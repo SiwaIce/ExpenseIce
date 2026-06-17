@@ -63,7 +63,7 @@ const LoansView = {
         </div>` : '<div style="margin-bottom:10px"></div>'}
         <div style="display:flex;gap:6px">
           <button class="btn btn-outline btn-sm" data-le="${p.id}">✏️</button>
-          <button class="btn btn-outline btn-sm" style="color:var(--danger)" data-ld="${p.id}">🗑️</button>
+          <button class="btn btn-outline btn-sm" data-ld="${p.id}">🗑️</button>
           ${!isCompleted ? `<button class="btn btn-primary btn-sm" style="flex:1" data-lp="${p.id}">💳 จ่ายงวดที่ ${paid + 1}</button>` : '<span style="flex:1"></span>'}
         </div>
       </div>`;
