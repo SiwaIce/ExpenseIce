@@ -121,7 +121,7 @@ const Views = {
 
     return `<div class="stats-grid" style="grid-template-columns:repeat(3,1fr)"><div class="stat-card income"><div class="stat-label">รายรับ</div><div class="stat-value">${U.fmtCurrency(sum.totalIncome, cfg.currency)}</div></div><div class="stat-card expense"><div class="stat-label">รายจ่าย</div><div class="stat-value">${U.fmtCurrency(sum.totalExpense, cfg.currency)}</div></div><div class="stat-card balance"><div class="stat-label">คงเหลือ</div><div class="stat-value">${U.fmtCurrency(sum.balance, cfg.currency)}</div></div></div>
     <div class="card"><div class="card-header"><span class="card-title">📋 รายการ (${txns.length})</span>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ${view==='timeline'?'btn-primary':'btn-outline'} btn-sm" data-vt="timeline">📅 Timeline</button><button class="btn ${view==='table'?'btn-primary':'btn-outline'} btn-sm" data-vt="table">📊 ตาราง</button><button class="btn btn-primary btn-sm" id="btnAddT">➕</button><button class="btn btn-outline btn-sm" id="btnStmtScan">📄 Statement</button><button class="btn btn-outline btn-sm" id="btnExpCSV">📥 CSV</button><button class="btn btn-outline btn-sm" id="btnImpCSV">📤</button><input type="file" id="csvFI" accept=".csv" style="display:none"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ${view==='timeline'?'btn-primary':'btn-outline'} btn-sm" data-vt="timeline">📅 Timeline</button><button class="btn ${view==='table'?'btn-primary':'btn-outline'} btn-sm" data-vt="table">📊 ตาราง</button><button class="btn btn-primary btn-sm" id="btnAddT">➕</button><button class="btn btn-outline btn-sm" id="btnStmtScan">📄 Statement</button><button class="btn btn-outline btn-sm" id="btnSlipScan">📲 สแกนสลิป</button><button class="btn btn-outline btn-sm" id="btnExpCSV">📥 CSV</button><button class="btn btn-outline btn-sm" id="btnImpCSV">📤</button><input type="file" id="csvFI" accept=".csv" style="display:none"></div>
     </div>
     <div class="filter-bar">
       <select id="fType"><option value="all" ${f.type==='all'?'selected':''}>ทั้งหมด</option><option value="income" ${f.type==='income'?'selected':''}>รายรับ</option><option value="expense" ${f.type==='expense'?'selected':''}>รายจ่าย</option></select>
@@ -145,6 +145,7 @@ const Views = {
   attachTxnEvents() {
     document.getElementById('btnAddT')?.addEventListener('click', () => POS.openModal(null, null, null));
     document.getElementById('btnStmtScan')?.addEventListener('click', () => this.openStatementScanner());
+    document.getElementById('btnSlipScan')?.addEventListener('click', () => this.openSlipScanner());
     document.getElementById('btnExpCSV')?.addEventListener('click', () => {
       U.dlBlob(EH.exportCSV(ST.getAll('transactions'), ST.getAll('categories')), `txn_${U.today()}.csv`);
       U.toast('ส่งออก CSV สำเร็จ', 'success');
@@ -380,6 +381,90 @@ const Views = {
       U.toast(`✅ Import ${selected.length} รายการแล้ว`, 'success');
       o.remove();
       App.rv('transactions');
+    });
+  },
+
+  // ---------- SLIP SCANNER ----------
+  openSlipScanner() {
+    const cfg = U.getConfig();
+    const cats = ST.getAll('categories');
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:460px">
+      <h3>📲 สแกนสลิปโอนเงิน / PromptPay</h3>
+      <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ถ่ายรูปหรืออัพโหลดสลิป → AI อ่านและบันทึกให้อัตโนมัติ รองรับ PromptPay, LINE Pay, สลิปธนาคาร</p>
+      <label class="btn btn-primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;margin-bottom:10px">
+        📷 เลือกรูปสลิป
+        <input type="file" id="slipFile" accept="image/*" capture="environment" style="display:none">
+      </label>
+      <div id="slipStatus" style="font-size:.8rem;margin:10px 0"></div>
+      <div id="slipPreview" style="display:none;background:var(--bg-input);border-radius:10px;padding:14px;margin-bottom:10px">
+        <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px">
+          <div><div class="btag">จำนวนเงิน</div><div id="slipAmt" style="font-weight:700;color:var(--expense);font-size:1.1rem"></div></div>
+          <div><div class="btag">วันที่</div><div id="slipDate" style="font-weight:600;font-size:.88rem"></div></div>
+          <div style="grid-column:span 2"><div class="btag">รายการ / ผู้รับ</div><div id="slipName" style="font-weight:600;font-size:.88rem"></div></div>
+          <div><div class="btag">ประเภท</div><div id="slipType" style="font-size:.85rem"></div></div>
+          <div><div class="btag">หมวดหมู่</div><div id="slipCat" style="font-size:.85rem"></div></div>
+        </div>
+      </div>
+      <div class="modal-actions">
+        <button class="btn btn-outline" id="slipClose">ปิด</button>
+        <button class="btn btn-primary" id="slipSave" style="display:none">✅ บันทึกรายการ</button>
+      </div>
+    </div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#slipClose').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+    let slipData = null;
+    const _prep = (file) => new Promise((res, rej) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX = 1400; let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) { const r = Math.min(MAX/w, MAX/h); w = Math.round(w*r); h = Math.round(h*r); }
+        const canvas = document.createElement('canvas'); canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        res({ b64: canvas.toDataURL('image/jpeg', 0.88).split(',')[1], mimeType: 'image/jpeg' });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); rej(new Error('โหลดภาพไม่ได้')); };
+      img.src = url;
+    });
+    o.querySelector('#slipFile')?.addEventListener('change', async e => {
+      const file = e.target.files[0]; if (!file) return;
+      if (!AI._key()) { U.toast(AI._noKeyMsg().split('\n')[0], 'error'); return; }
+      const status = o.querySelector('#slipStatus');
+      if (status) { status.style.color = 'var(--accent)'; status.textContent = '🔄 AI กำลังอ่านสลิป...'; }
+      try {
+        const { b64, mimeType } = await _prep(file);
+        const expCats = cats.filter(c => c.type === 'expense');
+        const catList = expCats.map(c => `${c.id}:${c.name}`).join(', ');
+        const text = await AI.vision(
+          `จากรูปสลิปโอนเงิน/PromptPay/LINE Pay/ธนาคารนี้ ตอบเป็น JSON เท่านั้น:\n{"amount":<จำนวนเงิน>,"name":"<ชื่อผู้รับหรือรายการ>","date":"<YYYY-MM-DD>","type":"expense","categoryId":"<id หรือ null>"}\nหมวดหมู่: ${catList}\ntype: expense=โอนออก/จ่าย, income=รับเงิน`,
+          b64, mimeType, { maxTokens: 350 }
+        );
+        const match = text.match(/\{[\s\S]*?\}/);
+        if (!match) throw new Error('parse');
+        slipData = JSON.parse(match[0]);
+        const cat = cats.find(c => c.id === slipData.categoryId);
+        const preview = o.querySelector('#slipPreview'); if (preview) preview.style.display = '';
+        o.querySelector('#slipAmt').textContent = U.fmtCurrency(slipData.amount || 0, cfg.currency);
+        o.querySelector('#slipDate').textContent = slipData.date || U.today();
+        o.querySelector('#slipName').textContent = slipData.name || 'ไม่ระบุ';
+        o.querySelector('#slipType').textContent = slipData.type === 'income' ? '💚 รายรับ' : '🔴 รายจ่าย';
+        o.querySelector('#slipCat').textContent = cat ? `${cat.icon} ${cat.name}` : '❓ ไม่ระบุ';
+        if (status) { status.style.color = 'var(--success)'; status.textContent = '✅ อ่านสลิปสำเร็จ'; }
+        o.querySelector('#slipSave').style.display = '';
+        e.target.value = '';
+      } catch {
+        if (status) { status.style.color = 'var(--danger)'; status.textContent = '⚠️ อ่านสลิปไม่ได้ ลองถ่ายรูปใหม่'; }
+        e.target.value = '';
+      }
+    });
+    o.querySelector('#slipSave')?.addEventListener('click', () => {
+      if (!slipData) return;
+      ST.add('transactions', { type: slipData.type || 'expense', amount: Number(slipData.amount) || 0, categoryId: slipData.categoryId || '', itemName: slipData.name || 'สลิปโอนเงิน', date: slipData.date || U.today(), note: 'สแกนจากสลิป' });
+      U.toast('✅ บันทึกแล้ว', 'success');
+      o.remove(); App.rv('transactions');
     });
   },
 

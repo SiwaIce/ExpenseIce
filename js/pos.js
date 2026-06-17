@@ -4,6 +4,25 @@ const POS = {
   cat: null,
   q: '',
   _pendingReceiptFile: null,
+  _prepareReceiptImage(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX = 1400;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) { const r = Math.min(MAX/w, MAX/h); w = Math.round(w*r); h = Math.round(h*r); }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        resolve({ b64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('โหลดภาพไม่ได้')); };
+      img.src = url;
+    });
+  },
   _isPinned(itemId) {
     return ((U.getConfig().pinnedItems) || []).includes(itemId);
   },
@@ -250,19 +269,24 @@ const POS = {
       const file = e.target.files[0]; if (!file) return;
       const status = document.getElementById('receiptStatus');
       if (!AI._key()) { U.toast(AI._provider()==='gemini' ? 'กรุณาตั้งค่า Gemini API Key ก่อน' : 'กรุณาตั้งค่า Anthropic API Key ก่อน', 'error'); return; }
-      if (status) status.textContent = '🔄 กำลังวิเคราะห์...';
+      if (status) { status.textContent = '🔄 กำลังวิเคราะห์...'; status.style.color = 'var(--accent)'; }
       try {
-        const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
-        const text = await AI.vision('จากรูปใบเสร็จนี้ ตอบเป็น JSON เท่านั้น ไม่มีข้อความอื่น: {"amount": <ตัวเลขยอดรวม>, "name": "<ชื่อร้าน/รายการ>", "date": "<YYYY-MM-DD หรือ null>"}', b64, file.type, { maxTokens: 256 });
-        const match = text.match(/\{[\s\S]*\}/);
+        const { b64, mimeType } = await POS._prepareReceiptImage(file);
+        const expCats = ST.getAll('categories').filter(c => c.type === 'expense');
+        const catList = expCats.map(c => `${c.id}:${c.name}`).join(', ');
+        const text = await AI.vision(
+          `จากรูปใบเสร็จหรือสลิปนี้ ตอบเป็น JSON เท่านั้น ไม่มีข้อความอื่น:\n{"amount":<ยอดรวม>,"name":"<ชื่อร้าน/รายการ>","date":"<YYYY-MM-DD หรือ null>","categoryId":"<id ที่เหมาะสม หรือ null>"}\nหมวดหมู่: ${catList}`,
+          b64, mimeType, { maxTokens: 400 }
+        );
+        const match = text.match(/\{[\s\S]*?\}/);
         if (!match) throw new Error('parse');
         const data = JSON.parse(match[0]);
-        if (status) status.textContent = '';
+        if (status) { status.textContent = ''; status.style.color = ''; }
         this._pendingReceiptFile = file;
         e.target.value = '';
-        this.openModal(null, null, null, { amount: data.amount, name: data.name, date: data.date });
+        this.openModal(null, data.categoryId || null, null, { amount: data.amount, name: data.name, date: data.date });
       } catch {
-        if (status) status.textContent = '⚠️ วิเคราะห์ไม่ได้ ลองใหม่';
+        if (status) { status.textContent = '⚠️ วิเคราะห์ไม่ได้ ลองใหม่'; status.style.color = 'var(--danger)'; }
         e.target.value = '';
       }
     });
@@ -402,7 +426,7 @@ const POS = {
       const el = o.querySelector('#mNote');
       el.value = el.value ? (el.value + ', ' + ch.dataset.ch) : ch.dataset.ch;
     }));
-    // Voice input
+    // Voice input — number extraction immediately, then AI parses full sentence if key available
     o.querySelector('#voiceBtn')?.addEventListener('click', () => {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
       if (!SR) { U.toast('เบราว์เซอร์ไม่รองรับ Voice Input', 'error'); return; }
@@ -410,14 +434,36 @@ const POS = {
       const rec = new SR(); rec.lang = 'th-TH'; rec.interimResults = false; rec.maxAlternatives = 1;
       btn.textContent = '🔴'; btn.style.color = 'var(--danger)';
       try { rec.start(); } catch { btn.textContent = '🎤'; btn.style.color = ''; return; }
-      rec.onresult = e => {
+      rec.onresult = async e => {
         const text = e.results[0][0].transcript;
         const num = text.replace(/,/g,'').match(/\d+\.?\d*/);
-        if (num) { numVal = num[0]; refreshDisp(); U.toast('🎤 ' + text, 'info'); }
+        if (num) { numVal = num[0]; refreshDisp(); }
         btn.textContent = '🎤'; btn.style.color = '';
+        if (AI._key() && text.trim()) {
+          btn.textContent = '🤖'; btn.style.color = 'var(--accent)';
+          try {
+            const cats = ST.getAll('categories');
+            const catList = cats.map(c => `${c.id}:${c.name}`).join(', ');
+            const today = U.today();
+            const aiText = await AI.call(
+              `คำพูด: "${text}"\nสกัดข้อมูลรายการเป็น JSON เท่านั้น:\n{"amount":0,"name":"","categoryId":"","date":"${today}"}\nหมวดหมู่: ${catList}\nวันนี้คือ ${today} (ถ้าไม่ระบุวันให้ใช้วันนี้)`,
+              { maxTokens: 120 }
+            );
+            const m = aiText.match(/\{[\s\S]*?\}/);
+            if (m) {
+              const d = JSON.parse(m[0]);
+              if (d.amount > 0) { numVal = String(d.amount); refreshDisp(); }
+              if (d.name) { const el = o.querySelector('#mN'); if (el) el.value = d.name; }
+              if (d.categoryId) { const el = o.querySelector('#mC'); if (el) el.value = d.categoryId; }
+              if (d.date && d.date !== 'null' && d.date !== today) { const el = o.querySelector('#mD'); if (el) el.value = d.date; }
+              U.toast(`🎤 AI: ${text}`, 'success');
+            } else { U.toast(`🎤 ${text}`, 'info'); }
+          } catch { U.toast(`🎤 ${text}`, 'info'); }
+          btn.textContent = '🎤'; btn.style.color = '';
+        } else if (num) { U.toast('🎤 ' + text, 'info'); }
       };
       rec.onerror = () => { btn.textContent = '🎤'; btn.style.color = ''; };
-      rec.onend = () => { btn.textContent = '🎤'; btn.style.color = ''; };
+      rec.onend = () => { if (btn.textContent === '🔴') { btn.textContent = '🎤'; btn.style.color = ''; } };
     });
     // Split bill
     const _updateSplit = () => {
@@ -446,20 +492,28 @@ const POS = {
       { id:'cat_health', words:['หมอ','ยา','โรงพยาบาล','คลินิก','วิตามิน','สุขภาพ','ฟัน','ตา'] },
       { id:'cat_entertain', words:['ภาพยนตร์','หนัง','netflix','spotify','เกม','concert','ท่องเที่ยว','โรงแรม','สปา','บันเทิง','ดนตรี'] },
     ];
-    o.querySelector('#mN')?.addEventListener('blur', () => {
+    o.querySelector('#mN')?.addEventListener('blur', async () => {
       const name = (o.querySelector('#mN')?.value || '').toLowerCase();
       const sel = o.querySelector('#mC');
-      if (!name || !sel || parseFloat(numVal) > 0) return;
+      if (!name || !sel) return;
       const allCatsLocal = ST.getAll('categories');
+      let matched = false;
       for (const rule of _CAT_RULES) {
         if (rule.words.some(w => name.includes(w))) {
           const match = allCatsLocal.find(c => c.id === rule.id);
-          if (match && sel.value !== match.id) {
-            sel.value = match.id;
-            U.toast(`💡 หมวด: ${match.icon} ${match.name}`, 'info');
-          }
-          break;
+          if (match && sel.value !== match.id) { sel.value = match.id; U.toast(`💡 หมวด: ${match.icon} ${match.name}`, 'info'); }
+          matched = true; break;
         }
+      }
+      if (!matched && AI._key() && name.length >= 2) {
+        try {
+          const expCats = allCatsLocal.filter(c => c.type === 'expense');
+          const catList = expCats.map(c => `${c.id}:${c.icon}${c.name}`).join(', ');
+          const result = await AI.call(`รายการ: "${name}"\nหมวดหมู่: ${catList}\nตอบ id หมวดหมู่ที่เหมาะสมที่สุดเพียงอย่างเดียว`, { maxTokens: 25 });
+          const catId = result.trim().replace(/[^a-z0-9_]/g, '');
+          const match = expCats.find(c => c.id === catId);
+          if (match && sel.value !== match.id) { sel.value = match.id; U.toast(`🤖 AI หมวด: ${match.icon} ${match.name}`, 'info'); }
+        } catch {}
       }
     });
     // Category pre-fill amount from history

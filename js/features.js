@@ -3,7 +3,8 @@ const InsightsView = {
   render() {
     return `<div class="ai-tabs"><button class="ai-tab active" data-ait="insights">💡 AI วิเคราะห์</button><button class="ai-tab" data-ait="chat">🤖 แชท</button></div>
     <div id="aitInsights">
-      <div class="card"><div class="card-header"><span class="card-title">🤖 AI Insights — วิเคราะห์การใช้จ่าย</span><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" id="btnMonthReport">📊 รายงานเดือน</button><button class="btn btn-primary btn-sm" id="btnRefreshInsights">🔄 วิเคราะห์ใหม่</button></div></div><div id="insightsContainer"><div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>กำลังวิเคราะห์ข้อมูล...</span></div></div></div>
+      <div class="card" style="padding:12px 16px"><div style="font-size:.72rem;font-weight:700;color:var(--text-secondary);margin-bottom:8px;text-transform:uppercase">🤖 เครื่องมือ AI</div><div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(142px,1fr));gap:7px"><button class="btn btn-outline btn-sm" id="btnMonthReport">📊 รายงานเดือน</button><button class="btn btn-outline btn-sm" id="btnWeekly">📅 สรุปสัปดาห์</button><button class="btn btn-outline btn-sm" id="btnPattern">🔍 Spending Pattern</button><button class="btn btn-outline btn-sm" id="btnTaxAdvisor">🧾 ลดหย่อนภาษี</button><button class="btn btn-outline btn-sm" id="btnDebtPlan">💳 แผนปลดหนี้</button></div></div>
+      <div class="card"><div class="card-header"><span class="card-title">🤖 AI Insights — วิเคราะห์การใช้จ่าย</span><button class="btn btn-primary btn-sm" id="btnRefreshInsights">🔄 วิเคราะห์ใหม่</button></div><div id="insightsContainer"><div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>กำลังวิเคราะห์ข้อมูล...</span></div></div></div>
       <div class="card"><div class="card-header"><span class="card-title">🚨 รายการผิดปกติ</span></div><div id="anomalyContainer"></div></div>
       <div class="card"><div class="card-header"><span class="card-title">📅 คาดการณ์สิ้นเดือน</span></div><div id="forecastContainer"></div></div>
     </div>
@@ -18,6 +19,10 @@ const InsightsView = {
       this.loadInsights();
     });
     document.getElementById('btnMonthReport')?.addEventListener('click', () => this.openMonthlyReport());
+    document.getElementById('btnWeekly')?.addEventListener('click', () => this.openWeeklySummary());
+    document.getElementById('btnPattern')?.addEventListener('click', () => this.openSpendingPattern());
+    document.getElementById('btnTaxAdvisor')?.addEventListener('click', () => this.openTaxAdvisor());
+    document.getElementById('btnDebtPlan')?.addEventListener('click', () => this.openDebtStrategy());
     document.querySelectorAll('[data-ait]').forEach(tab => tab.addEventListener('click', () => {
       document.querySelectorAll('[data-ait]').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
@@ -30,6 +35,117 @@ const InsightsView = {
         setTimeout(() => ChatView.attachEvents(), 50);
       }
     }));
+  },
+  async openWeeklySummary() {
+    if (!AI._key()) { U.toast(AI._noKeyMsg().split('\n')[0], 'error'); return; }
+    const cfg = U.getConfig();
+    const now = new Date();
+    const dates = [];
+    for (let i = 6; i >= 0; i--) { const d = new Date(now); d.setDate(d.getDate() - i); dates.push(U._ld(d)); }
+    const txns = ST.getAll('transactions').filter(t => t.date >= dates[0] && t.date <= dates[6]);
+    const cats = ST.getAll('categories');
+    const income = txns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+    const expense = txns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+    const catBreakdown = EH.catSpending(txns, cats).slice(0, 5).map(s => `${s.name}: ${U.fmtCurrency(s.amount, cfg.currency)}`).join(', ');
+    const dayDetails = dates.map(d => {
+      const exp = txns.filter(t => t.date === d && t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+      return `${d}: ${exp > 0 ? U.fmtCurrency(exp, cfg.currency) : 'ไม่มีรายการ'}`;
+    }).join('\n');
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:500px"><h3>📅 สรุป 7 วันที่ผ่านมา</h3><div id="weeklyBody"><div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>AI กำลังสรุป...</span></div></div><div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" id="weeklyClose">ปิด</button></div></div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#weeklyClose').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+    try {
+      const text = await AI.call(
+        `สรุปการใช้จ่าย 7 วันที่ผ่านมา เป็นภาษาไทย อ่านง่าย มีคำแนะนำและกำลังใจ:\n\nรายรับรวม: ${U.fmtCurrency(income, cfg.currency)}\nรายจ่ายรวม: ${U.fmtCurrency(expense, cfg.currency)}\nคงเหลือ: ${U.fmtCurrency(income - expense, cfg.currency)}\nหมวดที่ใช้มาก: ${catBreakdown || 'ไม่มีข้อมูล'}\n\nรายวัน:\n${dayDetails}\n\nสรุปสั้นๆ 3-4 ประโยค พร้อมคำแนะนำ 1-2 ข้อ`,
+        { maxTokens: 600 }
+      );
+      const body = document.getElementById('weeklyBody');
+      if (body) body.innerHTML = `<div style="line-height:1.8;font-size:.86rem;background:var(--bg-input);padding:14px;border-radius:10px;white-space:pre-wrap">${text}</div>`;
+    } catch {
+      const body = document.getElementById('weeklyBody');
+      if (body) body.innerHTML = '<div class="insight-card"><div class="insight-icon">⚠️</div><div class="insight-text">ไม่สามารถสร้างสรุปได้ กรุณาลองใหม่</div></div>';
+    }
+  },
+  async openSpendingPattern() {
+    if (!AI._key()) { U.toast(AI._noKeyMsg().split('\n')[0], 'error'); return; }
+    const cfg = U.getConfig();
+    const txns = ST.getAll('transactions').filter(t => t.type === 'expense');
+    if (txns.length < 10) { U.toast('ต้องมีรายการอย่างน้อย 10 รายการ', 'error'); return; }
+    const dayNames = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
+    const dayTotals = Array(7).fill(0), dayCounts = Array(7).fill(0);
+    txns.forEach(t => { const d = new Date(t.date + 'T00:00:00').getDay(); dayTotals[d] += Number(t.amount); dayCounts[d]++; });
+    const dayStr = dayNames.map((n, i) => dayCounts[i] > 0 ? `${n}: เฉลี่ย ${U.fmtCurrency(Math.round(dayTotals[i]/dayCounts[i]), cfg.currency)}/ครั้ง (${dayCounts[i]} ครั้ง)` : `${n}: ไม่มีรายการ`).join('\n');
+    const dateTotals = {};
+    txns.forEach(t => { const day = parseInt(t.date.slice(8)); dateTotals[day] = (dateTotals[day] || 0) + Number(t.amount); });
+    const topDates = Object.entries(dateTotals).sort((a,b) => b[1]-a[1]).slice(0,5).map(([d,v]) => `วันที่ ${d}: ${U.fmtCurrency(v, cfg.currency)}`).join(', ');
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:500px"><h3>🔍 Spending Pattern Analysis</h3><div id="patternBody"><div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>AI กำลังวิเคราะห์...</span></div></div><div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" id="patternClose">ปิด</button></div></div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#patternClose').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+    try {
+      const text = await AI.call(
+        `วิเคราะห์ pattern การใช้จ่ายและให้ insight เป็นภาษาไทย:\n\nค่าเฉลี่ยต่อวันในสัปดาห์:\n${dayStr}\n\nวันที่ของเดือนที่ใช้เงินมากสุด: ${topDates}\nจำนวนรายการทั้งหมด: ${txns.length}\n\nวิเคราะห์: 1)วันไหนในสัปดาห์ที่ใช้เงินมาก/น้อย 2)ช่วงไหนของเดือนที่ใช้เยอะ 3)แนะนำการจัดการ`,
+        { maxTokens: 700 }
+      );
+      const body = document.getElementById('patternBody');
+      if (body) body.innerHTML = `<div style="line-height:1.8;font-size:.86rem;background:var(--bg-input);padding:14px;border-radius:10px;white-space:pre-wrap">${text}</div>`;
+    } catch {
+      const body = document.getElementById('patternBody');
+      if (body) body.innerHTML = '<div class="insight-card"><div class="insight-icon">⚠️</div><div class="insight-text">ไม่สามารถวิเคราะห์ได้</div></div>';
+    }
+  },
+  async openTaxAdvisor() {
+    if (!AI._key()) { U.toast(AI._noKeyMsg().split('\n')[0], 'error'); return; }
+    const cfg = U.getConfig();
+    const year = new Date().getFullYear();
+    const txns = ST.getAll('transactions').filter(t => t.type === 'expense' && t.date.startsWith(String(year)));
+    const cats = ST.getAll('categories');
+    const spending = EH.catSpending(txns, cats).map(s => `${s.name}: ${U.fmtCurrency(s.amount, cfg.currency)}`).join(', ');
+    const allItems = txns.slice(0, 60).map(t => { const cat = cats.find(c => c.id === t.categoryId); return `${t.date} ${t.itemName || (cat?.name || '?')} ${U.fmtCurrency(t.amount, cfg.currency)}`; }).join('\n');
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:520px"><h3>🧾 ที่ปรึกษาลดหย่อนภาษีไทย ${year}</h3><div id="taxBody"><div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>AI กำลังวิเคราะห์...</span></div></div><div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" id="taxClose">ปิด</button></div></div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#taxClose').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+    try {
+      const text = await AI.call(
+        `วิเคราะห์รายจ่ายของผู้ใช้ในปี ${year} และแนะนำสิทธิ์ลดหย่อนภาษีเงินได้บุคคลธรรมดาของไทยที่อาจใช้ได้ เป็นภาษาไทย:\n\nสรุปรายจ่ายปีนี้: ${spending || 'ยังไม่มีข้อมูล'}\n\nรายการล่าสุด:\n${allItems || 'ยังไม่มีรายการ'}\n\nให้: 1)รายการที่น่าจะใช้ลดหย่อนได้พร้อมวงเงินสูงสุดตามกฎหมาย 2)สิทธิ์ที่ยังไม่เห็นในรายการแต่น่าพิจารณา 3)คำเตือน: AI ไม่ใช่นักบัญชี ควรปรึกษาผู้เชี่ยวชาญ`,
+        { maxTokens: 900 }
+      );
+      const body = document.getElementById('taxBody');
+      if (body) body.innerHTML = `<div style="line-height:1.8;font-size:.85rem;background:var(--bg-input);padding:14px;border-radius:10px;white-space:pre-wrap;max-height:60vh;overflow-y:auto">${text}</div>`;
+    } catch {
+      const body = document.getElementById('taxBody');
+      if (body) body.innerHTML = '<div class="insight-card"><div class="insight-icon">⚠️</div><div class="insight-text">ไม่สามารถวิเคราะห์ได้</div></div>';
+    }
+  },
+  async openDebtStrategy() {
+    if (!AI._key()) { U.toast(AI._noKeyMsg().split('\n')[0], 'error'); return; }
+    const cfg = U.getConfig();
+    const cards = ST.getAll('credit_cards');
+    const loans = ST.getAll('loan_plans').filter(p => p.status === 'active');
+    if (!cards.filter(c => c.used > 0).length && !loans.length) { U.toast('ไม่มีหนี้บัตรเครดิตหรือแผนผ่อนชำระ', 'info'); return; }
+    const cardStr = cards.filter(c => c.used > 0).map(c => `บัตร ${c.name}: ยอดค้าง ${U.fmtCurrency(c.used||0, cfg.currency)} วงเงิน ${U.fmtCurrency(c.limit||0, cfg.currency)}`).join('\n');
+    const loanStr = loans.map(p => { const rem = Math.max(0, p.numberOfMonths - p.paidMonths) * Number(p.monthlyPayment||0); return `${p.name}: ยอดค้าง ${U.fmtCurrency(rem, cfg.currency)} ผ่อน ${U.fmtCurrency(p.monthlyPayment||0, cfg.currency)}/เดือน ดอกเบี้ย ${p.interestRate||0}%/ปี`; }).join('\n');
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:520px"><h3>💳 แผนปลดหนี้ที่เหมาะสมที่สุด</h3><div id="debtBody"><div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>AI กำลังวางแผน...</span></div></div><div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" id="debtClose">ปิด</button></div></div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#debtClose').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+    try {
+      const text = await AI.call(
+        `วางแผนปลดหนี้สำหรับผู้ใช้นี้ เป็นภาษาไทย เข้าใจง่าย:\n${cardStr ? `\nบัตรเครดิต:\n${cardStr}` : ''}${loanStr ? `\nแผนผ่อนชำระ:\n${loanStr}` : ''}\n\nแนะนำ: 1)เปรียบเทียบ Avalanche(ดอกสูงก่อน) vs Snowball(ยอดน้อยก่อน) 2)ลำดับการจ่ายหนี้ที่แนะนำ 3)ประมาณเวลาปลดหนี้ทั้งหมด(สมมติจ่ายขั้นต่ำ+เงินเหลือ 5,000/เดือน) 4)เคล็ดลับเพิ่มเติม`,
+        { maxTokens: 900 }
+      );
+      const body = document.getElementById('debtBody');
+      if (body) body.innerHTML = `<div style="line-height:1.8;font-size:.85rem;background:var(--bg-input);padding:14px;border-radius:10px;white-space:pre-wrap;max-height:60vh;overflow-y:auto">${text}</div>`;
+    } catch {
+      const body = document.getElementById('debtBody');
+      if (body) body.innerHTML = '<div class="insight-card"><div class="insight-icon">⚠️</div><div class="insight-text">ไม่สามารถวิเคราะห์ได้</div></div>';
+    }
   },
   loadAnomalies() {
     const container = document.getElementById('anomalyContainer'); if (!container) return;
