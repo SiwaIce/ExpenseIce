@@ -327,7 +327,7 @@ const AI = {
     return this._claude({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, system: systemPrompt, messages: history }, key);
   },
   // Vision call (for receipt scanner)
-  async vision(textPrompt, b64, mimeType, { maxTokens = 256 } = {}) {
+  async vision(textPrompt, b64, mimeType, { maxTokens = 2000 } = {}) {
     const key = this._key();
     if (!key) throw new Error('NO_KEY');
     if (this._provider() === 'gemini') {

@@ -264,30 +264,53 @@ const Views = {
       const el = o.querySelector('#stmtCount'); if (el) el.textContent = `เลือก ${sel}/${tot} รายการ`;
     };
 
+    // Compress + convert to JPEG via canvas (handles HEIC, large photos, etc.)
+    const _prepareImage = (file) => new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX = 1600;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) { const r = Math.min(MAX/w, MAX/h); w = Math.round(w*r); h = Math.round(h*r); }
+        const canvas = document.createElement('canvas');
+        canvas.width = w; canvas.height = h;
+        canvas.getContext('2d').drawImage(img, 0, 0, w, h);
+        const dataUrl = canvas.toDataURL('image/jpeg', 0.88);
+        resolve({ b64: dataUrl.split(',')[1], mimeType: 'image/jpeg' });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('โหลดภาพไม่ได้')); };
+      img.src = url;
+    });
+
     o.querySelector('#stmtFile')?.addEventListener('change', async e => {
       const file = e.target.files[0]; if (!file) return;
       if (!AI._key()) { U.toast(AI._noKeyMsg().split('\n')[0], 'error'); return; }
       const status = o.querySelector('#stmtStatus');
-      if (status) { status.style.color = 'var(--accent)'; status.textContent = '🔄 AI กำลังอ่าน statement...'; }
+      const sizeMB = (file.size / 1048576).toFixed(1);
+      if (status) { status.style.color = 'var(--accent)'; status.textContent = `🔄 กำลังบีบอัดภาพ (${sizeMB} MB)...`; }
       try {
-        const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
+        const { b64, mimeType } = await _prepareImage(file);
+        if (status) status.textContent = '🔄 AI กำลังอ่าน statement...';
         const prompt = `จากภาพ bank statement นี้ ให้สกัดรายการธุรกรรมทุกรายการ ตอบเป็น JSON array เท่านั้น ไม่มีข้อความอื่น:
 [{"date":"YYYY-MM-DD","amount":0,"type":"expense","itemName":"ชื่อรายการ"}]
 - type: "expense"=ถอน/จ่าย/เดบิต, "income"=ฝาก/รับ/เครดิต
-- amount: ตัวเลขบวกเสมอ
+- amount: ตัวเลขบวกเสมอ (ไม่มีลบ)
 - date: YYYY-MM-DD (ปีปัจจุบัน ${new Date().getFullYear()} ถ้าไม่ระบุ)
-- itemName: ชื่อรายการหรือคำอธิบาย`;
-        const text = await AI.vision(prompt, b64, file.type, { maxTokens: 1500 });
+- itemName: ชื่อร้านค้าหรือรายการ`;
+        const text = await AI.vision(prompt, b64, mimeType, { maxTokens: 2000 });
         const clean = text.replace(/```json|```/g, '').trim();
-        const match = clean.match(/\[[\s\S]*\]/);
+        const match = clean.match(/\[[\s\S]*?\]/);
         pendingTxns = match ? JSON.parse(match[0]) : [];
-        if (!pendingTxns.length) throw new Error('ไม่พบรายการ');
+        if (!pendingTxns.length) {
+          if (status) { status.style.color = 'var(--warning,#f59e0b)'; status.textContent = '⚠️ ไม่พบรายการ — อาจเป็นเพราะภาพไม่ชัด หรือรูปแบบ statement ไม่ตรงมาตรฐาน'; }
+          e.target.value = ''; return;
+        }
 
         const preview = o.querySelector('#stmtPreview');
         const list = o.querySelector('#stmtList');
         if (preview) preview.style.display = '';
         if (list) list.innerHTML = pendingTxns.map((t, i) => {
-          const cat = cats.find(c => c.type === t.type) || cats[0] || {};
           return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg-input);border-radius:8px;font-size:.8rem">
             <input type="checkbox" class="stmt-chk" data-idx="${i}" checked>
             <span style="color:var(--text-secondary);flex-shrink:0;width:80px">${t.date}</span>
@@ -301,7 +324,12 @@ const Views = {
         o.querySelector('#stmtImport').style.display = '';
         e.target.value = '';
       } catch(err) {
-        if (status) { status.style.color = 'var(--danger)'; status.textContent = '⚠️ อ่านไม่ได้ — ลองรูปที่ชัดขึ้น'; }
+        const msg = err?.message || '';
+        let hint = 'ลองรูปที่ชัดขึ้น หรืออัพโหลดใหม่';
+        if (msg.includes('NO_KEY')) hint = 'ยังไม่ได้ตั้งค่า API Key';
+        else if (msg.includes('โหลดภาพ')) hint = 'ไฟล์ภาพเปิดไม่ได้ (ลอง screenshot แทน)';
+        else if (msg.toLowerCase().includes('size') || msg.includes('too large')) hint = 'ภาพใหญ่เกินไป ลอง screenshot แทน';
+        if (status) { status.style.color = 'var(--danger)'; status.textContent = `⚠️ ${hint}`; }
         e.target.value = '';
       }
     });
