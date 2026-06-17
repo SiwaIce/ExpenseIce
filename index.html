@@ -366,6 +366,8 @@ table tbody tr:hover{background:var(--bg-input)}
 }
 .sync-dot{font-size:.9rem;line-height:1;transition:opacity .3s}
 .sync-dot.sync-syncing,.sync-dot.sync-pending{animation:spin .8s linear infinite;display:inline-block}
+.receipt-thumb{width:26px;height:26px;border-radius:4px;object-fit:cover;flex-shrink:0;cursor:pointer;border:1px solid var(--border);transition:transform .15s}
+.receipt-thumb:hover{transform:scale(1.1)}
 @keyframes spin{to{transform:rotate(360deg)}}
 /* AI Chatbot */
 .ai-tabs{display:flex;gap:6px;margin-bottom:14px}
@@ -452,6 +454,7 @@ table tbody tr:hover{background:var(--bg-input)}
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-auth-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-firestore-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-storage-compat.js"></script>
 <script src="js/firebase-sync.js"></script>
 <script src="js/app.js"></script>
 <script>

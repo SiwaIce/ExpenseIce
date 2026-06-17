@@ -114,20 +114,11 @@ const ChatView = {
   },
 
   async _callAPI() {
-    const apiKey = U.getConfig().apiKey || '';
-    if (!apiKey) return '⚠️ กรุณาตั้งค่า Anthropic API Key ก่อน\nไปที่ ⚙️ ตั้งค่า แล้วกรอก API Key ของคุณ';
-    const res = await fetch('https://api.anthropic.com/v1/messages', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-calls': 'true' },
-      body: JSON.stringify({
-        model: 'claude-sonnet-4-6',
-        max_tokens: 1500,
-        system: this._buildSystemPrompt(),
-        messages: this.history
-      })
-    });
-    const json = await res.json();
-    if (json.error) return `⚠️ ${json.error.message || 'เกิดข้อผิดพลาด'}`;
-    return json.content?.[0]?.text || 'ไม่ได้รับคำตอบ กรุณาลองใหม่';
+    if (!AI._key()) return AI._noKeyMsg();
+    try {
+      return await AI.chat(this._buildSystemPrompt(), this.history, { maxTokens: 1500 });
+    } catch(e) {
+      return `⚠️ ${e.message || 'เกิดข้อผิดพลาด'}`;
+    }
   }
 };

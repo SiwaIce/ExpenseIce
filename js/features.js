@@ -46,19 +46,13 @@ const InsightsView = {
 
 สร้าง 4-5 insights ที่มีประโยชน์ เช่น เปรียบเทียบเดือนก่อน, วันที่ใช้จ่ายเยอะ, คำแนะนำประหยัด, pattern ที่น่าสนใจ`;
 
-    const apiKey = U.getConfig().apiKey || '';
-    if (!apiKey) {
-      container.innerHTML = '<div class="insight-card"><div class="insight-icon">🔑</div><div class="insight-text">กรุณาตั้งค่า Anthropic API Key ก่อน<br><small>ไปที่ ⚙️ ตั้งค่า แล้วกรอก API Key</small></div></div>';
+    if (!AI._key()) {
+      const prov = AI._provider();
+      container.innerHTML = `<div class="insight-card"><div class="insight-icon">🔑</div><div class="insight-text">กรุณาตั้งค่า ${prov === 'gemini' ? 'Gemini' : 'Anthropic'} API Key ก่อน<br><small>ไปที่ ⚙️ ตั้งค่า แล้วกรอก API Key</small></div></div>`;
       return;
     }
     try {
-      const res = await fetch('https://api.anthropic.com/v1/messages', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'x-api-key': apiKey, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-calls': 'true' },
-        body: JSON.stringify({ model: 'claude-sonnet-4-6', max_tokens: 1000, messages: [{ role: 'user', content: prompt }] })
-      });
-      const json = await res.json();
-      const text = json.content?.[0]?.text || '[]';
+      const text = await AI.call(prompt, { maxTokens: 1000 });
       let insights = [];
       try { const clean = text.replace(/```json|```/g, '').trim(); insights = JSON.parse(clean); }
       catch (e) { insights = [{ icon: '💡', text: 'ไม่สามารถวิเคราะห์ได้ในขณะนี้ กรุณาลองใหม่' }]; }

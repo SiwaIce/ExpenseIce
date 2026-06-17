@@ -285,6 +285,78 @@ const Charts = {
   }
 };
 
+// ===== AI PROVIDER HELPER =====
+const AI = {
+  _provider() { return U.getConfig().aiProvider || 'claude'; },
+  _key() {
+    const cfg = U.getConfig();
+    return this._provider() === 'gemini' ? (cfg.geminiApiKey || '') : (cfg.apiKey || '');
+  },
+  _noKeyMsg() {
+    const p = this._provider();
+    return p === 'gemini'
+      ? '⚠️ กรุณาตั้งค่า Gemini API Key ก่อน\nไปที่ ⚙️ ตั้งค่า แล้วกรอก Gemini API Key (รับฟรีที่ aistudio.google.com)'
+      : '⚠️ กรุณาตั้งค่า Anthropic API Key ก่อน\nไปที่ ⚙️ ตั้งค่า แล้วกรอก API Key ของคุณ';
+  },
+  // Text call (for insights, structured responses)
+  async call(prompt, { maxTokens = 1000, systemPrompt = null } = {}) {
+    const key = this._key();
+    if (!key) throw new Error('NO_KEY');
+    if (this._provider() === 'gemini') {
+      return this._gemini([{ role: 'user', parts: [{ text: prompt }] }], { key, maxTokens, systemPrompt });
+    }
+    const body = { model: 'claude-sonnet-4-6', max_tokens: maxTokens, messages: [{ role: 'user', content: prompt }] };
+    if (systemPrompt) body.system = systemPrompt;
+    return this._claude(body, key);
+  },
+  // Chat with history (for chatbot)
+  async chat(systemPrompt, history, { maxTokens = 1500 } = {}) {
+    const key = this._key();
+    if (!key) throw new Error('NO_KEY');
+    if (this._provider() === 'gemini') {
+      const contents = history.map(m => ({ role: m.role === 'assistant' ? 'model' : 'user', parts: [{ text: m.content }] }));
+      return this._gemini(contents, { key, maxTokens, systemPrompt });
+    }
+    return this._claude({ model: 'claude-sonnet-4-6', max_tokens: maxTokens, system: systemPrompt, messages: history }, key);
+  },
+  // Vision call (for receipt scanner)
+  async vision(textPrompt, b64, mimeType, { maxTokens = 256 } = {}) {
+    const key = this._key();
+    if (!key) throw new Error('NO_KEY');
+    if (this._provider() === 'gemini') {
+      const contents = [{ role: 'user', parts: [{ inline_data: { mime_type: mimeType, data: b64 } }, { text: textPrompt }] }];
+      return this._gemini(contents, { key, maxTokens });
+    }
+    return this._claude({
+      model: 'claude-haiku-4-5-20251001', max_tokens: maxTokens,
+      messages: [{ role: 'user', content: [
+        { type: 'image', source: { type: 'base64', media_type: mimeType, data: b64 } },
+        { type: 'text', text: textPrompt }
+      ]}]
+    }, key);
+  },
+  async _claude(body, key) {
+    const res = await fetch('https://api.anthropic.com/v1/messages', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json', 'x-api-key': key, 'anthropic-version': '2023-06-01', 'anthropic-dangerous-direct-browser-calls': 'true' },
+      body: JSON.stringify(body)
+    });
+    const json = await res.json();
+    if (json.error) throw new Error(json.error.message);
+    return json.content?.[0]?.text || '';
+  },
+  async _gemini(contents, { key, maxTokens, systemPrompt } = {}) {
+    const body = { contents, generationConfig: { maxOutputTokens: maxTokens } };
+    if (systemPrompt) body.system_instruction = { parts: [{ text: systemPrompt }] };
+    const res = await fetch(`https://generativelanguage.googleapis.com/v1beta/models/gemini-2.0-flash:generateContent?key=${key}`, {
+      method: 'POST', headers: { 'Content-Type': 'application/json' }, body: JSON.stringify(body)
+    });
+    const json = await res.json();
+    if (json.error) throw new Error(json.error.message);
+    return json.candidates?.[0]?.content?.parts?.[0]?.text || '';
+  }
+};
+
 function buildAccSelHTML(type, selectedId = '') {
   const wallets = ST.getAll('wallet_accounts');
   const cards = ST.getAll('credit_cards');

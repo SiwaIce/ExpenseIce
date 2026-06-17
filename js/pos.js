@@ -3,6 +3,7 @@ const POS = {
   type: 'expense',
   cat: null,
   q: '',
+  _pendingReceiptFile: null,
   _isPinned(itemId) {
     return ((U.getConfig().pinnedItems) || []).includes(itemId);
   },
@@ -87,6 +88,7 @@ const POS = {
                 ${t.note ? `<div style="font-size:.64rem;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.note}</div>` : ''}
               </div>
               <span style="font-size:.77rem;font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'};flex-shrink:0">${U.fmtCurrency(t.amount, cfg.currency)}</span>
+              ${t.receiptUrl ? `<img src="${t.receiptUrl}" class="receipt-thumb" title="ดูใบเสร็จ" onclick="event.stopPropagation();window.open('${t.receiptUrl}','_blank')">` : ''}
               <button class="btn-ghost" style="padding:2px 3px;font-size:.68rem;flex-shrink:0" data-et="${t.id}">✏️</button>
               <button class="btn-ghost" style="padding:2px 3px;font-size:.68rem;color:var(--danger);flex-shrink:0" data-dt="${t.id}">🗑️</button>
             </div>
@@ -212,28 +214,16 @@ const POS = {
     document.getElementById('receiptInput')?.addEventListener('change', async (e) => {
       const file = e.target.files[0]; if (!file) return;
       const status = document.getElementById('receiptStatus');
-      const apiKey = U.getConfig().apiKey || '';
-      if (!apiKey) { U.toast('กรุณาตั้งค่า Anthropic API Key ก่อน', 'error'); return; }
+      if (!AI._key()) { U.toast(AI._provider()==='gemini' ? 'กรุณาตั้งค่า Gemini API Key ก่อน' : 'กรุณาตั้งค่า Anthropic API Key ก่อน', 'error'); return; }
       if (status) status.textContent = '🔄 กำลังวิเคราะห์...';
       try {
         const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
-        const resp = await fetch('https://api.anthropic.com/v1/messages', {
-          method: 'POST',
-          headers: { 'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-calls':'true' },
-          body: JSON.stringify({
-            model: 'claude-haiku-4-5-20251001', max_tokens: 256,
-            messages: [{ role: 'user', content: [
-              { type: 'image', source: { type: 'base64', media_type: file.type, data: b64 } },
-              { type: 'text', text: 'จากรูปใบเสร็จนี้ ตอบเป็น JSON เท่านั้น ไม่มีข้อความอื่น: {"amount": <ตัวเลขยอดรวม>, "name": "<ชื่อร้าน/รายการ>", "date": "<YYYY-MM-DD หรือ null>"}' }
-            ]}]
-          })
-        });
-        const json = await resp.json();
-        const text = json.content?.[0]?.text || '';
+        const text = await AI.vision('จากรูปใบเสร็จนี้ ตอบเป็น JSON เท่านั้น ไม่มีข้อความอื่น: {"amount": <ตัวเลขยอดรวม>, "name": "<ชื่อร้าน/รายการ>", "date": "<YYYY-MM-DD หรือ null>"}', b64, file.type, { maxTokens: 256 });
         const match = text.match(/\{[\s\S]*\}/);
         if (!match) throw new Error('parse');
         const data = JSON.parse(match[0]);
         if (status) status.textContent = '';
+        this._pendingReceiptFile = file;
         e.target.value = '';
         this.openModal(null, null, null, { amount: data.amount, name: data.name, date: data.date });
       } catch {
@@ -401,6 +391,17 @@ const POS = {
         const instRate = parseFloat(o.querySelector('#mInstRate')?.value) || 0;
         const instStart = o.querySelector('#mInstStart')?.value || date;
         const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, date, note, accountId, installment: instEnabled });
+        // Upload pending receipt image to Firebase Storage
+        const pendingFile = POS._pendingReceiptFile;
+        POS._pendingReceiptFile = null;
+        if (pendingFile && typeof CloudSync !== 'undefined' && CloudSync.isLoggedIn()) {
+          U.toast('📤 กำลังอัปโหลดใบเสร็จ...', 'info');
+          CloudSync.uploadReceipt(pendingFile, newTxn.id).then(url => {
+            if (url) { ST.update('transactions', newTxn.id, { receiptUrl: url }); App.rv('add'); }
+          });
+        } else {
+          POS._pendingReceiptFile = null;
+        }
         if (instEnabled && instMonths > 0) {
           const monthly = EH.calcMonthlyPayment(amount, instMonths, instRate);
           const instRec = ST.add('installments', {

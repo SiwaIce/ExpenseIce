@@ -63,6 +63,29 @@ const CloudSync = {
     }
   },
 
+  async uploadReceipt(file, txnId) {
+    if (!this._user || !window.firebase) return null;
+    try {
+      const ext = file.type.includes('png') ? 'png' : 'jpg';
+      const ref = firebase.storage().ref(`users/${this._user.uid}/receipts/${txnId}.${ext}`);
+      const snap = await ref.put(file);
+      return await snap.ref.getDownloadURL();
+    } catch(e) {
+      console.error('Receipt upload error:', e);
+      return null;
+    }
+  },
+
+  async deleteReceipt(txnId) {
+    if (!this._user || !window.firebase) return;
+    try {
+      for (const ext of ['jpg', 'png']) {
+        const ref = firebase.storage().ref(`users/${this._user.uid}/receipts/${txnId}.${ext}`);
+        await ref.delete().catch(() => {});
+      }
+    } catch {}
+  },
+
   reinit() {
     if (!window.firebase) return;
     const deleteApps = firebase.apps.map(a => a.delete());

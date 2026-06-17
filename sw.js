@@ -41,6 +41,7 @@ self.addEventListener('fetch', e => {
   // Don't cache Firebase / Anthropic API calls
   const url = e.request.url;
   if (url.includes('firestore.googleapis.com') ||
+      url.includes('firebasestorage.googleapis.com') ||
       url.includes('identitytoolkit.google') ||
       url.includes('googleapis.com') ||
       url.includes('api.anthropic.com') ||
