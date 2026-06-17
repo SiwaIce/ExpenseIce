@@ -3,6 +3,16 @@ const POS = {
   type: 'expense',
   cat: null,
   q: '',
+  _isPinned(itemId) {
+    return ((U.getConfig().pinnedItems) || []).includes(itemId);
+  },
+  _togglePin(itemId) {
+    const pinned = (U.getConfig().pinnedItems || []).slice();
+    const idx = pinned.indexOf(itemId);
+    if (idx >= 0) pinned.splice(idx, 1); else pinned.push(itemId);
+    U.updateConfig({ pinnedItems: pinned });
+    App.rv('add');
+  },
   render() {
     const cats = ST.getAll('categories');
     const items = ST.getAll('items');
@@ -21,11 +31,20 @@ const POS = {
     const displayCats = cats.filter(c => c.type === this.type);
     const favItems = EH.getFavItems(this.type);
 
+    const pinnedIds = U.getConfig().pinnedItems || [];
+    const pinnedObjs = pinnedIds.map(id => ST.getById('items', id)).filter(it => {
+      if (!it) return false;
+      const cat = ST.getById('categories', it.categoryId);
+      return cat && cat.type === this.type;
+    });
+
     let posContent = '';
     if (!this.cat) {
+      const pinnedHTML = pinnedObjs.length > 0 ?
+        `<div style="margin-bottom:12px"><div style="font-size:.68rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">📌 ปักหมุด</div><div class="pos-grid">${pinnedObjs.map(it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" style="border:1.5px solid var(--accent)" data-fav-id="${it.id}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}"><button class="pin-btn pinned" data-pin="${it.id}">📌</button><span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span><span class="item-amount">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span><button class="qa-btn" data-qa-fn="${it.id}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button></div>`).join('')}</div></div>` : '';
       const favHTML = favItems.length > 0 ?
         `<div style="margin-bottom:12px"><div style="font-size:.68rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">⭐ ใช้บ่อย</div><div class="pos-grid">${favItems.map(it => `<div class="item-card fav ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}"><span class="fav-star">⭐</span><span class="use-cnt">${it.useCount}x</span><span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span><span class="item-amount">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span><button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button></div>`).join('')}</div></div>` : '';
-      posContent = favHTML + `<div style="font-size:.68rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">📁 หมวดหมู่</div>
+      posContent = pinnedHTML + favHTML + `<div style="font-size:.68rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">📁 หมวดหมู่</div>
         <div class="pos-grid">
           ${displayCats.map(cat => {
             const catItems = items.filter(i => i.categoryId === cat.id);
@@ -49,7 +68,7 @@ const POS = {
         <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;font-weight:700;font-size:.95rem"><span style="font-size:1.3rem">${cat.icon}</span>${cat.name}</div>
         <div class="pos-search"><span class="si">🔍</span><input type="text" id="itemQ" placeholder="ค้นหารายการ..." value="${this.q}"></div>
         <div class="pos-grid">
-          ${catItems.map(it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-item="${it.id}" data-cat="${this.cat}"><span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span><span class="item-amount">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span><button class="qa-btn" data-qa="${it.id}">+</button></div>`).join('')}
+          ${catItems.map(it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-item="${it.id}" data-cat="${this.cat}"><button class="pin-btn ${this._isPinned(it.id)?'pinned':''}" data-pin="${it.id}">📌</button><span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span><span class="item-amount">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span><button class="qa-btn" data-qa="${it.id}">+</button></div>`).join('')}
           <div class="item-card" data-item="custom" data-cat="${this.cat}" style="border-style:dashed"><span class="item-icon">✏️</span><span class="item-name">กำหนดเอง</span><span class="item-amount" style="color:var(--text-secondary)">กรอกเอง</span></div>
         </div>`;
     }
@@ -88,7 +107,7 @@ const POS = {
           ${posContent}
         </div>
       </div>
-      <div style="width:230px;flex-shrink:0">
+      <div class="pos-right-col">
         <div class="streak-widget">
           <span style="font-size:1.8rem">🔥</span>
           <div style="flex:1">
@@ -132,14 +151,18 @@ const POS = {
     );
     document.getElementById('backBtn')?.addEventListener('click', () => { this.cat = null; this.q = ''; App.rv('add'); });
     document.getElementById('itemQ')?.addEventListener('input', e => { this.q = e.target.value; App.rv('add'); });
+    document.querySelectorAll('[data-pin]').forEach(btn => btn.addEventListener('click', e => {
+      e.stopPropagation();
+      this._togglePin(btn.dataset.pin);
+    }));
     document.querySelectorAll('.item-card:not(.fav)').forEach(card => card.addEventListener('click', e => {
-      if (e.target.closest('.qa-btn')) return;
+      if (e.target.closest('.qa-btn') || e.target.closest('.pin-btn')) return;
       const iid = card.dataset.item; const cid = card.dataset.cat;
       if (iid === 'custom') this.openModal(null, cid, null);
       else this.openModal(ST.getById('items', iid), cid, null);
     }));
-    document.querySelectorAll('.item-card.fav').forEach(card => card.addEventListener('click', e => {
-      if (e.target.closest('.qa-btn')) return;
+    document.querySelectorAll('.item-card.fav, .item-card[data-fav-id]').forEach(card => card.addEventListener('click', e => {
+      if (e.target.closest('.qa-btn') || e.target.closest('.pin-btn')) return;
       const iid = card.dataset.favId;
       const item = iid ? ST.getById('items', iid) : null;
       this.openModal(item, item ? item.categoryId : null, null);
@@ -204,8 +227,12 @@ const POS = {
     };
     const chips = chipMap[defCat] || ['ส่วนตัว', 'งาน', 'ครอบครัว'];
     let numVal = String(defAmt || '');
-    const o = document.createElement('div'); o.className = 'modal-overlay';
-    const buildModalHTML = () => `<div class="modal"><h3>${isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : '➕ เพิ่มรายการ'}</h3>
+    const isMobile = window.innerWidth <= 640;
+    const o = document.createElement('div'); o.className = isMobile ? 'bs-overlay' : 'modal-overlay';
+    const buildModalHTML = () => isMobile
+      ? `<div class="bs-sheet"><div class="bs-handle" id="bsHandle"></div><h3 style="font-size:1rem;font-weight:600;margin-bottom:14px">${isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : '➕ เพิ่มรายการ'}</h3>${_buildModalBody()}</div>`
+      : `<div class="modal"><h3>${isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : '➕ เพิ่มรายการ'}</h3>${_buildModalBody()}</div>`;
+    const _buildModalBody = () => `
       <div class="form-group"><label>ประเภท</label><div class="type-toggle"><button class="type-btn ${t0==='expense'?'ae':''}" data-mt="expense">รายจ่าย</button><button class="type-btn ${t0==='income'?'ai':''}" data-mt="income">รายรับ</button></div><input type="hidden" id="mT" value="${t0}"></div>
       <div class="form-group"><label>จำนวนเงิน</label><div class="amt-display focused" id="npDisp">${U.fmtCurrency(Number(numVal)||0, cfg.currency)}</div><div class="presets" id="mPresets">${presets.map(a => `<button class="preset-btn" data-pv="${a}">${U.fmtCurrency(a, cfg.currency)}</button>`).join('')}</div><div class="numpad">${['7','8','9','4','5','6','1','2','3'].map(n => `<button class="np" data-n="${n}">${n}</button>`).join('')}<button class="np np-del" data-n="del">⌫</button><button class="np" data-n="0">0</button><button class="np" data-n=".">.</button></div></div>
       <div class="form-group"><label>หมวดหมู่</label><select id="mC">${cats.map(c => `<option value="${c.id}" ${defCat===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select></div>
@@ -216,7 +243,7 @@ const POS = {
       <div class="form-group"><label>วันที่</label><input type="date" id="mD" value="${isEdit?editTxn.date:U.today()}"><div class="dshorts"><button class="dshort ${!isEdit?'active':''}" data-ds="today">วันนี้</button><button class="dshort" data-ds="yesterday">เมื่อวาน</button><button class="dshort" data-ds="2d">2 วันก่อน</button><button class="dshort" data-ds="3d">3 วันก่อน</button></div></div>
       <div class="form-group"><label>หมายเหตุ</label><textarea id="mNote" placeholder="หมายเหตุ...">${isEdit?editTxn.note||'':''}</textarea><div class="nchips">${chips.map(ch => `<button class="nchip" data-ch="${ch}">${ch}</button>`).join('')}</div></div>
       <div class="modal-actions"><button class="btn btn-outline" id="mCan">ยกเลิก</button><button class="btn ${t0==='expense'?'btn-expense':'btn-income'}" id="mSave">💾 บันทึก</button></div>
-    </div>`;
+    `;
     o.innerHTML = buildModalHTML();
     document.getElementById('modalRoot').appendChild(o);
     const refreshDisp = () => {
@@ -307,6 +334,7 @@ const POS = {
     }));
     o.querySelector('#mCan').onclick = () => o.remove();
     o.onclick = e => { if (e.target === o) o.remove(); };
+    o.querySelector('#bsHandle')?.addEventListener('click', () => o.remove());
     o.querySelector('#mSave').onclick = () => {
       const type = o.querySelector('#mT').value;
       const amount = parseFloat(numVal);

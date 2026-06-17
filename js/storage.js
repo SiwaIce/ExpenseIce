@@ -154,7 +154,7 @@ const U = {
   getConfig() {
     const c = ST.getAll('config');
     if (!c.length) {
-      const d = { id: 'cfg_main', currency: 'THB', theme: 'light', accent: 'indigo', userName: 'ผู้ใช้', onboarded: false, apiKey: '', firebaseConfig: '' };
+      const d = { id: 'cfg_main', currency: 'THB', theme: 'light', accent: 'indigo', userName: 'ผู้ใช้', onboarded: false, apiKey: '', firebaseConfig: '', pinnedItems: [] };
       ST.add('config', d);
       return d;
     }

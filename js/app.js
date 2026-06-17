@@ -8,6 +8,7 @@ const App = {
     this.applyTheme();
     this.bindNav();
     document.getElementById('btnTheme').addEventListener('click', () => this.toggleTheme());
+    document.getElementById('btnRefresh').addEventListener('click', () => { this.rv(this.cv); U.toast('รีเฟรชแล้ว', 'info'); });
     this.rv('add');
     this.updateUI();
     this.updateSBBudgets();

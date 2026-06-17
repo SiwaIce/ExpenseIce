@@ -351,6 +351,19 @@ table tbody tr:hover{background:var(--bg-input)}
 .loan-badge.done{background:var(--success-light,#d1fae5);color:var(--success,#059669)}
 .loan-preview{background:var(--bg-input);border-radius:var(--radius);padding:10px 12px;margin-bottom:12px;font-size:.8rem;color:var(--text-secondary)}
 .nav-group{font-size:.6rem;font-weight:700;letter-spacing:.7px;color:var(--text-secondary);text-transform:uppercase;padding:12px 16px 3px;opacity:.65;pointer-events:none}
+.pin-btn{position:absolute;top:4px;right:4px;background:none;border:none;cursor:pointer;font-size:.75rem;opacity:.25;padding:2px 3px;line-height:1;transition:opacity .15s;z-index:1}
+.pin-btn:hover{opacity:.7}.pin-btn.pinned{opacity:1;color:var(--accent)}
+.pos-right-col{width:230px;flex-shrink:0}
+.bs-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:999;display:flex;align-items:flex-end;animation:bsFadeIn .2s ease}
+.bs-sheet{background:var(--bg-card);border-radius:18px 18px 0 0;width:100%;max-height:88vh;overflow-y:auto;padding:0 16px env(safe-area-inset-bottom,16px);animation:bsSlideUp .25s ease}
+.bs-handle{width:36px;height:4px;background:var(--border);border-radius:2px;margin:10px auto 16px;cursor:pointer}
+@keyframes bsFadeIn{from{opacity:0}to{opacity:1}}
+@keyframes bsSlideUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+@media(max-width:640px){
+  .pos-right-col{width:100%;margin:0 -8px;width:calc(100% + 16px)}
+  .pos-right-col .streak-widget{border-radius:0}
+  .pos-right-col .card{border-radius:0;border-left:none;border-right:none}
+}
 .sync-dot{font-size:.9rem;line-height:1;transition:opacity .3s}
 .sync-dot.sync-syncing,.sync-dot.sync-pending{animation:spin .8s linear infinite;display:inline-block}
 @keyframes spin{to{transform:rotate(360deg)}}
@@ -416,6 +429,7 @@ table tbody tr:hover{background:var(--bg-input)}
       <span class="header-title" id="headerTitle">➕ บันทึกรายการ</span>
     </div>
     <div class="header-right">
+      <button class="btn btn-ghost btn-sm" id="btnRefresh" title="รีเฟรช">🔄</button>
       <button class="btn btn-ghost btn-sm" id="btnTheme" title="สลับธีม">🌓</button>
     </div>
   </header>
