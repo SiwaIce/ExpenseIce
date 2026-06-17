@@ -658,6 +658,21 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 }
 
 /* ─── Bottom Navigation (Mobile only) ─── */
+/* Today widget */
+.today-widget{display:flex;align-items:center;gap:10px;padding:10px 12px;background:var(--bg-input);border-radius:12px;margin-bottom:14px;border:1px solid var(--border)}
+.tw-totals{display:flex;align-items:center;gap:8px;flex-shrink:0}
+.tw-total{display:flex;flex-direction:column;align-items:center;gap:1px}
+.tw-amt{font-weight:800;font-size:.82rem}
+.tw-lbl{font-size:.58rem;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em}
+.tw-div{width:1px;height:28px;background:var(--border)}
+.tw-quick{display:flex;gap:5px;margin-left:auto}
+.tw-item{display:flex;flex-direction:column;align-items:center;gap:2px;padding:5px 7px;background:var(--bg-card);border:1px solid var(--border);border-radius:8px;cursor:pointer;transition:all .15s;line-height:1}
+.tw-item:active{transform:scale(.88);background:var(--accent-light)}
+/* Mini numpad overlay */
+.mini-numpad{position:fixed;bottom:0;left:0;right:0;z-index:5000;background:var(--bg-card);border-radius:20px 20px 0 0;padding:16px 16px calc(16px + env(safe-area-inset-bottom,0px));box-shadow:0 -8px 40px rgba(0,0,0,.2);border-top:1px solid var(--border);transform:translateY(100%);transition:transform .3s cubic-bezier(.32,1.2,.5,1)}
+.mini-numpad.show{transform:translateY(0)}
+.mini-np-btn{padding:13px 6px;background:var(--bg-input);border:1px solid var(--border);border-radius:10px;font-size:1.05rem;font-weight:700;cursor:pointer;transition:.12s;color:var(--text);width:100%;text-align:center}
+.mini-np-btn:active{transform:scale(.88);background:var(--accent-light)}
 .bottom-nav{display:none}
 @media(max-width:640px){
   .bottom-nav{
@@ -870,6 +885,81 @@ window.addEventListener('DOMContentLoaded', () => {
       document.addEventListener('pointerup', up);
     });
     fabB.addEventListener('click', e => { if (delta > 8) { e.stopImmediatePropagation(); delta = 0; } }, true);
+  })();
+
+  // Mini numpad — long-press on bottom nav 💸 button
+  (function() {
+    const addBtn = document.querySelector('[data-bnav="add"]');
+    if (!addBtn) return;
+    let lpTimer = null, longPressed = false;
+    addBtn.addEventListener('pointerdown', () => {
+      longPressed = false;
+      lpTimer = setTimeout(() => { longPressed = true; showMiniNumpad(); }, 500);
+    });
+    addBtn.addEventListener('pointerup', () => clearTimeout(lpTimer));
+    addBtn.addEventListener('pointerleave', () => clearTimeout(lpTimer));
+    addBtn.addEventListener('click', e => {
+      if (longPressed) { e.stopImmediatePropagation(); e.preventDefault(); longPressed = false; }
+    }, true);
+
+    window.showMiniNumpad = function() {
+      if (document.getElementById('miniNumpad')) { closeMiniNumpad(); return; }
+      const cats = (typeof ST !== 'undefined' ? ST.getAll('categories') : []).filter(c => c.type === 'expense');
+      const cfg = typeof U !== 'undefined' ? U.getConfig() : {};
+      const cur = cfg.currency || 'THB';
+      let mVal = '';
+
+      const bg = document.createElement('div');
+      bg.id = 'miniNumpadBg';
+      bg.style.cssText = 'position:fixed;inset:0;z-index:4999;background:rgba(0,0,0,.35)';
+      bg.onclick = () => closeMiniNumpad();
+
+      const el = document.createElement('div');
+      el.id = 'miniNumpad';
+      el.className = 'mini-numpad';
+      el.innerHTML = `<div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:10px">
+        <span style="font-weight:700;font-size:.95rem">⚡ บันทึกด่วน</span>
+        <button id="miniClose" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-secondary);padding:4px 6px">✕</button>
+      </div>
+      <div id="miniDisp" style="font-size:1.9rem;font-weight:800;text-align:center;color:var(--accent);margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:10px;min-height:54px;letter-spacing:.02em">฿ 0</div>
+      <select id="miniCat" style="width:100%;margin-bottom:10px;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:.85rem">${cats.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}</select>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">${['7','8','9','4','5','6','1','2','3','del','0','.'].map(n => `<button class="mini-np-btn" data-mn="${n}">${n === 'del' ? '⌫' : n}</button>`).join('')}</div>
+      <button id="miniSave" style="width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;transition:.15s">💾 บันทึก</button>`;
+
+      document.body.appendChild(bg);
+      document.body.appendChild(el);
+      requestAnimationFrame(() => el.classList.add('show'));
+
+      const disp = el.querySelector('#miniDisp');
+      const fmtDisp = () => { disp.textContent = (cur === 'THB' ? '฿ ' : cur + ' ') + (parseFloat(mVal) || 0).toLocaleString('th-TH'); };
+      el.querySelectorAll('.mini-np-btn').forEach(btn => btn.addEventListener('click', () => {
+        const n = btn.dataset.mn;
+        if (n === 'del') mVal = mVal.slice(0, -1);
+        else if (n === '.' && !mVal.includes('.')) mVal += '.';
+        else if (n !== '.' && mVal.length < 10) mVal += n;
+        fmtDisp();
+      }));
+      el.querySelector('#miniClose').onclick = () => closeMiniNumpad();
+      el.querySelector('#miniSave').onclick = () => {
+        const amount = parseFloat(mVal);
+        if (!amount || amount <= 0) { if (typeof U !== 'undefined') U.toast('กรุณากรอกจำนวนเงิน', 'error'); return; }
+        const catId = el.querySelector('#miniCat').value;
+        const cat = cats.find(c => c.id === catId) || {};
+        if (typeof ST !== 'undefined') {
+          ST.add('transactions', { type: 'expense', amount, categoryId: catId, itemName: cat.name || '', date: typeof U !== 'undefined' ? U.today() : new Date().toISOString().slice(0, 10), note: '' });
+          if (typeof U !== 'undefined') U.toast(`✅ ${cat.icon || ''} ${cat.name || ''} ${amount.toLocaleString('th-TH')} บันทึกแล้ว`, 'success');
+          if (typeof App !== 'undefined') App.rv('add');
+        }
+        closeMiniNumpad();
+      };
+    };
+
+    window.closeMiniNumpad = function() {
+      const el = document.getElementById('miniNumpad');
+      const bg = document.getElementById('miniNumpadBg');
+      if (el) { el.classList.remove('show'); setTimeout(() => { el.remove(); if (bg) bg.remove(); }, 300); }
+      else if (bg) bg.remove();
+    };
   })();
 });
 </script>

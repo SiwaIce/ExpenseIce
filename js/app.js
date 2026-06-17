@@ -25,6 +25,24 @@ const App = {
     setTimeout(() => CloudSync.init(), 200);
     setTimeout(() => this.autoCreateRecurring(), 600);
     setTimeout(() => this.checkDueNotifications(), 1200);
+    // Evening reminder if no transactions recorded today
+    setTimeout(() => {
+      const h = new Date().getHours();
+      if (h >= 16 && h <= 22) {
+        const today = U.today();
+        const hasTxns = ST.getAll('transactions').some(t => t.date === today);
+        const key = 'exp_evRemind_' + today;
+        if (!hasTxns && !localStorage.getItem(key)) {
+          localStorage.setItem(key, '1');
+          const el = document.createElement('div');
+          el.id = 'eveningBanner';
+          el.style.cssText = 'position:fixed;top:68px;left:50%;transform:translateX(-50%);z-index:9000;background:linear-gradient(135deg,var(--accent),#7c3aed);color:#fff;padding:10px 16px;border-radius:14px;font-size:.84rem;font-weight:600;box-shadow:0 4px 24px rgba(0,0,0,.25);display:flex;gap:10px;align-items:center;max-width:340px;width:calc(90% - 32px)';
+          el.innerHTML = '🌆 ยังไม่มีรายการวันนี้ อย่าลืมบันทึก! <button onclick="document.getElementById(\'eveningBanner\').remove()" style="background:rgba(255,255,255,.25);border:none;color:#fff;border-radius:6px;padding:2px 8px;cursor:pointer;font-size:.8rem;margin-left:auto">✕</button>';
+          document.body.appendChild(el);
+          setTimeout(() => document.getElementById('eveningBanner')?.remove(), 8000);
+        }
+      }
+    }, 2000);
   },
   checkDueNotifications() {
     if (!('Notification' in window)) return;

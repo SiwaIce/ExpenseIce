@@ -68,7 +68,40 @@ const POS = {
         </div>
       </div>` : '';
 
-    const posContent = pinnedHTML + favHTML +
+    // Time-based suggestions
+    const hour = new Date().getHours();
+    const timeHints = hour >= 6 && hour < 10 ? { label: '🌅 เช้า', cats: ['cat_food','cat_transport'] }
+      : hour >= 10 && hour < 14 ? { label: '☀️ เที่ยง', cats: ['cat_food'] }
+      : hour >= 14 && hour < 18 ? { label: '🌤️ บ่าย', cats: ['cat_food','cat_entertain'] }
+      : hour >= 17 && hour < 23 ? { label: '🌆 เย็น', cats: ['cat_food','cat_transport'] }
+      : null;
+    const timeFavs = (timeHints && this.type === 'expense')
+      ? favItems.filter(it => timeHints.cats.includes(it.categoryId)).slice(0, 4) : [];
+    const timeSuggestHTML = timeFavs.length > 0 ? `<div style="margin-bottom:14px">
+      <div class="pos-section-label">${timeHints.label} แนะนำ</div>
+      <div class="pos-grid">${timeFavs.map(it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
+        <span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span>
+        <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button>
+      </div>`).join('')}</div>
+    </div>` : '';
+
+    // Compact today widget
+    const todayWidget = todayTxns.length > 0 ? `<div class="today-widget">
+      <div class="tw-totals">
+        <div class="tw-total"><span class="tw-amt" style="color:var(--expense)">${U.fmtCurrency(sum.totalExpense, cfg.currency)}</span><span class="tw-lbl">รายจ่าย</span></div>
+        <div class="tw-div"></div>
+        <div class="tw-total"><span class="tw-amt" style="color:var(--income)">${U.fmtCurrency(sum.totalIncome, cfg.currency)}</span><span class="tw-lbl">รายรับ</span></div>
+      </div>
+      <div class="tw-quick">${[...todayTxns].reverse().slice(0, 3).map(t => {
+        const cat = ST.getById('categories', t.categoryId) || { icon: '❓' };
+        return `<button class="tw-item" data-dup="${t.id}" title="ซ้ำ: ${t.itemName||''} ${U.fmtCurrency(t.amount, cfg.currency)}">
+          <span style="font-size:1.1rem">${cat.icon}</span>
+          <span style="font-size:.6rem;color:var(--text-secondary)">${U.fmtCurrency(t.amount, cfg.currency)}</span>
+        </button>`;
+      }).join('')}</div>
+    </div>` : '';
+
+    const posContent = pinnedHTML + favHTML + timeSuggestHTML + todayWidget +
       `<div class="pos-section-label">📁 หมวดหมู่</div>
       <div class="pos-grid">
         ${displayCats.map(cat => {
@@ -102,6 +135,7 @@ const POS = {
               </div>
               <span style="font-size:.77rem;font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'};flex-shrink:0">${U.fmtCurrency(t.amount, cfg.currency)}</span>
               ${t.receiptUrl ? `<img src="${t.receiptUrl}" class="receipt-thumb" title="ดูใบเสร็จ" onclick="event.stopPropagation();window.open('${t.receiptUrl}','_blank')">` : ''}
+              <button class="btn-ghost" style="padding:2px 3px;font-size:.68rem;color:var(--accent);flex-shrink:0" data-dup="${t.id}" title="ซ้ำรายการ">🔁</button>
               <button class="btn-ghost" style="padding:2px 3px;font-size:.68rem;flex-shrink:0" data-et="${t.id}">✏️</button>
               <button class="btn-ghost" style="padding:2px 3px;font-size:.68rem;color:var(--danger);flex-shrink:0" data-dt="${t.id}">🗑️</button>
             </div>
@@ -192,6 +226,15 @@ const POS = {
         App.rv('add');
       });
     });
+    document.querySelectorAll('[data-dup]').forEach(btn => btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const t = ST.getById('transactions', btn.dataset.dup);
+      if (!t) return;
+      const { id, receiptUrl, installmentId, ...rest } = t;
+      ST.add('transactions', { ...rest, date: U.today() });
+      U.toast(`🔁 ซ้ำ: ${t.itemName || 'รายการ'} ✅`, 'success');
+      App.rv('add');
+    }));
     document.querySelectorAll('[data-et]').forEach(btn => btn.addEventListener('click', e => {
       e.stopPropagation();
       const txn = ST.getById('transactions', btn.dataset.et);
@@ -253,7 +296,7 @@ const POS = {
       : `<div class="modal"><h3>${isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : '➕ เพิ่มรายการ'}</h3>${_buildModalBody()}</div>`;
     const _buildModalBody = () => `
       <div class="form-group"><label>ประเภท</label><div class="type-toggle"><button class="type-btn ${t0==='expense'?'ae':''}" data-mt="expense">รายจ่าย</button><button class="type-btn ${t0==='income'?'ai':''}" data-mt="income">รายรับ</button></div><input type="hidden" id="mT" value="${t0}"></div>
-      <div class="form-group"><label>จำนวนเงิน</label><div class="amt-display focused" id="npDisp">${U.fmtCurrency(Number(numVal)||0, cfg.currency)}</div><div class="presets" id="mPresets">${presets.map(a => `<button class="preset-btn" data-pv="${a}">${U.fmtCurrency(a, cfg.currency)}</button>`).join('')}</div><div class="numpad">${['7','8','9','4','5','6','1','2','3'].map(n => `<button class="np" data-n="${n}">${n}</button>`).join('')}<button class="np np-del" data-n="del">⌫</button><button class="np" data-n="0">0</button><button class="np" data-n=".">.</button></div></div>
+      <div class="form-group"><label>จำนวนเงิน</label><div style="display:flex;gap:6px;align-items:center"><div class="amt-display focused" id="npDisp" style="flex:1">${U.fmtCurrency(Number(numVal)||0, cfg.currency)}</div><button class="btn-ghost" id="voiceBtn" title="พูดจำนวนเงิน" style="font-size:1.05rem;padding:6px 9px;border:1px solid var(--border);flex-shrink:0">🎤</button><button class="btn-ghost" id="splitBtn" title="แบ่งบิล" style="font-size:.75rem;padding:6px 8px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap">÷ แบ่ง</button></div><div id="splitRow" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;padding:8px;background:var(--bg-input);border-radius:8px"><span style="font-size:.78rem">แบ่ง</span><input type="number" id="splitN" value="2" min="2" max="20" style="width:55px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:.85rem;background:var(--bg-card);color:var(--text)"><span style="font-size:.78rem">คน คนละ</span><span id="splitResult" style="font-weight:700;color:var(--accent);font-size:.88rem">-</span><button class="btn btn-sm btn-outline" id="splitApply" style="font-size:.74rem;padding:3px 10px">ใช้</button></div><div class="presets" id="mPresets">${presets.map(a => `<button class="preset-btn" data-pv="${a}">${U.fmtCurrency(a, cfg.currency)}</button>`).join('')}</div><div class="numpad">${['7','8','9','4','5','6','1','2','3'].map(n => `<button class="np" data-n="${n}">${n}</button>`).join('')}<button class="np np-del" data-n="del">⌫</button><button class="np" data-n="0">0</button><button class="np" data-n=".">.</button></div></div>
       <div class="form-group"><label>หมวดหมู่</label><select id="mC">${cats.map(c => `<option value="${c.id}" ${defCat===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select></div>
       ${catQuickItems.length > 0 ? `<div class="form-group"><label style="font-size:.74rem;color:var(--text-secondary)">รายการที่บันทึกไว้</label><div class="nchips" id="qiChips">${catQuickItems.map(it => `<button type="button" class="nchip qi-chip" data-qi-name="${it.name}" data-qi-amt="${it.defaultAmount||0}">${it.icon} ${it.name}</button>`).join('')}</div></div>` : ''}
       <div class="form-group"><label>ชื่อรายการ</label><input type="text" id="mN" value="${defName}" placeholder="เช่น ข้าวผัด, น้ำมัน..."></div>
@@ -358,6 +401,52 @@ const POS = {
       const el = o.querySelector('#mNote');
       el.value = el.value ? (el.value + ', ' + ch.dataset.ch) : ch.dataset.ch;
     }));
+    // Voice input
+    o.querySelector('#voiceBtn')?.addEventListener('click', () => {
+      const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+      if (!SR) { U.toast('เบราว์เซอร์ไม่รองรับ Voice Input', 'error'); return; }
+      const btn = o.querySelector('#voiceBtn');
+      const rec = new SR(); rec.lang = 'th-TH'; rec.interimResults = false; rec.maxAlternatives = 1;
+      btn.textContent = '🔴'; btn.style.color = 'var(--danger)';
+      try { rec.start(); } catch { btn.textContent = '🎤'; btn.style.color = ''; return; }
+      rec.onresult = e => {
+        const text = e.results[0][0].transcript;
+        const num = text.replace(/,/g,'').match(/\d+\.?\d*/);
+        if (num) { numVal = num[0]; refreshDisp(); U.toast('🎤 ' + text, 'info'); }
+        btn.textContent = '🎤'; btn.style.color = '';
+      };
+      rec.onerror = () => { btn.textContent = '🎤'; btn.style.color = ''; };
+      rec.onend = () => { btn.textContent = '🎤'; btn.style.color = ''; };
+    });
+    // Split bill
+    const _updateSplit = () => {
+      const n = parseInt(o.querySelector('#splitN')?.value) || 2;
+      const total = parseFloat(numVal) || 0;
+      const r = o.querySelector('#splitResult'); if (r) r.textContent = total > 0 ? U.fmtCurrency(Math.ceil(total / n), cfg.currency) : '-';
+    };
+    o.querySelector('#splitBtn')?.addEventListener('click', () => {
+      const sr = o.querySelector('#splitRow'); if (!sr) return;
+      sr.style.display = sr.style.display === 'none' ? 'flex' : 'none';
+      if (sr.style.display !== 'none') _updateSplit();
+    });
+    o.querySelector('#splitN')?.addEventListener('input', _updateSplit);
+    o.querySelector('#splitApply')?.addEventListener('click', () => {
+      const n = parseInt(o.querySelector('#splitN')?.value) || 2;
+      const total = parseFloat(numVal) || 0;
+      if (total > 0 && n > 1) { numVal = String(Math.ceil(total / n)); refreshDisp(); }
+      const sr = o.querySelector('#splitRow'); if (sr) sr.style.display = 'none';
+    });
+    // Category pre-fill amount from history
+    o.querySelector('#mC')?.addEventListener('change', () => {
+      if (parseFloat(numVal) > 0) return;
+      const catId = o.querySelector('#mC').value;
+      const catTxns = ST.getAll('transactions').filter(t => t.categoryId === catId && Number(t.amount) > 0);
+      if (!catTxns.length) return;
+      const freq = {};
+      catTxns.forEach(t => { const a = String(t.amount); freq[a] = (freq[a] || 0) + 1; });
+      const topAmt = Object.entries(freq).sort((a,b) => b[1] - a[1])[0]?.[0];
+      if (topAmt) { numVal = topAmt; refreshDisp(); U.toast('💡 แนะนำจากประวัติ', 'info'); }
+    });
     o.querySelector('#mCan').onclick = () => o.remove();
     o.onclick = e => { if (e.target === o) o.remove(); };
     o.querySelector('#bsHandle')?.addEventListener('click', () => o.remove());
