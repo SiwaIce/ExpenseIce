@@ -13,7 +13,10 @@ const CloudSync = {
   _parseCfg() {
     try {
       const s = U.getConfig().firebaseConfig;
-      return s ? JSON.parse(s) : null;
+      if (!s) return null;
+      try { return JSON.parse(s); } catch {}
+      // Accept JS object syntax (Firebase default copy format)
+      return Function('"use strict";return (' + s + ')')();
     } catch { return null; }
   },
 

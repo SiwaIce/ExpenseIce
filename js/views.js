@@ -281,15 +281,16 @@ const Views = {
     }));
     document.getElementById('btnSaveFB')?.addEventListener('click', () => {
       const raw = document.getElementById('sFBConfig').value.trim();
-      try {
-        if (raw) JSON.parse(raw);
-        U.updateConfig({ firebaseConfig: raw });
-        CloudSync.reinit();
-        U.toast('บันทึก Firebase Config แล้ว ✅', 'success');
-        setTimeout(() => App.rv('settings'), 500);
-      } catch {
-        U.toast('Firebase Config ไม่ถูกต้อง (ต้องเป็น JSON)', 'error');
-      }
+      const isValid = raw => {
+        try { JSON.parse(raw); return true; } catch {}
+        try { const o = Function('"use strict";return (' + raw + ')')(); return !!(o && o.projectId); } catch {}
+        return false;
+      };
+      if (raw && !isValid(raw)) { U.toast('Firebase Config ไม่ถูกต้อง กรุณาตรวจสอบอีกครั้ง', 'error'); return; }
+      U.updateConfig({ firebaseConfig: raw });
+      CloudSync.reinit();
+      U.toast('บันทึก Firebase Config แล้ว ✅', 'success');
+      setTimeout(() => App.rv('settings'), 500);
     });
     document.getElementById('btnForcePush')?.addEventListener('click', async () => {
       U.toast('กำลัง Push...', 'info');
