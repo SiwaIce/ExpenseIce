@@ -22,6 +22,25 @@ const Views = {
 
     const activeGoals = ST.getAll('savings_goals').filter(g => g.status === 'active');
     const allActiveInsts = ST.getAll('installments').filter(i => i.status === 'active');
+    // Spending forecast: average of last 3 months
+    const forecastData = (() => {
+      const now = new Date(); const results = [];
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const m = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+        const exp = txns.filter(t => t.date.startsWith(m) && t.type === 'expense').reduce((s,t) => s + Number(t.amount), 0);
+        if (exp > 0) results.push(exp);
+      }
+      if (!results.length) return null;
+      const avg = results.reduce((s,v) => s+v, 0) / results.length;
+      const daysInMonth = new Date(now.getFullYear(), now.getMonth()+1, 0).getDate();
+      const daysDone = now.getDate();
+      const projected = Math.round((avg / daysInMonth) * daysInMonth);
+      const soFar = mSum.totalExpense;
+      const remaining = Math.max(0, projected - soFar);
+      const pct = Math.min(100, Math.round(soFar / projected * 100));
+      return { avg: Math.round(avg), projected, soFar, remaining, pct, daysDone, daysInMonth };
+    })();
     const instsDue = EH.getInstallmentsDueThisMonth();
     const instDueTotal = instsDue.reduce((s, i) => s + Number(i.monthlyPayment), 0);
     const instRemainingTotal = allActiveInsts.reduce((s, i) => s + i.monthlyPayment * i.remainingMonths, 0);
@@ -37,6 +56,7 @@ const Views = {
       <div class="stat-card" style="background:linear-gradient(135deg,var(--accent),#8b5cf6);border:none"><div class="stat-label" style="color:rgba(255,255,255,.8)">🔥 Streak</div><div class="stat-value" style="color:#fff">${streak} วัน</div></div>
       ${walletCards}
     </div>
+    ${forecastData ? `<div class="card" style="border-left:4px solid var(--accent)"><div class="card-header"><span class="card-title">🔮 คาดการณ์รายจ่ายเดือนนี้</span><span style="font-size:.72rem;color:var(--text-secondary)">อ้างอิงจาก 3 เดือนที่ผ่านมา</span></div><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:10px"><div style="text-align:center;padding:9px;background:var(--bg-input);border-radius:9px"><div class="btag">ใช้ไปแล้ว</div><div style="font-weight:700;color:var(--expense);font-size:.88rem">${U.fmtCurrency(forecastData.soFar, cfg.currency)}</div></div><div style="text-align:center;padding:9px;background:var(--accent-light);border-radius:9px"><div class="btag">ประมาณการทั้งเดือน</div><div style="font-weight:700;color:var(--accent);font-size:.88rem">${U.fmtCurrency(forecastData.projected, cfg.currency)}</div></div><div style="text-align:center;padding:9px;background:${forecastData.pct>90?'var(--danger-light)':'var(--success-light)'};border-radius:9px"><div class="btag">คาดว่าเหลือ</div><div style="font-weight:700;color:${forecastData.pct>90?'var(--danger)':'var(--success)'};font-size:.88rem">${U.fmtCurrency(forecastData.remaining, cfg.currency)}</div></div></div><div style="margin-bottom:4px"><div style="display:flex;justify-content:space-between;font-size:.72rem;color:var(--text-secondary);margin-bottom:3px"><span>วันที่ ${forecastData.daysDone}/${forecastData.daysInMonth}</span><span>${forecastData.pct}% ของประมาณการ</span></div><div style="background:var(--border);border-radius:4px;height:8px"><div style="height:8px;border-radius:4px;background:${forecastData.pct>90?'var(--danger)':forecastData.pct>70?'var(--warning)':'var(--accent)'};width:${forecastData.pct}%;transition:width .5s"></div></div></div></div>` : ''}
     <div class="charts-row">
       <div class="card"><div class="card-header"><span class="card-title">🍩 สัดส่วนรายจ่าย</span></div><div class="chart-container"><canvas id="donutChart"></canvas></div><div class="prog-legend">${spending.slice(0,6).map(s => `<div class="prog-legend-item"><span class="ldot" style="background:${s.color}"></span>${s.icon} ${s.name} (${s.percent.toFixed(1)}%)</div>`).join('')}</div></div>
       <div class="card"><div class="card-header"><span class="card-title">📈 แนวโน้ม 14 วัน</span></div><div class="chart-container"><canvas id="lineChart"></canvas></div><div class="prog-legend"><div class="prog-legend-item"><span class="ldot" style="background:#10b981"></span>รายรับ</div><div class="prog-legend-item"><span class="ldot" style="background:#ef4444"></span>รายจ่าย</div></div></div>
@@ -205,7 +225,7 @@ const Views = {
       { id: 'orange', color: '#f97316', label: 'Orange' },
       { id: 'purple', color: '#8b5cf6', label: 'Purple' }
     ];
-    return `<div class="card"><div class="card-header"><span class="card-title">⚙️ การตั้งค่า</span></div><div class="form-group"><label>ชื่อผู้ใช้</label><input type="text" id="sUN" value="${cfg.userName||'ผู้ใช้'}"></div><div class="form-group"><label>🤖 Anthropic API Key</label><input type="password" id="sApiKey" value="${cfg.apiKey||''}" placeholder="sk-ant-api03-..."><div style="font-size:.72rem;color:var(--text-secondary);margin-top:4px">ใช้สำหรับ AI Insights และ AI Chat · ไม่เปิดเผยข้อมูลออกนอกเครื่อง</div>${!cfg.apiKey?'<div style="font-size:.72rem;color:var(--danger);margin-top:2px">⚠️ ยังไม่ได้ตั้งค่า — ฟีเจอร์ AI จะยังไม่ทำงาน</div>':''}</div><div class="form-group"><label>สกุลเงิน</label><select id="sCur"><option value="THB" ${cfg.currency==='THB'?'selected':''}>บาท (฿)</option><option value="USD" ${cfg.currency==='USD'?'selected':''}>ดอลลาร์ ($)</option><option value="EUR" ${cfg.currency==='EUR'?'selected':''}>ยูโร (€)</option><option value="JPY" ${cfg.currency==='JPY'?'selected':''}>เยน (¥)</option><option value="GBP" ${cfg.currency==='GBP'?'selected':''}>ปอนด์ (£)</option></select></div><div class="form-group"><label>สีธีม (Accent Color)</label><div class="ac-swatches">${accentColors.map(ac=>`<div class="ac-sw ${(cfg.accent||'indigo')===ac.id?'active':''}" style="background:${ac.color}" data-ac="${ac.id}" title="${ac.label}"></div>`).join('')}</div></div><button class="btn btn-primary" id="btnSaveS">💾 บันทึก</button></div><div class="card"><div class="card-header"><span class="card-title">☁️ Cloud Sync</span><span id="syncStatus" class="sync-dot ${CloudSync.isLoggedIn()?'sync-synced':'sync-offline'}" title="${CloudSync.isLoggedIn()?'ซิงค์แล้ว':'ออฟไลน์'}">${CloudSync.isLoggedIn()?'✅':'☁️'}</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ซิงค์ข้อมูลกับ Firebase Firestore — ใช้ได้ทุกอุปกรณ์ iOS, Android, PC</p><div class="form-group"><label>Firebase Config (JSON)</label><textarea id="sFBConfig" rows="5" style="font-size:.72rem;font-family:monospace;resize:vertical" placeholder='&#123;"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."&#125;'>${cfg.firebaseConfig||''}</textarea></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-primary btn-sm" id="btnSaveFB">💾 บันทึก Config</button>${CloudSync.isLoggedIn()?`<button class="btn btn-outline btn-sm" id="btnForcePush">⬆️ Push</button><button class="btn btn-outline btn-sm" id="btnForcePull">⬇️ Pull</button><button class="btn btn-outline btn-sm" id="btnCloudSignOut" style="color:var(--danger)">🚪 ออกจากระบบ</button>`:CloudSync.isConfigured()?`<button class="btn btn-success btn-sm" id="btnCloudSignIn">🔑 Sign in with Google</button>`:''}</div><details style="margin-top:4px"><summary style="font-size:.78rem;color:var(--text-secondary);cursor:pointer">📋 วิธีตั้งค่า Firebase (ขยายดู)</summary><ol style="font-size:.74rem;color:var(--text-secondary);padding:8px 0 0 16px;line-height:2.1"><li>ไปที่ <b>console.firebase.google.com</b> → สร้างโปรเจคใหม่</li><li>เพิ่ม Web App (<b>&lt;/&gt;</b>) → คัดลอก <b>firebaseConfig</b> ทั้งก้อน JSON</li><li>เปิด <b>Firestore Database</b> → สร้างฐานข้อมูล → <b>Test Mode</b></li><li>เปิด <b>Authentication</b> → Sign-in method → เปิดใช้ <b>Google</b></li><li>เพิ่ม domain ที่ใช้งาน (localhost หรือ URL) ใน Authorized domains</li><li>วาง config → กด <b>บันทึก Config</b> → กด <b>☁️ Sign in</b> ใน sidebar</li></ol></details></div><div class="card"><div class="card-header"><span class="card-title">📁 หมวดหมู่ & รายการ</span><button class="btn btn-primary btn-sm" id="btnAddCat">➕ หมวดหมู่</button></div><div class="tabs"><div class="tab active" data-st="cats">หมวดหมู่ (${cats.length})</div><div class="tab" data-st="items">รายการ (${items.length})</div></div><div id="st-cats"><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>ประเภท</th><th>สี</th><th></th></tr></thead><tbody>${cats.map(c=>`<tr><td style="font-size:1.2rem">${c.icon}</td><td>${c.name}</td><td><span class="badge badge-${c.type}">${c.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${c.color}"></span>${c.color}</td><td>${c.isDefault?'':`<button class="btn-ghost btnEC" data-id="${c.id}">✏️</button><button class="btn-ghost btnDC" data-id="${c.id}" style="color:var(--danger)">🗑️</button>`}</td></tr>`).join('')}</tbody></table></div></div><div id="st-items" style="display:none"><div style="margin-bottom:7px"><button class="btn btn-success btn-sm" id="btnAddItem">➕ รายการ</button></div><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>หมวดหมู่</th><th>จำนวนเริ่มต้น</th><th></th></tr></thead><tbody>${items.map(i=>{const cat=cats.find(c=>c.id===i.categoryId)||{icon:'❓',name:'?'};return`<tr><td style="font-size:1rem">${i.icon}</td><td>${i.name}</td><td>${cat.icon} ${cat.name}</td><td>${U.fmtCurrency(i.defaultAmount, cfg.currency)}</td><td>${i.isDefault?'':`<button class="btn-ghost btnEI" data-id="${i.id}">✏️</button><button class="btn-ghost btnDI" data-id="${i.id}" style="color:var(--danger)">🗑️</button>`}</td></tr>`}).join('')}</tbody></table></div></div></div><div class="card"><div class="card-header"><span class="card-title">💾 สำรองข้อมูล</span></div><p style="color:var(--text-secondary);margin-bottom:10px;font-size:.84rem">Export ข้อมูลทั้งหมดเป็น JSON เพื่อสำรอง หรือ Import เพื่อกู้คืน</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="btnExportJSON">📤 Export JSON</button><label class="btn btn-outline" style="cursor:pointer">📥 Import JSON<input type="file" id="inputImportJSON" accept=".json" style="display:none"></label></div></div><div class="card" style="border:2px solid var(--danger)"><div class="card-header"><span class="card-title" style="color:var(--danger)">⚠️ โซนอันตราย</span></div><p style="color:var(--text-secondary);margin-bottom:9px;font-size:.84rem">รีเซ็ตจะลบข้อมูลทั้งหมด</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-danger" id="btnReset">🗑️ รีเซ็ตทั้งหมด</button><button class="btn btn-outline btn-sm" id="btnResetOB">🎯 แสดง Onboarding ใหม่</button></div></div>`;
+    return `<div class="card"><div class="card-header"><span class="card-title">⚙️ การตั้งค่า</span></div><div class="form-group"><label>ชื่อผู้ใช้</label><input type="text" id="sUN" value="${cfg.userName||'ผู้ใช้'}"></div><div class="form-group"><label>🤖 Anthropic API Key</label><input type="password" id="sApiKey" value="${cfg.apiKey||''}" placeholder="sk-ant-api03-..."><div style="font-size:.72rem;color:var(--text-secondary);margin-top:4px">ใช้สำหรับ AI Insights และ AI Chat · ไม่เปิดเผยข้อมูลออกนอกเครื่อง</div>${!cfg.apiKey?'<div style="font-size:.72rem;color:var(--danger);margin-top:2px">⚠️ ยังไม่ได้ตั้งค่า — ฟีเจอร์ AI จะยังไม่ทำงาน</div>':''}</div><div class="form-group"><label>สกุลเงิน</label><select id="sCur"><option value="THB" ${cfg.currency==='THB'?'selected':''}>บาท (฿)</option><option value="USD" ${cfg.currency==='USD'?'selected':''}>ดอลลาร์ ($)</option><option value="EUR" ${cfg.currency==='EUR'?'selected':''}>ยูโร (€)</option><option value="JPY" ${cfg.currency==='JPY'?'selected':''}>เยน (¥)</option><option value="GBP" ${cfg.currency==='GBP'?'selected':''}>ปอนด์ (£)</option></select></div><div class="form-group"><label>สีธีม (Accent Color)</label><div class="ac-swatches">${accentColors.map(ac=>`<div class="ac-sw ${(cfg.accent||'indigo')===ac.id?'active':''}" style="background:${ac.color}" data-ac="${ac.id}" title="${ac.label}"></div>`).join('')}</div></div><button class="btn btn-primary" id="btnSaveS">💾 บันทึก</button></div><div class="card"><div class="card-header"><span class="card-title">☁️ Cloud Sync</span><span id="syncStatus" class="sync-dot ${CloudSync.isLoggedIn()?'sync-synced':'sync-offline'}" title="${CloudSync.isLoggedIn()?'ซิงค์แล้ว':'ออฟไลน์'}">${CloudSync.isLoggedIn()?'✅':'☁️'}</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ซิงค์ข้อมูลกับ Firebase Firestore — ใช้ได้ทุกอุปกรณ์ iOS, Android, PC</p><div class="form-group"><label>Firebase Config (JSON)</label><textarea id="sFBConfig" rows="5" style="font-size:.72rem;font-family:monospace;resize:vertical" placeholder='&#123;"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."&#125;'>${cfg.firebaseConfig||''}</textarea></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-primary btn-sm" id="btnSaveFB">💾 บันทึก Config</button>${CloudSync.isLoggedIn()?`<button class="btn btn-outline btn-sm" id="btnForcePush">⬆️ Push</button><button class="btn btn-outline btn-sm" id="btnForcePull">⬇️ Pull</button><button class="btn btn-outline btn-sm" id="btnCloudSignOut" style="color:var(--danger)">🚪 ออกจากระบบ</button>`:CloudSync.isConfigured()?`<button class="btn btn-success btn-sm" id="btnCloudSignIn">🔑 Sign in with Google</button>`:''}</div><details style="margin-top:4px"><summary style="font-size:.78rem;color:var(--text-secondary);cursor:pointer">📋 วิธีตั้งค่า Firebase (ขยายดู)</summary><ol style="font-size:.74rem;color:var(--text-secondary);padding:8px 0 0 16px;line-height:2.1"><li>ไปที่ <b>console.firebase.google.com</b> → สร้างโปรเจคใหม่</li><li>เพิ่ม Web App (<b>&lt;/&gt;</b>) → คัดลอก <b>firebaseConfig</b> ทั้งก้อน JSON</li><li>เปิด <b>Firestore Database</b> → สร้างฐานข้อมูล → <b>Test Mode</b></li><li>เปิด <b>Authentication</b> → Sign-in method → เปิดใช้ <b>Google</b></li><li>เพิ่ม domain ที่ใช้งาน (localhost หรือ URL) ใน Authorized domains</li><li>วาง config → กด <b>บันทึก Config</b> → กด <b>☁️ Sign in</b> ใน sidebar</li></ol></details></div><div class="card"><div class="card-header"><span class="card-title">📁 หมวดหมู่ & รายการ</span><button class="btn btn-primary btn-sm" id="btnAddCat">➕ หมวดหมู่</button></div><div class="tabs"><div class="tab active" data-st="cats">หมวดหมู่ (${cats.length})</div><div class="tab" data-st="items">รายการ (${items.length})</div></div><div id="st-cats"><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>ประเภท</th><th>สี</th><th></th></tr></thead><tbody>${cats.map(c=>`<tr><td style="font-size:1.2rem">${c.icon}</td><td>${c.name}</td><td><span class="badge badge-${c.type}">${c.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${c.color}"></span>${c.color}</td><td>${c.isDefault?'':`<button class="btn-ghost btnEC" data-id="${c.id}">✏️</button><button class="btn-ghost btnDC" data-id="${c.id}" style="color:var(--danger)">🗑️</button>`}</td></tr>`).join('')}</tbody></table></div></div><div id="st-items" style="display:none"><div style="margin-bottom:7px"><button class="btn btn-success btn-sm" id="btnAddItem">➕ รายการ</button></div><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>หมวดหมู่</th><th>จำนวนเริ่มต้น</th><th></th></tr></thead><tbody>${items.map(i=>{const cat=cats.find(c=>c.id===i.categoryId)||{icon:'❓',name:'?'};return`<tr><td style="font-size:1rem">${i.icon}</td><td>${i.name}</td><td>${cat.icon} ${cat.name}</td><td>${U.fmtCurrency(i.defaultAmount, cfg.currency)}</td><td>${i.isDefault?'':`<button class="btn-ghost btnEI" data-id="${i.id}">✏️</button><button class="btn-ghost btnDI" data-id="${i.id}" style="color:var(--danger)">🗑️</button>`}</td></tr>`}).join('')}</tbody></table></div></div></div><div class="card"><div class="card-header"><span class="card-title">💾 สำรองข้อมูล</span></div><p style="color:var(--text-secondary);margin-bottom:10px;font-size:.84rem">Export ข้อมูลทั้งหมดเป็น JSON เพื่อสำรอง หรือ Import เพื่อกู้คืน</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="btnExportJSON">📤 Export JSON</button><button class="btn btn-outline" id="btnExportCSV">📊 Export CSV</button><label class="btn btn-outline" style="cursor:pointer">📥 Import JSON<input type="file" id="inputImportJSON" accept=".json" style="display:none"></label><label class="btn btn-outline" style="cursor:pointer">📋 Import CSV (ธนาคาร)<input type="file" id="inputImportCSV" accept=".csv,.txt" style="display:none"></label></div></div><div class="card"><div class="card-header"><span class="card-title">🔐 PIN Lock</span><span style="font-size:.72rem;color:var(--text-secondary)">${cfg.pinHash ? '✅ เปิดใช้งาน' : 'ปิดอยู่'}</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ป้องกันการเข้าถึงแอปด้วย PIN 4 หลัก</p><div style="display:flex;gap:8px;flex-wrap:wrap">${cfg.pinHash ? `<button class="btn btn-outline btn-sm" id="btnChangePin">🔄 เปลี่ยน PIN</button><button class="btn btn-outline btn-sm" id="btnRemovePin" style="color:var(--danger)">🗑️ ปิด PIN</button>` : `<button class="btn btn-primary btn-sm" id="btnSetPin">🔐 ตั้ง PIN</button>`}</div></div><div class="card" style="border:2px solid var(--danger)"><div class="card-header"><span class="card-title" style="color:var(--danger)">⚠️ โซนอันตราย</span></div><p style="color:var(--text-secondary);margin-bottom:9px;font-size:.84rem">รีเซ็ตจะลบข้อมูลทั้งหมด</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-danger" id="btnReset">🗑️ รีเซ็ตทั้งหมด</button><button class="btn btn-outline btn-sm" id="btnResetOB">🎯 แสดง Onboarding ใหม่</button></div></div>`;
   },
   attachSettingsEvents() {
     document.getElementById('btnSaveS')?.addEventListener('click', () => {
@@ -218,6 +238,27 @@ const Views = {
       document.querySelectorAll('.ac-sw').forEach(s => s.classList.remove('active'));
       sw.classList.add('active');
     }));
+    document.getElementById('btnExportCSV')?.addEventListener('click', () => {
+      const cfg = U.getConfig();
+      const cats = ST.getAll('categories');
+      const accs = [...ST.getAll('wallet_accounts'), ...ST.getAll('credit_cards')];
+      const rows = [['วันที่','ชื่อรายการ','หมวดหมู่','ประเภท','จำนวนเงิน','บัญชี','หมายเหตุ']];
+      ST.getAll('transactions').sort((a,b) => a.date < b.date ? 1 : -1).forEach(t => {
+        const cat = cats.find(c => c.id === t.categoryId);
+        const acc = accs.find(a => a.id === t.accountId);
+        rows.push([
+          t.date, `"${(t.itemName||'').replace(/"/g,'""')}"`,
+          `"${cat ? cat.name : ''}"`,
+          t.type === 'income' ? 'รายรับ' : 'รายจ่าย',
+          t.amount,
+          `"${acc ? acc.name : ''}"`,
+          `"${(t.note||'').replace(/"/g,'""')}"`
+        ]);
+      });
+      const csv = '﻿' + rows.map(r => r.join(',')).join('\n');
+      U.dlBlob(csv, `transactions-${U.today()}.csv`);
+      U.toast('Export CSV สำเร็จ 📊', 'success');
+    });
     document.getElementById('btnExportJSON')?.addEventListener('click', () => {
       const data = {};
       ['transactions','categories','items','recurring','budgets','wallet_accounts','credit_cards','account_transfers','installments','savings_goals','subscriptions','loan_plans'].forEach(k => { data[k] = ST.getAll(k); });
@@ -246,6 +287,14 @@ const Views = {
       } catch (err) {
         U.toast('ไฟล์ไม่ถูกต้อง กรุณาใช้ไฟล์ backup เท่านั้น', 'error');
       }
+      e.target.value = '';
+    });
+    document.getElementById('inputImportCSV')?.addEventListener('change', async (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      try {
+        const text = await file.text();
+        this.openCSVImportModal(text);
+      } catch { U.toast('อ่านไฟล์ไม่ได้', 'error'); }
       e.target.value = '';
     });
     document.getElementById('btnReset')?.addEventListener('click', async () => {
@@ -304,6 +353,9 @@ const Views = {
       App.updateUI(); App.rv(App.cv);
       U.toast('Pull สำเร็จ ⬇️', 'success');
     });
+    document.getElementById('btnSetPin')?.addEventListener('click', () => PinLock.setup(() => App.rv('settings')));
+    document.getElementById('btnChangePin')?.addEventListener('click', () => PinLock.setup(() => App.rv('settings')));
+    document.getElementById('btnRemovePin')?.addEventListener('click', () => PinLock.remove());
     document.getElementById('btnCloudSignIn')?.addEventListener('click', () => CloudSync.signIn());
     document.getElementById('btnCloudSignOut')?.addEventListener('click', async () => {
       const ok = await U.confirm('ออกจากระบบ Cloud?');
@@ -447,5 +499,58 @@ const Views = {
         App.rv('trash');
       });
     });
+  },
+  openCSVImportModal(csvText) {
+    const lines = csvText.split(/\r?\n/).filter(l => l.trim());
+    if (lines.length < 2) { U.toast('ไฟล์ CSV ว่างเปล่า', 'error'); return; }
+    const parse = line => line.split(',').map(c => c.trim().replace(/^"|"$/g,'').replace(/""/g,'"'));
+    const headers = parse(lines[0]);
+    const rows = lines.slice(1).map(parse).filter(r => r.some(c => c));
+    const cats = ST.getAll('categories');
+    const cfg = U.getConfig();
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    const colOpts = headers.map((h,i) => `<option value="${i}">${h}</option>`).join('');
+    const noneOpt = `<option value="-1">-- ไม่ใช้ --</option>`;
+    o.innerHTML = `<div class="modal" style="max-width:520px"><h3>📋 Import CSV จากธนาคาร</h3>
+      <p style="font-size:.78rem;color:var(--text-secondary);margin-bottom:12px">พบ ${rows.length} แถว — เลือก column ที่ตรงกัน</p>
+      <div style="display:grid;grid-template-columns:1fr 1fr;gap:8px;margin-bottom:12px">
+        <div class="form-group"><label>วันที่</label><select id="csvDate">${colOpts}</select></div>
+        <div class="form-group"><label>จำนวนเงิน</label><select id="csvAmt">${colOpts}</select></div>
+        <div class="form-group"><label>รายการ/คำอธิบาย</label><select id="csvName">${noneOpt}${colOpts}</select></div>
+        <div class="form-group"><label>ประเภท (ถ้ามี)</label><select id="csvType">${noneOpt}${colOpts}</select></div>
+      </div>
+      <div class="form-group"><label>หมวดหมู่เริ่มต้น</label><select id="csvCat">${cats.map(c=>`<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}</select></div>
+      <div style="font-size:.74rem;color:var(--text-secondary);margin-bottom:12px">ตัวอย่าง 3 แถวแรก: ${rows.slice(0,3).map(r=>`<code style="display:block;font-size:.68rem;background:var(--bg-input);padding:2px 6px;border-radius:4px;margin-top:2px">${r.slice(0,5).join(' | ')}</code>`).join('')}</div>
+      <div class="modal-actions"><button class="btn btn-outline" id="csvCan">ยกเลิก</button><button class="btn btn-primary" id="csvImport">📥 Import ${rows.length} รายการ</button></div>
+    </div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#csvCan').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+    o.querySelector('#csvImport').onclick = () => {
+      const di = parseInt(o.querySelector('#csvDate').value);
+      const ai = parseInt(o.querySelector('#csvAmt').value);
+      const ni = parseInt(o.querySelector('#csvName').value);
+      const ti = parseInt(o.querySelector('#csvType').value);
+      const catId = o.querySelector('#csvCat').value;
+      let count = 0;
+      rows.forEach(r => {
+        const rawDate = r[di]||''; const rawAmt = r[ai]||'';
+        const amt = Math.abs(parseFloat(rawAmt.replace(/[^0-9.-]/g,'')));
+        if (!amt || isNaN(amt)) return;
+        const dateParts = rawDate.match(/(\d{4})[/-](\d{1,2})[/-](\d{1,2})|(\d{1,2})[/-](\d{1,2})[/-](\d{2,4})/);
+        let date = U.today();
+        if (dateParts) {
+          if (dateParts[1]) date = `${dateParts[1]}-${dateParts[2].padStart(2,'0')}-${dateParts[3].padStart(2,'0')}`;
+          else { const y = dateParts[6].length===2?'20'+dateParts[6]:dateParts[6]; date = `${y}-${dateParts[5].padStart(2,'0')}-${dateParts[4].padStart(2,'0')}`; }
+        }
+        const rawType = ti >= 0 ? (r[ti]||'') : '';
+        const type = /รับ|income|credit|เข้า/i.test(rawType) ? 'income' : 'expense';
+        const itemName = ni >= 0 ? (r[ni]||'').slice(0,80) : 'นำเข้าจาก CSV';
+        ST.add('transactions', { type, amount: amt, categoryId: catId, itemName, date, note: 'CSV import', accountId: '' });
+        count++;
+      });
+      U.toast(`Import สำเร็จ ${count} รายการ ✅`, 'success');
+      o.remove(); App.rv('transactions');
+    };
   }
 };

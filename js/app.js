@@ -6,6 +6,9 @@ const App = {
     seedWalletAccounts();
     ST.purgeExpired(30);
     this.applyTheme();
+    PinLock.check(() => this._boot());
+  },
+  _boot() {
     this.bindNav();
     document.getElementById('btnTheme').addEventListener('click', () => this.toggleTheme());
     document.getElementById('btnRefresh').addEventListener('click', () => { this.rv(this.cv); U.toast('รีเฟรชแล้ว', 'info'); });
@@ -18,6 +21,74 @@ const App = {
     });
     setTimeout(() => Onboarding.show(), 400);
     setTimeout(() => CloudSync.init(), 200);
+    setTimeout(() => this.autoCreateRecurring(), 600);
+    setTimeout(() => this.checkDueNotifications(), 1200);
+  },
+  checkDueNotifications() {
+    if (!('Notification' in window)) return;
+    const cfg = U.getConfig();
+    const today = U.today();
+    if (cfg.lastNotifDate === today) return;
+    const checkAndNotify = () => {
+      const todayD = new Date(today);
+      const soon = d => { const diff = (new Date(d) - todayD) / 86400000; return diff >= 0 && diff <= 3; };
+      const items = [];
+      ST.getAll('subscriptions').filter(s => s.active !== false && soon(s.nextBillingDate)).forEach(s =>
+        items.push(`📱 ${s.name} — ${new Date(s.nextBillingDate).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}`)
+      );
+      ST.getAll('loan_plans').filter(p => p.status === 'active').forEach(p => {
+        const d = p.dayOfMonth; const now = new Date();
+        const due = new Date(now.getFullYear(), now.getMonth(), d);
+        if (due < now) due.setMonth(due.getMonth()+1);
+        if (soon(due.toISOString().slice(0,10))) items.push(`🏦 ${p.name} — วันที่ ${d} ของเดือน`);
+      });
+      ST.getAll('recurring').forEach(r => {
+        const d = Number(r.dayOfMonth); const now = new Date();
+        const due = new Date(now.getFullYear(), now.getMonth(), d);
+        if (due < now) due.setMonth(due.getMonth()+1);
+        if (soon(due.toISOString().slice(0,10))) items.push(`🔁 ${r.name} — วันที่ ${d} ของเดือน`);
+      });
+      if (items.length > 0) {
+        new Notification('💰 Expense Tracker — แจ้งเตือน', {
+          body: items.slice(0,5).join('\n'),
+          icon: './icons/icon-192.png'
+        });
+      }
+      U.updateConfig({ lastNotifDate: today });
+    };
+    if (Notification.permission === 'granted') { checkAndNotify(); }
+    else if (Notification.permission !== 'denied') {
+      Notification.requestPermission().then(p => { if (p === 'granted') checkAndNotify(); });
+    }
+  },
+  autoCreateRecurring() {
+    const today = U.today();
+    const cfg = U.getConfig();
+    if (cfg.lastAutoRecurDate === today) return;
+    const dayOfMonth = new Date().getDate();
+    const month = U.thisMonth();
+    const txns = ST.getAll('transactions');
+    const recs = ST.getAll('recurring');
+    let created = 0;
+    recs.forEach(rec => {
+      if (Number(rec.dayOfMonth) > dayOfMonth) return;
+      const alreadyDone = txns.some(t =>
+        t.date.startsWith(month) &&
+        t.categoryId === rec.categoryId &&
+        Math.abs(Number(t.amount) - Number(rec.amount)) < 1 &&
+        t.type === rec.type &&
+        (t.note === 'รายการประจำ' || t.itemName === rec.name)
+      );
+      if (!alreadyDone) {
+        ST.add('transactions', { type: rec.type, amount: rec.amount, categoryId: rec.categoryId, itemName: rec.name, date: today, note: 'รายการประจำ (อัตโนมัติ)', accountId: rec.accountId || '' });
+        created++;
+      }
+    });
+    U.updateConfig({ lastAutoRecurDate: today });
+    if (created > 0) {
+      U.toast(`✅ สร้างรายการประจำอัตโนมัติ ${created} รายการ`, 'success');
+      this.updateUI(); this.updateSBBudgets();
+    }
   },
   applyTheme() {
     const cfg = U.getConfig();

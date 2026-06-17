@@ -1,8 +1,9 @@
-const CACHE = 'expense-v2';
+const CACHE = 'expense-v3';
 const ASSETS = [
   './',
   './index.html',
   './manifest.json',
+  './js/pinlock.js',
   './js/storage.js',
   './js/helpers.js',
   './js/pos.js',

@@ -105,6 +105,10 @@ const POS = {
             </div>
           </div>
           ${posContent}
+          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px">
+            <label class="btn btn-outline btn-sm" style="cursor:pointer;font-size:.76rem" title="สแกนใบเสร็จด้วย AI">📷 สแกนใบเสร็จ<input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none"></label>
+            <span id="receiptStatus" style="font-size:.72rem;color:var(--text-secondary)"></span>
+          </div>
         </div>
       </div>
       <div class="pos-right-col">
@@ -205,17 +209,49 @@ const POS = {
       if (ok) deleteTransaction(btn.dataset.dt, () => App.rv('add'), () => App.rv('add'));
     }));
     const tl = document.getElementById('todayList'); if (tl) initSwipe(tl);
+    document.getElementById('receiptInput')?.addEventListener('change', async (e) => {
+      const file = e.target.files[0]; if (!file) return;
+      const status = document.getElementById('receiptStatus');
+      const apiKey = U.getConfig().apiKey || '';
+      if (!apiKey) { U.toast('กรุณาตั้งค่า Anthropic API Key ก่อน', 'error'); return; }
+      if (status) status.textContent = '🔄 กำลังวิเคราะห์...';
+      try {
+        const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
+        const resp = await fetch('https://api.anthropic.com/v1/messages', {
+          method: 'POST',
+          headers: { 'Content-Type':'application/json','x-api-key':apiKey,'anthropic-version':'2023-06-01','anthropic-dangerous-direct-browser-calls':'true' },
+          body: JSON.stringify({
+            model: 'claude-haiku-4-5-20251001', max_tokens: 256,
+            messages: [{ role: 'user', content: [
+              { type: 'image', source: { type: 'base64', media_type: file.type, data: b64 } },
+              { type: 'text', text: 'จากรูปใบเสร็จนี้ ตอบเป็น JSON เท่านั้น ไม่มีข้อความอื่น: {"amount": <ตัวเลขยอดรวม>, "name": "<ชื่อร้าน/รายการ>", "date": "<YYYY-MM-DD หรือ null>"}' }
+            ]}]
+          })
+        });
+        const json = await resp.json();
+        const text = json.content?.[0]?.text || '';
+        const match = text.match(/\{[\s\S]*\}/);
+        if (!match) throw new Error('parse');
+        const data = JSON.parse(match[0]);
+        if (status) status.textContent = '';
+        e.target.value = '';
+        this.openModal(null, null, null, { amount: data.amount, name: data.name, date: data.date });
+      } catch {
+        if (status) status.textContent = '⚠️ วิเคราะห์ไม่ได้ ลองใหม่';
+        e.target.value = '';
+      }
+    });
   },
   flash(text) {
     const el = document.createElement('div'); el.className = 'qa-flash'; el.textContent = '✅ ' + text;
     document.body.appendChild(el); setTimeout(() => el.remove(), 2100);
   },
-  openModal(item, catId, editTxn) {
+  openModal(item, catId, editTxn, prefill = null) {
     const cats = ST.getAll('categories'); const cfg = U.getConfig();
     const isEdit = !!editTxn;
     const defCat = catId || (isEdit ? editTxn.categoryId : (this.type === 'expense' ? 'cat_food' : 'cat_salary'));
-    const defAmt = item ? item.defaultAmount : (isEdit ? editTxn.amount : '');
-    const defName = item ? item.name : (isEdit ? editTxn.itemName : '');
+    const defAmt = prefill?.amount || (item ? item.defaultAmount : (isEdit ? editTxn.amount : ''));
+    const defName = prefill?.name || (item ? item.name : (isEdit ? editTxn.itemName : ''));
     const t0 = isEdit ? editTxn.type : this.type;
     const presets = EH.getRecentAmounts(t0);
     const chipMap = {
@@ -240,7 +276,7 @@ const POS = {
       <div class="form-group" id="mAccGrp"><label id="mAccLbl">บัญชี</label><div class="acc-select-grid" id="mAccSelect"><span style="font-size:.74rem;color:var(--text-secondary)">กำลังโหลด...</span></div><input type="hidden" id="mAccId" value="${isEdit?editTxn.accountId||'':''}"></div>
       <div class="form-group" id="instToggleGrp" style="display:none"><label class="inst-toggle-row"><input type="checkbox" id="mInstToggle"><span>💳 ผ่อนชำระผ่านบัตรเครดิต</span></label></div>
       <div id="instFields" style="display:none"><div class="form-row"><div class="form-group"><label>จำนวนงวด</label><select id="mInstMonths"><option value="3">3 งวด</option><option value="6">6 งวด</option><option value="10" selected>10 งวด</option><option value="12">12 งวด</option><option value="24">24 งวด</option></select></div><div class="form-group"><label>ดอกเบี้ย %/ปี</label><input type="number" id="mInstRate" value="0" min="0" max="100" step="0.1" placeholder="0"></div></div><div class="form-group"><label>วันเริ่มผ่อน</label><input type="date" id="mInstStart" value="${isEdit?editTxn.date||U.today():U.today()}"></div><div id="instCalcBox" class="inst-summary" style="display:none"></div></div>
-      <div class="form-group"><label>วันที่</label><input type="date" id="mD" value="${isEdit?editTxn.date:U.today()}"><div class="dshorts"><button class="dshort ${!isEdit?'active':''}" data-ds="today">วันนี้</button><button class="dshort" data-ds="yesterday">เมื่อวาน</button><button class="dshort" data-ds="2d">2 วันก่อน</button><button class="dshort" data-ds="3d">3 วันก่อน</button></div></div>
+      <div class="form-group"><label>วันที่</label><input type="date" id="mD" value="${isEdit?editTxn.date:(prefill?.date||U.today())}"><div class="dshorts"><button class="dshort ${!isEdit?'active':''}" data-ds="today">วันนี้</button><button class="dshort" data-ds="yesterday">เมื่อวาน</button><button class="dshort" data-ds="2d">2 วันก่อน</button><button class="dshort" data-ds="3d">3 วันก่อน</button></div></div>
       <div class="form-group"><label>หมายเหตุ</label><textarea id="mNote" placeholder="หมายเหตุ...">${isEdit?editTxn.note||'':''}</textarea><div class="nchips">${chips.map(ch => `<button class="nchip" data-ch="${ch}">${ch}</button>`).join('')}</div></div>
       <div class="modal-actions"><button class="btn btn-outline" id="mCan">ยกเลิก</button><button class="btn ${t0==='expense'?'btn-expense':'btn-income'}" id="mSave">💾 บันทึก</button></div>
     `;

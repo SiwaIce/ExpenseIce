@@ -13,6 +13,7 @@ const ST = {
     item.id = item.id || this._id(c);
     item.createdAt = item.createdAt || new Date().toISOString();
     item.updatedAt = new Date().toISOString();
+    item._updatedAt = Date.now();
     a.push(item);
     this._save(c, a);
     return item;
@@ -21,7 +22,7 @@ const ST = {
     const a = this._raw(c);
     const i = a.findIndex(x => x.id === id);
     if (i < 0) return null;
-    a[i] = { ...a[i], ...u, updatedAt: new Date().toISOString() };
+    a[i] = { ...a[i], ...u, updatedAt: new Date().toISOString(), _updatedAt: Date.now() };
     this._save(c, a);
     return a[i];
   },

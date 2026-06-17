@@ -46,15 +46,16 @@ const CloudSync = {
       this._auth.onAuthStateChanged(user => {
         this._user = user;
         this._renderSidebar();
+        App.updateUI();
         if (user) {
           this._setStatus('syncing');
-          this.pull().then(() => {
-            this._setStatus('synced');
-            App.updateUI();
-            App.rv(App.cv);
-          });
+          this.pull()
+            .then(() => this._setStatus('synced'))
+            .catch(() => this._setStatus('error'))
+            .finally(() => App.rv(App.cv));
         } else {
           this._setStatus('offline');
+          App.rv(App.cv);
         }
       });
     } catch(e) {
@@ -103,6 +104,8 @@ const CloudSync = {
     this._pushTimer = setTimeout(() => this.push(), 3000);
   },
 
+  _ts() { return Date.now(); },
+
   async push() {
     if (!this._db || !this._user) return;
     this._setStatus('syncing');
@@ -110,10 +113,12 @@ const CloudSync = {
       const batch = this._db.batch();
       for (const c of this._cols) {
         const ref = this._db.doc(`users/${this._user.uid}/exp/${c}`);
-        batch.set(ref, {
-          data: ST._raw(c),
-          at: firebase.firestore.FieldValue.serverTimestamp()
-        });
+        const local = ST._raw(c);
+        // Stamp _updatedAt on each record if missing
+        const stamped = Array.isArray(local)
+          ? local.map(r => r._updatedAt ? r : { ...r, _updatedAt: this._ts() })
+          : local;
+        batch.set(ref, { data: stamped, at: firebase.firestore.FieldValue.serverTimestamp() });
       }
       await batch.commit();
       this._setStatus('synced');
@@ -128,9 +133,22 @@ const CloudSync = {
     try {
       for (const c of this._cols) {
         const snap = await this._db.doc(`users/${this._user.uid}/exp/${c}`).get();
-        if (snap.exists && Array.isArray(snap.data().data)) {
-          localStorage.setItem('exp_' + c, JSON.stringify(snap.data().data));
+        if (!snap.exists) continue;
+        const remote = snap.data().data;
+        const local = ST._raw(c);
+        if (!Array.isArray(remote) || !Array.isArray(local)) {
+          // For config (object), remote wins only if newer
+          if (remote && !Array.isArray(remote)) localStorage.setItem('exp_' + c, JSON.stringify(remote));
+          continue;
         }
+        // Per-record merge: last _updatedAt wins
+        const merged = {};
+        local.forEach(r => { if (r.id) merged[r.id] = r; });
+        remote.forEach(r => {
+          if (!r.id) return;
+          if (!merged[r.id] || (r._updatedAt || 0) > (merged[r.id]._updatedAt || 0)) merged[r.id] = r;
+        });
+        localStorage.setItem('exp_' + c, JSON.stringify(Object.values(merged)));
       }
     } catch(e) {
       console.error('Sync pull error:', e);
@@ -150,18 +168,48 @@ const CloudSync = {
   _renderSidebar() {
     const nameEl = document.getElementById('cloudUserName');
     const btnEl  = document.getElementById('cloudAuthBtn');
-    if (!nameEl || !btnEl) return;
-    if (this._user) {
-      nameEl.textContent = (this._user.displayName || this._user.email || 'ผู้ใช้').split(' ')[0];
-      nameEl.style.display = '';
-      btnEl.textContent = 'ออก';
-      btnEl.title = 'ออกจากระบบ Cloud';
-      btnEl.dataset.caction = 'signout';
-    } else {
-      nameEl.style.display = 'none';
-      btnEl.textContent = this.isConfigured() ? '☁️ Sign in' : '☁️ ตั้งค่า';
-      btnEl.title = this.isConfigured() ? 'เข้าสู่ระบบด้วย Google' : 'ตั้งค่า Firebase ใน ⚙️ ตั้งค่า';
-      btnEl.dataset.caction = this.isConfigured() ? 'signin' : 'settings';
+    if (nameEl && btnEl) {
+      if (this._user) {
+        nameEl.textContent = (this._user.displayName || this._user.email || 'ผู้ใช้').split(' ')[0];
+        nameEl.style.display = '';
+        btnEl.textContent = 'ออก';
+        btnEl.title = 'ออกจากระบบ Cloud';
+        btnEl.dataset.caction = 'signout';
+      } else {
+        nameEl.style.display = 'none';
+        btnEl.textContent = this.isConfigured() ? '☁️ Sign in' : '☁️ ตั้งค่า';
+        btnEl.title = this.isConfigured() ? 'เข้าสู่ระบบด้วย Google' : 'ตั้งค่า Firebase ใน ⚙️ ตั้งค่า';
+        btnEl.dataset.caction = this.isConfigured() ? 'signin' : 'settings';
+      }
+    }
+    // อัปเดตปุ่มใน Settings card ถ้าเปิดอยู่
+    const signInBtn  = document.getElementById('btnCloudSignIn');
+    const signOutBtn = document.getElementById('btnCloudSignOut');
+    const pushBtn    = document.getElementById('btnForcePush');
+    const pullBtn    = document.getElementById('btnForcePull');
+    if (signInBtn || signOutBtn) {
+      if (this._user) {
+        signInBtn?.remove();
+        if (!signOutBtn && pushBtn) {
+          const b = document.createElement('button');
+          b.className = 'btn btn-outline btn-sm'; b.id = 'btnCloudSignOut';
+          b.style.color = 'var(--danger)'; b.textContent = '🚪 ออกจากระบบ';
+          b.addEventListener('click', async () => { const ok = await U.confirm('ออกจากระบบ Cloud?'); if (ok) { await CloudSync.signOut(); App.rv('settings'); } });
+          pushBtn.parentNode.appendChild(b);
+        }
+      } else {
+        signOutBtn?.remove(); pushBtn?.remove(); pullBtn?.remove();
+        if (!signInBtn && this.isConfigured()) {
+          const saveFB = document.getElementById('btnSaveFB');
+          if (saveFB) {
+            const b = document.createElement('button');
+            b.className = 'btn btn-success btn-sm'; b.id = 'btnCloudSignIn';
+            b.textContent = '🔑 Sign in with Google';
+            b.addEventListener('click', () => CloudSync.signIn());
+            saveFB.parentNode.appendChild(b);
+          }
+        }
+      }
     }
   }
 };
