@@ -90,15 +90,10 @@ const U = {
     if (!iso) return '-';
     return new Date(iso).toLocaleDateString('th-TH', { month:'short', day:'numeric' });
   },
-  today() { return new Date().toISOString().split('T')[0]; },
-  yesterday() {
-    const d = new Date(); d.setDate(d.getDate() - 1);
-    return d.toISOString().split('T')[0];
-  },
-  daysAgo(n) {
-    const d = new Date(); d.setDate(d.getDate() - n);
-    return d.toISOString().split('T')[0];
-  },
+  _ld(d) { return `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}-${String(d.getDate()).padStart(2,'0')}`; },
+  today() { return this._ld(new Date()); },
+  yesterday() { const d = new Date(); d.setDate(d.getDate()-1); return this._ld(d); },
+  daysAgo(n) { const d = new Date(); d.setDate(d.getDate()-n); return this._ld(d); },
   thisMonth() {
     const n = new Date();
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;

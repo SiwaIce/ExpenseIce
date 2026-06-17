@@ -82,8 +82,9 @@ const InsightsView = {
       return spent > 0 ? `${c.name}: ${U.fmtCurrency(spent, cfg.currency)}` : null;
     }).filter(Boolean).join(', ');
     // prev month
-    const prevD = new Date(now.getFullYear ? now.getFullYear() : new Date().getFullYear(), new Date().getMonth() - 1, 1);
-    const prevM = prevD.toISOString().slice(0, 7);
+    const now = new Date();
+    const prevD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const prevM = `${prevD.getFullYear()}-${String(prevD.getMonth()+1).padStart(2,'0')}`;
     const prevTxns = ST.getAll('transactions').filter(t => t.date.startsWith(prevM));
     const prevExp = prevTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
 

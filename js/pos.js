@@ -305,6 +305,7 @@ const POS = {
       <div id="instFields" style="display:none"><div class="form-row"><div class="form-group"><label>จำนวนงวด</label><select id="mInstMonths"><option value="3">3 งวด</option><option value="6">6 งวด</option><option value="10" selected>10 งวด</option><option value="12">12 งวด</option><option value="24">24 งวด</option></select></div><div class="form-group"><label>ดอกเบี้ย %/ปี</label><input type="number" id="mInstRate" value="0" min="0" max="100" step="0.1" placeholder="0"></div></div><div class="form-group"><label>วันเริ่มผ่อน</label><input type="date" id="mInstStart" value="${isEdit?editTxn.date||U.today():U.today()}"></div><div id="instCalcBox" class="inst-summary" style="display:none"></div></div>
       <div class="form-group"><label>วันที่</label><input type="date" id="mD" value="${isEdit?editTxn.date:(prefill?.date||U.today())}"><div class="dshorts"><button class="dshort ${!isEdit?'active':''}" data-ds="today">วันนี้</button><button class="dshort" data-ds="yesterday">เมื่อวาน</button><button class="dshort" data-ds="2d">2 วันก่อน</button><button class="dshort" data-ds="3d">3 วันก่อน</button></div></div>
       <div class="form-group"><label>หมายเหตุ</label><textarea id="mNote" placeholder="หมายเหตุ...">${isEdit ? (editTxn.note && editTxn.note !== 'undefined' ? editTxn.note : '') : ''}</textarea><div class="nchips">${chips.map(ch => `<button class="nchip" data-ch="${ch}">${ch}</button>`).join('')}</div></div>
+      ${t0 === 'expense' ? `<div class="form-group"><label class="inst-toggle-row"><input type="checkbox" id="mReimburse" ${isEdit && editTxn.reimbursable ? 'checked' : ''}><span>🔄 รอเบิกคืน <span style="font-size:.72rem;color:var(--text-secondary)">(จ่ายแทนก่อน เบิกทีหลัง)</span></span></label></div>` : ''}
       <div class="modal-actions"><button class="btn btn-outline" id="mCan">ยกเลิก</button><button class="btn ${t0==='expense'?'btn-expense':'btn-income'}" id="mSave">💾 บันทึก</button></div>
     `;
     o.innerHTML = buildModalHTML();
@@ -497,14 +498,16 @@ const POS = {
             ST.update('credit_cards', editTxn.accountId, { used: Math.max(0, (oldCC.used || 0) - Number(editTxn.amount)) });
           }
         }
-        ST.update('transactions', editTxn.id, { type, amount, categoryId, itemName, date, note, accountId });
+        const reimbEdit = type === 'expense' && !!(o.querySelector('#mReimburse')?.checked);
+        ST.update('transactions', editTxn.id, { type, amount, categoryId, itemName, date, note, accountId, reimbursable: reimbEdit, reimburseStatus: reimbEdit ? (editTxn.reimburseStatus || 'pending') : '' });
       } else {
         const isInstCC = type === 'expense' && accountId ? !!ST.getById('credit_cards', accountId) : false;
         const instEnabled = isInstCC && !!(o.querySelector('#mInstToggle')?.checked);
         const instMonths = parseInt(o.querySelector('#mInstMonths')?.value) || 0;
         const instRate = parseFloat(o.querySelector('#mInstRate')?.value) || 0;
         const instStart = o.querySelector('#mInstStart')?.value || date;
-        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, date, note, accountId, installment: instEnabled });
+        const reimbursable = type === 'expense' && !!(o.querySelector('#mReimburse')?.checked);
+        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, date, note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '' });
         // Upload pending receipt image to Firebase Storage
         const pendingFile = POS._pendingReceiptFile;
         POS._pendingReceiptFile = null;

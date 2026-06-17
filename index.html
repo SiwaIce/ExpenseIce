@@ -116,6 +116,15 @@ table tbody tr:hover{background:var(--bg-input)}
 .filter-bar{display:flex;gap:7px;flex-wrap:wrap;align-items:flex-end;margin-bottom:10px}
 .filter-bar>*{flex:1;min-width:108px;max-width:185px}
 .filter-bar .btn{flex:0 0 auto}
+/* Privacy Mode */
+body.privacy-mode .stat-value,
+body.privacy-mode .tl-amount,
+body.privacy-mode .tw-amt,
+body.privacy-mode .inst-progress-fill+*,
+body.privacy-mode [class*="amt"]{filter:blur(7px);transition:filter .2s;cursor:pointer;user-select:none}
+body.privacy-mode .stat-value:hover,
+body.privacy-mode .tl-amount:hover,
+body.privacy-mode .tw-amt:hover{filter:none}
 .top-list{list-style:none}
 .top-list li{display:flex;align-items:center;justify-content:space-between;padding:6px 0;border-bottom:1px solid var(--border);gap:6px}
 .top-list .rank{font-weight:700;color:var(--accent);width:20px;font-size:.82rem}
@@ -245,11 +254,22 @@ button,a,label,input,select,textarea,.nchip,.preset-btn,.dshort,.type-btn,.chat-
 .acc-balance.pos{color:var(--success)}
 .acc-balance.neg{color:var(--expense)}
 .acc-subtext{font-size:.68rem;color:var(--text-secondary);margin-top:2px}
-.cc-card{background:linear-gradient(135deg,#1e293b,#334155);border-radius:14px;padding:16px;color:#fff;position:relative;overflow:hidden;margin-bottom:10px}
+.cc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:12px;margin-bottom:4px}
+.cc-card{background:linear-gradient(135deg,#1e293b,#334155);border-radius:16px;padding:18px;color:#fff;position:relative;overflow:hidden}
 .cc-card.visa{background:linear-gradient(135deg,#1a1f71,#2d4a9e)}
 .cc-card.mastercard{background:linear-gradient(135deg,#6b1a1a,#c0392b)}
 .cc-card.amex{background:linear-gradient(135deg,#2e7d32,#1b5e20)}
+.cc-card.cashcard{background:linear-gradient(135deg,#92400e,#d97706)}
 .cc-card.other{background:linear-gradient(135deg,#4a1942,#7b2d8b)}
+.cc-stats{display:grid;grid-template-columns:repeat(3,1fr);gap:4px;font-size:.72rem;opacity:.85;margin-top:6px}
+/* Accounts tab bar */
+.acc-tab-bar{display:flex;gap:4px;overflow-x:auto;margin-bottom:14px;padding-bottom:2px;scrollbar-width:none}
+.acc-tab-bar::-webkit-scrollbar{display:none}
+.acc-tab{flex:0 0 auto;padding:7px 14px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg-input);color:var(--text-secondary);font-size:.8rem;font-weight:600;cursor:pointer;white-space:nowrap;transition:.15s}
+.acc-tab.active{background:var(--accent);color:#fff;border-color:var(--accent)}
+/* Reimburse list */
+.reimb-item{display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)}
+.reimb-item:last-child{border-bottom:none}
 .cc-chip{width:28px;height:20px;background:linear-gradient(135deg,#d4a017,#f0c040);border-radius:4px;margin-bottom:10px}
 .cc-number{font-size:.82rem;letter-spacing:2px;opacity:.7;margin-bottom:4px}
 .cc-name-row{display:flex;justify-content:space-between;align-items:flex-end}
@@ -762,6 +782,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
     <div class="header-right">
       <button class="btn btn-ghost btn-sm" id="btnRefresh" title="รีเฟรช">🔄</button>
       <button class="btn btn-ghost btn-sm" id="btnTheme" title="สลับธีม">🌓</button>
+      <button class="btn btn-ghost btn-sm" id="btnPrivacy" title="ซ่อน/แสดงตัวเลข">👁️</button>
       <button class="btn btn-ghost btn-sm hcloud-btn" id="headerCloudBtn" title="Cloud Sync">☁️</button>
     </div>
   </header>

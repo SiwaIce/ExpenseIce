@@ -80,13 +80,22 @@ const Views = {
     const cfg = U.getConfig();
     const cats = ST.getAll('categories');
     const hp = new URLSearchParams(window.location.hash.replace('#', ''));
+    const wallets = ST.getAll('wallet_accounts');
+    const creditCards = ST.getAll('credit_cards');
+    const allAccounts = [...wallets.map(w => ({ id: w.id, label: `${w.icon} ${w.name}` })), ...creditCards.map(c => ({ id: c.id, label: `💳 ${c.name}` }))];
+    const advOpen = localStorage.getItem('exp_advFilter') === '1';
     const f = {
       type: hp.get('type') || 'all',
       categoryId: hp.get('cat') || '',
       dateFrom: hp.get('from') || U.daysAgo(30),
       dateTo: hp.get('to') || U.today(),
-      search: hp.get('q') || ''
+      search: hp.get('q') || '',
+      amountMin: hp.get('amin') || '',
+      amountMax: hp.get('amax') || '',
+      accountId: hp.get('acc') || '',
+      hasReceipt: hp.get('rcpt') === '1'
     };
+    const hasAdv = !!(f.amountMin || f.amountMax || f.accountId || f.hasReceipt);
     const txns = EH.getTxns(f);
     const sum = EH.calcSum(txns);
     const grouped = {};
@@ -114,7 +123,22 @@ const Views = {
     <div class="card"><div class="card-header"><span class="card-title">📋 รายการ (${txns.length})</span>
       <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ${view==='timeline'?'btn-primary':'btn-outline'} btn-sm" data-vt="timeline">📅 Timeline</button><button class="btn ${view==='table'?'btn-primary':'btn-outline'} btn-sm" data-vt="table">📊 ตาราง</button><button class="btn btn-primary btn-sm" id="btnAddT">➕</button><button class="btn btn-outline btn-sm" id="btnStmtScan">📄 Statement</button><button class="btn btn-outline btn-sm" id="btnExpCSV">📥 CSV</button><button class="btn btn-outline btn-sm" id="btnImpCSV">📤</button><input type="file" id="csvFI" accept=".csv" style="display:none"></div>
     </div>
-    <div class="filter-bar"><select id="fType"><option value="all" ${f.type==='all'?'selected':''}>ทั้งหมด</option><option value="income" ${f.type==='income'?'selected':''}>รายรับ</option><option value="expense" ${f.type==='expense'?'selected':''}>รายจ่าย</option></select><select id="fCat"><option value="">ทุกหมวดหมู่</option>${cats.map(c => `<option value="${c.id}" ${f.categoryId===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select><input type="date" id="fFrom" value="${f.dateFrom}"><input type="date" id="fTo" value="${f.dateTo}"><input type="text" id="fSearch" placeholder="🔍 ค้นหา..." value="${f.search}"><button class="btn btn-outline btn-sm" id="btnReset">🔄</button></div>
+    <div class="filter-bar">
+      <select id="fType"><option value="all" ${f.type==='all'?'selected':''}>ทั้งหมด</option><option value="income" ${f.type==='income'?'selected':''}>รายรับ</option><option value="expense" ${f.type==='expense'?'selected':''}>รายจ่าย</option></select>
+      <select id="fCat"><option value="">ทุกหมวดหมู่</option>${cats.map(c => `<option value="${c.id}" ${f.categoryId===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
+      <input type="date" id="fFrom" value="${f.dateFrom}">
+      <input type="date" id="fTo" value="${f.dateTo}">
+      <input type="text" id="fSearch" placeholder="🔍 ชื่อ / หมายเหตุ..." value="${f.search}" style="min-width:130px">
+      <button class="btn btn-sm ${(advOpen||hasAdv)?'btn-primary':'btn-outline'}" id="btnAdvFilter" title="ตัวกรองขั้นสูง" style="flex:0 0 auto">⚙️${hasAdv?' ✦':''}</button>
+      <button class="btn btn-outline btn-sm" id="btnReset" style="flex:0 0 auto">🔄</button>
+    </div>
+    <div id="advFilterPanel" style="display:${advOpen||hasAdv?'flex':'none'};flex-wrap:wrap;gap:7px;padding:10px 12px;background:var(--bg-input);border-radius:10px;margin-bottom:10px;border:1px solid var(--border)">
+      <div style="width:100%;font-size:.72rem;font-weight:700;color:var(--text-secondary);margin-bottom:2px">⚙️ ตัวกรองขั้นสูง</div>
+      <select id="fAcc" style="flex:1;min-width:130px"><option value="">ทุกบัญชี</option>${allAccounts.map(a=>`<option value="${a.id}" ${f.accountId===a.id?'selected':''}>${a.label}</option>`).join('')}</select>
+      <input type="number" id="fAmtMin" placeholder="จำนวนต่ำสุด" value="${f.amountMin}" min="0" style="flex:1;min-width:110px">
+      <input type="number" id="fAmtMax" placeholder="จำนวนสูงสุด" value="${f.amountMax}" min="0" style="flex:1;min-width:110px">
+      <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;cursor:pointer;flex:0 0 auto;white-space:nowrap"><input type="checkbox" id="fHasReceipt" ${f.hasReceipt?'checked':''}> มีใบเสร็จเท่านั้น</label>
+    </div>
     ${view==='timeline' ? `<div id="tlContainer">${txns.length===0?'<div class="empty-state"><div class="empty-icon">📭</div>ยังไม่มีรายการ</div>':timelineHTML}</div>` : `<div class="table-wrap"><table><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายการ</th><th>จำนวน</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>${txns.length===0?`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-secondary)">ยังไม่มีรายการ</td></tr>`:txns.map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?',color:'#ccc'};return`<tr><td style="font-size:.78rem">${U.fmtDate(t.date)}</td><td><span class="badge badge-${t.type}">${t.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${cat.color}"></span>${cat.icon} ${cat.name}</td><td style="font-size:.8rem">${t.itemName||'-'}</td><td style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.78rem;color:var(--text-secondary)">${(t.note && t.note !== 'undefined') ? t.note : '-'}</td><td style="display:flex;gap:4px;padding:6px 10px"><button class="btn-ghost btnE" data-id="${t.id}" title="แก้ไข">✏️</button><button class="btn-ghost btnD" data-id="${t.id}" title="ลบ">🗑️</button></td></tr>`}).join('')}</tbody></table></div>`}
     </div>`;
   },
@@ -144,8 +168,18 @@ const Views = {
       window.location.hash = hp.toString();
       App.rv('transactions');
     }));
-    ['fType', 'fCat', 'fFrom', 'fTo'].forEach(id => document.getElementById(id)?.addEventListener('change', () => this.applyTxnFilter()));
+    document.getElementById('btnAdvFilter')?.addEventListener('click', () => {
+      const panel = document.getElementById('advFilterPanel');
+      const open = panel.style.display === 'none';
+      panel.style.display = open ? 'flex' : 'none';
+      localStorage.setItem('exp_advFilter', open ? '1' : '');
+      const btn = document.getElementById('btnAdvFilter');
+      if (btn) { btn.className = `btn btn-sm ${open ? 'btn-primary' : 'btn-outline'}`; }
+    });
+    ['fType', 'fCat', 'fFrom', 'fTo', 'fAcc'].forEach(id => document.getElementById(id)?.addEventListener('change', () => this.applyTxnFilter()));
+    ['fAmtMin', 'fAmtMax'].forEach(id => document.getElementById(id)?.addEventListener('input', () => this.applyTxnFilter()));
     document.getElementById('fSearch')?.addEventListener('input', () => this.applyTxnFilter());
+    document.getElementById('fHasReceipt')?.addEventListener('change', () => this.applyTxnFilter());
     const editFn = (id) => { const t = ST.getById('transactions', id); if (t) POS.openModal(null, null, t); };
     const delFn = async (id) => {
       const ok = await U.confirm('ลบรายการนี้?');
@@ -174,6 +208,10 @@ const Views = {
     const from = document.getElementById('fFrom')?.value || ''; if (from) p.set('from', from);
     const to = document.getElementById('fTo')?.value || ''; if (to) p.set('to', to);
     const q = document.getElementById('fSearch')?.value || ''; if (q) p.set('q', q); else p.delete('q');
+    const amin = document.getElementById('fAmtMin')?.value || ''; if (amin) p.set('amin', amin); else p.delete('amin');
+    const amax = document.getElementById('fAmtMax')?.value || ''; if (amax) p.set('amax', amax); else p.delete('amax');
+    const acc = document.getElementById('fAcc')?.value || ''; if (acc) p.set('acc', acc); else p.delete('acc');
+    const rcpt = document.getElementById('fHasReceipt')?.checked; if (rcpt) p.set('rcpt', '1'); else p.delete('rcpt');
     window.location.hash = p.toString();
     App.rv('transactions');
   },

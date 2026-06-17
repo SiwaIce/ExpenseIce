@@ -1,56 +1,154 @@
 // ===== ACCOUNTS & CREDIT CARDS =====
 const AccountsView = {
+  _tab() { return localStorage.getItem('exp_accTab') || 'wallets'; },
+  _setTab(t) { localStorage.setItem('exp_accTab', t); },
+
   render() {
     const wallets = ST.getAll('wallet_accounts');
     const cards = ST.getAll('credit_cards');
     const txns = ST.getAll('transactions');
-    const cfg = U.getConfig();
-    const totalWallet = wallets.reduce((s, w) => s + Number(w.balance), 0);
-    const totalDebt = cards.reduce((s, c) => s + Number(c.used || 0), 0);
-    const walletHTML = wallets.length === 0 ?
-      '<div class="empty-state"><div class="empty-icon">🏦</div>เพิ่มบัญชีแรกของคุณ</div>' :
-      `<div class="acc-grid">${wallets.map(w => {
-        const inc = txns.filter(t => t.accountId === w.id && t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-        const exp = txns.filter(t => t.accountId === w.id && t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
-        const wtypeLabel = { cash: 'เงินสด', bank: 'ธนาคาร', digital: 'กระเป๋าเงิน', saving: 'ออมทรัพย์' }[w.wtype] || w.wtype;
-        return `<div class="acc-card"><div class="acc-type-bar" style="background:${w.color}"></div><span class="acc-icon">${w.icon}</span><div class="acc-name">${w.name}</div><div class="acc-balance ${w.balance>=0?'pos':'neg'}">${U.fmtCurrency(w.balance, cfg.currency)}</div><div class="acc-subtext">${wtypeLabel}${inc>0||exp>0?` • รับ ${U.fmtCurrency(inc, cfg.currency)} จ่าย ${U.fmtCurrency(exp, cfg.currency)}`:'ยังไม่มีรายการ'}</div><div style="display:flex;gap:3px;margin-top:8px;justify-content:flex-end"><button class="btn btn-outline btn-sm" data-watr="${w.id}">↔️ โอน</button><button class="btn-ghost btn-sm" data-waed="${w.id}">✏️</button><button class="btn-ghost btn-sm" style="color:var(--danger)" data-wadl="${w.id}">🗑️</button></div></div>`;
-      }).join('')}</div>`;
-
     const allInsts = ST.getAll('installments');
-    const ccHTML = cards.length === 0 ?
-      '<div class="empty-state"><div class="empty-icon">💳</div>เพิ่มบัตรเครดิตแรก</div>' :
-      cards.map(cc => {
-        const used = Number(cc.used) || 0;
-        const limit = Number(cc.limit) || 1;
-        const pct = Math.min(used / limit * 100, 100);
-        const avail = limit - used;
-        const cls = pct < 70 ? 'bok' : pct < 90 ? 'bwarn' : 'bover';
-        const activeInsts = allInsts.filter(i => i.creditCardId === cc.id && i.status === 'active');
-        return `<div class="cc-card ${cc.network || 'other'}"><div class="cc-chip"></div><div class="cc-number">•••• •••• •••• ${cc.lastFour || '0000'}</div><div class="cc-name-row"><span class="cc-bank">${cc.name}</span><span class="cc-network">${(cc.network || '').toUpperCase()}</span></div><div class="cc-limit-bar"><div class="cc-limit-fill ${cls}" style="width:${pct}%"></div></div><div class="cc-stats"><span>ใช้ไป ${U.fmtCurrency(used, cfg.currency)}</span><span>วงเงิน ${U.fmtCurrency(limit, cfg.currency)}</span></div><div style="display:flex;gap:5px;margin-top:9px;flex-wrap:wrap"><button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3)" data-ccpay="${cc.id}">💰 จ่ายหนี้</button>${activeInsts.length > 0 ? `<button class="btn btn-sm" style="background:rgba(255,200,0,.25);color:#fff;border:1px solid rgba(255,200,0,.4)" data-ccplan="${cc.id}">📋 ${activeInsts.length} แผนผ่อน</button>` : ''}<span style="flex:1"></span><button class="btn-ghost btn-sm" style="color:rgba(255,255,255,.7)" data-cced="${cc.id}">✏️</button><button class="btn-ghost btn-sm" style="color:rgba(255,255,255,.5)" data-ccdl="${cc.id}">🗑️</button></div></div>`;
-      }).join('');
+    const cfg = U.getConfig();
+    const tab = this._tab();
 
-    const transfers = ST.getAll('account_transfers').sort((a, b) => new Date(b.date) - new Date(a.date)).slice(0, 10);
-    const trHTML = transfers.length === 0 ?
-      '<div style="color:var(--text-secondary);font-size:.8rem;padding:8px 0">ยังไม่มีประวัติการโอน</div>' :
-      `<div class="table-wrap"><table><thead><tr><th>วันที่</th><th>จาก</th><th>ถึง</th><th>จำนวน</th><th>หมายเหตุ</th></tr></thead><tbody>${transfers.map(t => {
-        const from = wallets.find(w => w.id === t.fromId) || cards.find(c => c.id === t.fromId) || { name: '?', icon: '❓' };
-        const to = wallets.find(w => w.id === t.toId) || cards.find(c => c.id === t.toId) || { name: '?', icon: '❓' };
-        return `<tr><td style="font-size:.76rem">${U.fmtDate(t.date)}</td><td>${from.icon} ${from.name}</td><td>${to.icon} ${to.name}</td><td style="font-weight:700;color:var(--accent)">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.76rem;color:var(--text-secondary)">${t.note || '-'}</td></tr>`;
-      }).join('')}</tbody></table></div>`;
+    const totalWallet = wallets.reduce((s, w) => s + Number(w.balance || 0), 0);
+    const totalDebt = cards.reduce((s, c) => s + Number(c.used || 0), 0);
+    const pendingR = txns.filter(t => t.reimbursable && t.reimburseStatus === 'pending');
+    const reimburseTotal = pendingR.reduce((s, t) => s + Number(t.amount), 0);
 
-    return `<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);margin-bottom:14px">
-      <div class="stat-card income"><div class="stat-label">ยอดเงินสด+บัญชีรวม</div><div class="stat-value">${U.fmtCurrency(totalWallet, cfg.currency)}</div></div>
-      <div class="stat-card expense"><div class="stat-label">ยอดหนี้บัตรเครดิต</div><div class="stat-value">${U.fmtCurrency(totalDebt, cfg.currency)}</div></div>
+    const summaryHTML = `<div class="stats-grid" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
+      <div class="stat-card income"><div class="stat-label">เงิน+บัญชีรวม</div><div class="stat-value">${U.fmtCurrency(totalWallet, cfg.currency)}</div></div>
+      <div class="stat-card expense"><div class="stat-label">หนี้บัตรเครดิต</div><div class="stat-value">${U.fmtCurrency(totalDebt, cfg.currency)}</div></div>
       <div class="stat-card balance"><div class="stat-label">ทรัพย์สินสุทธิ</div><div class="stat-value">${U.fmtCurrency(totalWallet - totalDebt, cfg.currency)}</div></div>
-    </div>
-    <div class="card"><div class="card-header"><span class="card-title">🏧 บัญชีของฉัน</span><button class="btn btn-primary btn-sm" id="btnAddWA">➕ เพิ่มบัญชี</button></div>${walletHTML}</div>
-    <div class="card"><div class="card-header"><span class="card-title">💳 บัตรเครดิต</span><button class="btn btn-primary btn-sm" id="btnAddCC">➕ เพิ่มบัตร</button></div>${ccHTML}</div>
-    <div class="card"><div class="card-header"><span class="card-title">↔️ ประวัติการโอน</span></div>${trHTML}</div>`;
+      <div class="stat-card" style="border-left:3px solid var(--warning);cursor:pointer" data-acctab="reimburse">
+        <div class="stat-label">🔄 รอเบิกคืน</div>
+        <div class="stat-value" style="color:var(--warning)">${U.fmtCurrency(reimburseTotal, cfg.currency)}</div>
+        <div style="font-size:.65rem;color:var(--text-secondary)">${pendingR.length} รายการรอเบิก</div>
+      </div>
+    </div>`;
+
+    const tabDefs = [
+      { id: 'wallets', label: `🏧 บัญชี${wallets.length ? ' ('+wallets.length+')' : ''}` },
+      { id: 'cards',   label: `💳 บัตร${cards.length ? ' ('+cards.length+')' : ''}` },
+      { id: 'transfers', label: '↔️ โอน' },
+      { id: 'reimburse', label: `🔄 รอเบิก${pendingR.length ? ' ('+pendingR.length+')' : ''}` },
+    ];
+    const tabBar = `<div class="acc-tab-bar">${tabDefs.map(t => `<button class="acc-tab ${tab===t.id?'active':''}" data-acctab="${t.id}">${t.label}</button>`).join('')}</div>`;
+
+    // ── Wallet tab ──
+    const wSearch = localStorage.getItem('exp_fwSearch') || '';
+    const wType   = localStorage.getItem('exp_fwType') || '';
+    let fw = wallets;
+    if (wSearch) fw = fw.filter(w => w.name.toLowerCase().includes(wSearch.toLowerCase()));
+    if (wType) fw = fw.filter(w => w.wtype === wType);
+    const wtypeOpts = [['','ทุกประเภท'],['cash','เงินสด'],['bank','ธนาคาร'],['saving','ออมทรัพย์'],['digital','ดิจิทัล'],['other','อื่นๆ']];
+    const walletsContent = `<div class="card">
+      <div class="card-header"><span class="card-title">🏧 บัญชีของฉัน</span><button class="btn btn-primary btn-sm" id="btnAddWA">➕ เพิ่มบัญชี</button></div>
+      <div style="display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap">
+        <input type="text" id="fWSearch" placeholder="🔍 ค้นหาบัญชี..." value="${wSearch}" style="flex:1;min-width:130px">
+        <select id="fWType">${wtypeOpts.map(([v,l]) => `<option value="${v}" ${wType===v?'selected':''}>${l}</option>`).join('')}</select>
+      </div>
+      ${fw.length === 0 ? '<div class="empty-state"><div class="empty-icon">🏦</div>ไม่พบบัญชีที่ตรงกัน</div>' :
+        `<div class="acc-grid">${fw.map(w => {
+          const inc = txns.filter(t => t.accountId===w.id && t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
+          const exp = txns.filter(t => t.accountId===w.id && t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
+          const wtl = {cash:'เงินสด',bank:'ธนาคาร',digital:'กระเป๋าเงิน',saving:'ออมทรัพย์'}[w.wtype]||w.wtype;
+          return `<div class="acc-card"><div class="acc-type-bar" style="background:${w.color}"></div><span class="acc-icon">${w.icon}</span><div class="acc-name">${w.name}</div><div class="acc-balance ${w.balance>=0?'pos':'neg'}">${U.fmtCurrency(w.balance,cfg.currency)}</div><div class="acc-subtext">${wtl}${inc>0||exp>0?` • รับ ${U.fmtCurrency(inc,cfg.currency)} จ่าย ${U.fmtCurrency(exp,cfg.currency)}`:'ยังไม่มีรายการ'}</div><div style="display:flex;gap:3px;margin-top:8px;justify-content:flex-end"><button class="btn btn-outline btn-sm" data-watr="${w.id}">↔️ โอน</button><button class="btn-ghost btn-sm" data-waed="${w.id}">✏️</button><button class="btn-ghost btn-sm" style="color:var(--danger)" data-wadl="${w.id}">🗑️</button></div></div>`;
+        }).join('')}</div>`}
+    </div>`;
+
+    // ── Cards tab ──
+    const cSearch = localStorage.getItem('exp_fcSearch') || '';
+    const cNet    = localStorage.getItem('exp_fcNet') || '';
+    let fc = cards;
+    if (cSearch) fc = fc.filter(c => c.name.toLowerCase().includes(cSearch.toLowerCase()));
+    if (cNet) fc = fc.filter(c => c.network === cNet);
+    const netOpts = [['','ทุกประเภท'],['visa','Visa'],['mastercard','Mastercard'],['amex','Amex'],['cashcard','Cash Card'],['other','Other']];
+    const cardsContent = `<div class="card">
+      <div class="card-header"><span class="card-title">💳 บัตรเครดิต</span><button class="btn btn-primary btn-sm" id="btnAddCC">➕ เพิ่มบัตร</button></div>
+      <div style="display:flex;gap:7px;margin-bottom:12px;flex-wrap:wrap">
+        <input type="text" id="fCSearch" placeholder="🔍 ค้นหาบัตร..." value="${cSearch}" style="flex:1;min-width:130px">
+        <select id="fCNet">${netOpts.map(([v,l]) => `<option value="${v}" ${cNet===v?'selected':''}>${l}</option>`).join('')}</select>
+      </div>
+      ${fc.length === 0 ? '<div class="empty-state"><div class="empty-icon">💳</div>ไม่พบบัตรที่ตรงกัน</div>' :
+        `<div class="cc-grid">${fc.map(cc => {
+          const used = Number(cc.used)||0, limit = Number(cc.limit)||1;
+          const pct = Math.min(used/limit*100,100), avail = limit-used;
+          const cls = pct<70?'bok':pct<90?'bwarn':'bover';
+          const activeInsts = allInsts.filter(i=>i.creditCardId===cc.id&&i.status==='active');
+          const monthSpend = txns.filter(t=>t.accountId===cc.id&&t.date.startsWith(U.thisMonth())).reduce((s,t)=>s+Number(t.amount),0);
+          const dueDays = cc.dueDay ? (() => { const now=new Date(),due=new Date(now.getFullYear(),now.getMonth(),cc.dueDay); if(due<now)due.setMonth(due.getMonth()+1); return Math.ceil((due-now)/86400000); })() : null;
+          return `<div class="cc-card ${cc.network||'other'}">
+            <div class="cc-chip"></div>
+            <div class="cc-number">•••• •••• •••• ${cc.lastFour||'0000'}</div>
+            <div class="cc-name-row"><span class="cc-bank">${cc.name}</span><span class="cc-network">${(cc.network||'').replace('cashcard','CASH').toUpperCase()}</span></div>
+            <div style="font-size:.69rem;opacity:.75;margin-bottom:5px">ใช้เดือนนี้ ${U.fmtCurrency(monthSpend,cfg.currency)}${dueDays!==null?` • ครบกำหนด ${dueDays<=3?'<span style="color:#ffd700;font-weight:700">':''}${dueDays} วัน${dueDays<=3?'</span>':''}`:''}</div>
+            <div class="cc-limit-bar"><div class="cc-limit-fill ${cls}" style="width:${pct}%"></div></div>
+            <div class="cc-stats" style="grid-template-columns:repeat(3,1fr)"><span>ใช้ไป<br><strong>${U.fmtCurrency(used,cfg.currency)}</strong></span><span>วงเงิน<br><strong>${U.fmtCurrency(limit,cfg.currency)}</strong></span><span style="color:${avail<0?'#ff6b6b':'#86efac'}">เหลือ<br><strong>${U.fmtCurrency(avail,cfg.currency)}</strong></span></div>
+            <div style="display:flex;gap:5px;margin-top:9px;flex-wrap:wrap">
+              <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3)" data-ccpay="${cc.id}">💰 จ่ายหนี้</button>
+              ${activeInsts.length>0?`<button class="btn btn-sm" style="background:rgba(255,200,0,.25);color:#fff;border:1px solid rgba(255,200,0,.4)" data-ccplan="${cc.id}">📋 ${activeInsts.length} แผน</button>`:''}
+              <span style="flex:1"></span>
+              <button class="btn-ghost btn-sm" style="color:rgba(255,255,255,.7)" data-cced="${cc.id}">✏️</button>
+              <button class="btn-ghost btn-sm" style="color:rgba(255,255,255,.5)" data-ccdl="${cc.id}">🗑️</button>
+            </div>
+          </div>`;
+        }).join('')}</div>`}
+    </div>`;
+
+    // ── Transfers tab ──
+    const transfers = ST.getAll('account_transfers').sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,20);
+    const transfersContent = `<div class="card"><div class="card-header"><span class="card-title">↔️ ประวัติการโอน</span></div>
+      ${transfers.length === 0 ? '<div style="color:var(--text-secondary);font-size:.8rem;padding:8px 0">ยังไม่มีประวัติการโอน</div>' :
+        `<div class="table-wrap"><table><thead><tr><th>วันที่</th><th>จาก</th><th>ถึง</th><th>จำนวน</th><th>หมายเหตุ</th></tr></thead><tbody>${transfers.map(t => {
+          const from = wallets.find(w=>w.id===t.fromId)||cards.find(c=>c.id===t.fromId)||{name:'?',icon:'❓'};
+          const to   = wallets.find(w=>w.id===t.toId)  ||cards.find(c=>c.id===t.toId)  ||{name:'?',icon:'❓'};
+          return `<tr><td style="font-size:.76rem">${U.fmtDate(t.date)}</td><td>${from.icon} ${from.name}</td><td>${to.icon} ${to.name}</td><td style="font-weight:700;color:var(--accent)">${U.fmtCurrency(t.amount,cfg.currency)}</td><td style="font-size:.76rem;color:var(--text-secondary)">${t.note||'-'}</td></tr>`;
+        }).join('')}</tbody></table></div>`}
+    </div>`;
+
+    // ── Reimburse tab ──
+    const cats = ST.getAll('categories');
+    const reimburseContent = `<div class="card">
+      <div class="card-header"><span class="card-title">🔄 รอเบิกคืน</span>
+        <span style="font-size:.75rem;color:var(--text-secondary)">รวม ${U.fmtCurrency(reimburseTotal,cfg.currency)}</span>
+      </div>
+      ${pendingR.length === 0 ? '<div class="empty-state"><div class="empty-icon">✅</div>ไม่มีรายการรอเบิก</div>' :
+        pendingR.sort((a,b)=>b.date.localeCompare(a.date)).map(t => {
+          const cat = cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?'};
+          return `<div class="reimb-item">
+            <div class="tl-ico" style="background:${cat.color||'#ccc'}22"><span style="font-size:1.1rem">${cat.icon}</span></div>
+            <div style="flex:1;min-width:0">
+              <div style="font-weight:600;font-size:.85rem">${t.itemName||cat.name}</div>
+              <div style="font-size:.7rem;color:var(--text-secondary)">${U.fmtDate(t.date)}${t.note?' • '+t.note:''}</div>
+            </div>
+            <div style="text-align:right;flex-shrink:0">
+              <div style="font-weight:700;color:var(--expense)">${U.fmtCurrency(t.amount,cfg.currency)}</div>
+              <button class="btn btn-success btn-sm" style="margin-top:4px;font-size:.7rem" data-reimb="${t.id}">✅ รับคืนแล้ว</button>
+            </div>
+          </div>`;
+        }).join('')}
+    </div>`;
+
+    const tabContent = { wallets: walletsContent, cards: cardsContent, transfers: transfersContent, reimburse: reimburseContent }[tab] || walletsContent;
+    return summaryHTML + tabBar + `<div id="accTabContent">${tabContent}</div>`;
   },
 
   attachEvents() {
+    // Tab switching
+    document.querySelectorAll('[data-acctab]').forEach(btn => btn.addEventListener('click', () => {
+      this._setTab(btn.dataset.acctab); App.rv('accounts');
+    }));
+    // Wallet filters
+    document.getElementById('fWSearch')?.addEventListener('input', e => { localStorage.setItem('exp_fwSearch', e.target.value); App.rv('accounts'); });
+    document.getElementById('fWType')?.addEventListener('change', e => { localStorage.setItem('exp_fwType', e.target.value); App.rv('accounts'); });
+    // Card filters
+    document.getElementById('fCSearch')?.addEventListener('input', e => { localStorage.setItem('exp_fcSearch', e.target.value); App.rv('accounts'); });
+    document.getElementById('fCNet')?.addEventListener('change', e => { localStorage.setItem('exp_fcNet', e.target.value); App.rv('accounts'); });
+    // Add buttons
     document.getElementById('btnAddWA')?.addEventListener('click', () => this.openWalletModal());
     document.getElementById('btnAddCC')?.addEventListener('click', () => this.openCCModal());
+    // Wallet actions
     document.querySelectorAll('[data-waed]').forEach(btn => btn.addEventListener('click', () => {
       const w = ST.getById('wallet_accounts', btn.dataset.waed); if (w) this.openWalletModal(w);
     }));
@@ -59,6 +157,7 @@ const AccountsView = {
       if (ok) { ST.softDelete('wallet_accounts', btn.dataset.wadl); U.toast('ลบแล้ว 🗑️', 'success'); App.rv('accounts'); }
     }));
     document.querySelectorAll('[data-watr]').forEach(btn => btn.addEventListener('click', () => this.openTransferModal(btn.dataset.watr)));
+    // Card actions
     document.querySelectorAll('[data-cced]').forEach(btn => btn.addEventListener('click', () => {
       const cc = ST.getById('credit_cards', btn.dataset.cced); if (cc) this.openCCModal(cc);
     }));
@@ -69,15 +168,21 @@ const AccountsView = {
         ? `⚠️ บัตรนี้มีแผนผ่อนอยู่ ${activeInsts.length} แผน\nการลบจะลบแผนผ่อนทั้งหมดด้วย\n(กู้คืนได้ใน 30 วันจากถังขยะ)`
         : 'ลบบัตรนี้?\n(กู้คืนได้ใน 30 วันจากถังขยะ)';
       const ok = await U.confirm(msg);
-      if (ok) {
-        activeInsts.forEach(i => ST.softDelete('installments', i.id));
-        ST.softDelete('credit_cards', ccId);
-        U.toast('ลบแล้ว 🗑️', 'success');
-        App.rv('accounts');
-      }
+      if (ok) { activeInsts.forEach(i => ST.softDelete('installments', i.id)); ST.softDelete('credit_cards', ccId); U.toast('ลบแล้ว 🗑️', 'success'); App.rv('accounts'); }
     }));
     document.querySelectorAll('[data-ccpay]').forEach(btn => btn.addEventListener('click', () => this.openCCPayModal(btn.dataset.ccpay)));
     document.querySelectorAll('[data-ccplan]').forEach(btn => btn.addEventListener('click', () => this.openInstallmentPlansModal(btn.dataset.ccplan)));
+    // Reimburse — mark received
+    document.querySelectorAll('[data-reimb]').forEach(btn => btn.addEventListener('click', async () => {
+      const txn = ST.getById('transactions', btn.dataset.reimb); if (!txn) return;
+      const ok = await U.confirm(`รับเงินคืน "${txn.itemName}" ${U.fmtCurrency(txn.amount, U.getConfig().currency)} แล้วใช่ไหม?\n(จะบันทึกเป็นรายรับให้อัตโนมัติ)`);
+      if (!ok) return;
+      ST.update('transactions', txn.id, { reimburseStatus: 'received' });
+      ST.add('transactions', { type: 'income', amount: txn.amount, categoryId: txn.categoryId, itemName: `เบิกคืน: ${txn.itemName}`, date: U.today(), note: 'เบิกคืนจากรายการที่จ่ายแทน' });
+      window.dispatchEvent(new Event('sc'));
+      U.toast(`✅ บันทึกรายรับ ${U.fmtCurrency(txn.amount, U.getConfig().currency)} แล้ว`, 'success');
+      App.rv('accounts');
+    }));
   },
 
   openWalletModal(edit = null) {
@@ -123,11 +228,11 @@ const AccountsView = {
 
   openCCModal(edit = null) {
     const isEdit = !!edit;
-    const networks = ['visa', 'mastercard', 'amex', 'other'];
+    const networks = ['visa', 'mastercard', 'amex', 'cashcard', 'other'];
     const o = document.createElement('div'); o.className = 'modal-overlay';
     o.innerHTML = `<div class="modal"><h3>${isEdit ? '✏️ แก้ไขบัตร' : '💳 เพิ่มบัตรเครดิต'}</h3>
-      <div class="form-group"><label>ชื่อบัตร/ธนาคาร</label><input type="text" id="ccName" value="${isEdit ? edit.name : ''}" placeholder="เช่น SCB Visa, KBank Mastercard"></div>
-      <div class="form-group"><label>เครือข่ายบัตร</label><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${networks.map(n => `<button class="btn btn-outline btn-sm ccNetBtn" data-net="${n}" style="${isEdit && edit.network === n ? 'background:var(--accent);color:#fff;border-color:var(--accent)' : ''}">${n.toUpperCase()}</button>`).join('')}</div><input type="hidden" id="ccNet" value="${isEdit ? edit.network || 'other' : 'other'}"></div>
+      <div class="form-group"><label>ชื่อบัตร/ธนาคาร</label><input type="text" id="ccName" value="${isEdit ? edit.name : ''}" placeholder="เช่น SCB Visa, KBank Cash Card"></div>
+      <div class="form-group"><label>ประเภทบัตร</label><div style="display:flex;gap:6px;flex-wrap:wrap;margin-top:4px">${networks.map(n => `<button class="btn btn-outline btn-sm ccNetBtn" data-net="${n}" style="${isEdit && edit.network === n ? 'background:var(--accent);color:#fff;border-color:var(--accent)' : ''}">${n==='cashcard'?'Cash Card':n.toUpperCase()}</button>`).join('')}</div><input type="hidden" id="ccNet" value="${isEdit ? edit.network || 'other' : 'other'}"></div>
       <div class="form-group"><label>4 หลักสุดท้าย</label><input type="text" id="ccLast" value="${isEdit ? edit.lastFour || '' : ''}" maxlength="4" placeholder="0000" inputmode="numeric"></div>
       <div class="form-group"><label>วงเงินรวม (Credit Limit)</label><input type="number" id="ccLimit" value="${isEdit ? edit.limit || 0 : 0}" step="100" min="0"></div>
       <div class="form-group"><label>ยอดหนี้ปัจจุบัน</label><input type="number" id="ccUsed" value="${isEdit ? edit.used || 0 : 0}" step="0.01" min="0"></div>

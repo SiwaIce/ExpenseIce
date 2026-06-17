@@ -12,6 +12,8 @@ const App = {
     this.bindNav();
     document.getElementById('btnTheme').addEventListener('click', () => this.toggleTheme());
     document.getElementById('btnRefresh').addEventListener('click', () => { this.rv(this.cv); U.toast('รีเฟรชแล้ว', 'info'); });
+    document.getElementById('btnPrivacy').addEventListener('click', () => this.togglePrivacy());
+    if (localStorage.getItem('exp_privacy') === '1') { document.body.classList.add('privacy-mode'); document.getElementById('btnPrivacy').textContent = '🙈'; }
     this.rv('add');
     this.updateUI();
     this.updateSBBudgets();
@@ -115,6 +117,13 @@ const App = {
     document.documentElement.setAttribute('data-theme', cfg.theme || 'light');
     if (cfg.accent && cfg.accent !== 'indigo') document.documentElement.setAttribute('data-accent', cfg.accent);
     else document.documentElement.removeAttribute('data-accent');
+  },
+  togglePrivacy() {
+    const on = document.body.classList.toggle('privacy-mode');
+    const btn = document.getElementById('btnPrivacy');
+    if (btn) btn.textContent = on ? '🙈' : '👁️';
+    if (on) localStorage.setItem('exp_privacy', '1'); else localStorage.removeItem('exp_privacy');
+    U.toast(on ? '🙈 ซ่อนตัวเลขแล้ว (hover เพื่อดู)' : '👁️ แสดงตัวเลขแล้ว', 'info');
   },
   toggleTheme() {
     const next = U.getConfig().theme === 'dark' ? 'light' : 'dark';

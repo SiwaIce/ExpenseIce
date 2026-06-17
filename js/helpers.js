@@ -9,6 +9,10 @@ const EH = {
       const q = f.search.toLowerCase();
       t = t.filter(x => (x.note || '').toLowerCase().includes(q) || (x.itemName || '').toLowerCase().includes(q));
     }
+    if (f.amountMin !== '' && f.amountMin != null) t = t.filter(x => Number(x.amount) >= Number(f.amountMin));
+    if (f.amountMax !== '' && f.amountMax != null) t = t.filter(x => Number(x.amount) <= Number(f.amountMax));
+    if (f.accountId) t = t.filter(x => x.accountId === f.accountId);
+    if (f.hasReceipt) t = t.filter(x => !!x.receiptUrl);
     return t.sort((a, b) => new Date(b.date) - new Date(a.date) || (b.createdAt || '').localeCompare(a.createdAt || ''));
   },
   calcSum(t) {
@@ -32,7 +36,7 @@ const EH = {
     const now = new Date();
     for (let i = days - 1; i >= 0; i--) {
       const d = new Date(now); d.setDate(d.getDate() - i);
-      const k = d.toISOString().split('T')[0];
+      const k = U._ld(d);
       map[k] = { date: k, income: 0, expense: 0 };
     }
     txns.forEach(t => {
