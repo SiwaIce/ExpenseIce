@@ -45,6 +45,7 @@ const CloudSync = {
 
       this._auth.onAuthStateChanged(user => {
         this._user = user;
+        localStorage.removeItem('exp_signingIn');
         this._renderSidebar();
         App.updateUI();
         if (user) {
@@ -103,6 +104,7 @@ const CloudSync = {
     const provider = new firebase.auth.GoogleAuthProvider();
     try {
       if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
+        localStorage.setItem('exp_signingIn', '1');
         await this._auth.signInWithRedirect(provider);
       } else {
         await this._auth.signInWithPopup(provider);
@@ -212,6 +214,11 @@ const CloudSync = {
       // Cloud row
       if (nameEl) { nameEl.textContent = '✅ ซิงค์แล้ว'; nameEl.style.display = ''; nameEl.style.color = 'var(--success)'; }
       if (btnEl)  { btnEl.textContent = 'ออก'; btnEl.title = 'ออกจากระบบ Cloud'; btnEl.dataset.caction = 'signout'; btnEl.style.color = 'var(--danger)'; }
+    } else if (localStorage.getItem('exp_signingIn')) {
+      if (avatarEl) { avatarEl.innerHTML = '⏳'; }
+      if (sbUserEl) { sbUserEl.textContent = 'กำลัง sign in...'; sbUserEl.style.color = 'var(--accent)'; }
+      if (nameEl)   { nameEl.textContent = 'รอสักครู่...'; nameEl.style.display = ''; nameEl.style.color = 'var(--accent)'; }
+      if (btnEl)    { btnEl.textContent = '⏳ รอ...'; btnEl.style.color = 'var(--accent)'; btnEl.disabled = true; }
     } else {
       if (avatarEl) { avatarEl.innerHTML = '👤'; avatarEl.style.background = ''; avatarEl.style.color = ''; avatarEl.style.padding = ''; }
       if (sbUserEl) { sbUserEl.textContent = 'ยังไม่ได้ล็อกอิน'; sbUserEl.style.fontWeight = ''; sbUserEl.style.color = ''; }
@@ -221,6 +228,7 @@ const CloudSync = {
         btnEl.title = this.isConfigured() ? 'เข้าสู่ระบบด้วย Google' : 'ตั้งค่า Firebase ใน ⚙️ ตั้งค่า';
         btnEl.dataset.caction = this.isConfigured() ? 'signin' : 'settings';
         btnEl.style.color = '';
+        btnEl.disabled = false;
       }
     }
     // Header cloud button

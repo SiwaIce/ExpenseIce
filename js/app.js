@@ -19,6 +19,8 @@ const App = {
     document.addEventListener('keydown', e => {
       if (e.key === 'Escape') { const o = document.querySelector('#modalRoot .modal-overlay'); if (o) o.remove(); }
     });
+    document.querySelectorAll('[data-bnav]').forEach(btn => btn.addEventListener('click', () => this.nav(btn.dataset.bnav)));
+    document.querySelectorAll('[data-bnav]').forEach(btn => btn.classList.toggle('active', btn.dataset.bnav === this.cv));
     setTimeout(() => Onboarding.show(), 400);
     setTimeout(() => CloudSync.init(), 200);
     setTimeout(() => this.autoCreateRecurring(), 600);
@@ -138,6 +140,7 @@ const App = {
     document.getElementById('headerTitle').textContent = titles[view] || view;
     document.getElementById('sidebar').classList.remove('open');
     document.getElementById('sidebarOverlay').classList.remove('show');
+    document.querySelectorAll('[data-bnav]').forEach(btn => btn.classList.toggle('active', btn.dataset.bnav === view));
     this.rv(view);
   },
   rv(view) {

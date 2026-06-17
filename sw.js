@@ -1,4 +1,4 @@
-const CACHE = 'expense-v3';
+const CACHE = 'expense-v6';
 const ASSETS = [
   './',
   './index.html',
@@ -38,16 +38,37 @@ self.addEventListener('activate', e => {
 
 self.addEventListener('fetch', e => {
   if (e.request.method !== 'GET') return;
-  // Don't cache Firebase / Anthropic API calls
   const url = e.request.url;
+
+  // Skip Firebase/API calls — never cache
   if (url.includes('firestore.googleapis.com') ||
       url.includes('firebasestorage.googleapis.com') ||
       url.includes('identitytoolkit.google') ||
       url.includes('googleapis.com') ||
       url.includes('api.anthropic.com') ||
+      url.includes('generativelanguage.googleapis.com') ||
       url.includes('gstatic.com')) {
     return;
   }
+
+  // Network-first for HTML and JS so updates deploy immediately
+  const isCodeFile = /\.(js|html)(\?|$)/.test(url) || url.endsWith('/') || url === location.origin + '/';
+  if (isCodeFile) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // Cache-first for icons and other static assets
   e.respondWith(
     caches.match(e.request).then(cached => {
       if (cached) return cached;

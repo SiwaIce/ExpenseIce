@@ -58,7 +58,14 @@ const EH = {
       .sort((a, b) => b[1].count - a[1].count)
       .slice(0, 8)
       .map(([k, v]) => {
-        let item = k.startsWith('n:') ? { name: k.slice(2), icon: '📌', defaultAmount: 0, categoryId: '' } : ST.getById('items', k);
+        let item;
+        if (k.startsWith('n:')) {
+          const lastTxn = v.last;
+          const cat = lastTxn.categoryId ? (ST.getById('categories', lastTxn.categoryId) || {}) : {};
+          item = { name: k.slice(2), icon: cat.icon || '📝', defaultAmount: lastTxn.amount || 0, categoryId: lastTxn.categoryId || '' };
+        } else {
+          item = ST.getById('items', k);
+        }
         return item ? { ...item, useCount: v.count } : null;
       }).filter(Boolean);
   },

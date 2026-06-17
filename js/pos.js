@@ -60,6 +60,7 @@ const POS = {
           ${favItems.map(it => `<div class="item-card fav ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
             <span class="fav-star">⭐</span>
             <span class="use-cnt">${it.useCount}x</span>
+            ${it.id && !this._isPinned(it.id) ? `<button class="pin-btn" data-pin="${it.id}" title="ปักหมุด">📌</button>` : ''}
             <span class="item-icon">${it.icon}</span>
             <span class="item-name">${it.name}</span>
             <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button>
