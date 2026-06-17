@@ -189,7 +189,7 @@ button,a,label,input,select,textarea,.nchip,.preset-btn,.dshort,.type-btn,.chat-
 .txn-item{display:flex;align-items:center;gap:6px;padding:5px 6px;background:var(--bg-input);border-radius:7px;transition:all .13s;cursor:default}
 .txn-item:hover{background:var(--border)}
 .swipe-wrap{position:relative;overflow:hidden;border-radius:7px;margin-bottom:3px;touch-action:pan-y}
-.swipe-del-bg{position:absolute;right:0;top:0;bottom:0;width:65px;background:var(--danger);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1rem;border-radius:0 7px 7px 0;pointer-events:none}
+.swipe-del-bg{position:absolute;right:0;top:0;bottom:0;width:65px;background:var(--danger);display:flex;align-items:center;justify-content:center;color:#fff;font-size:1rem;border-radius:0 7px 7px 0;pointer-events:none;opacity:0;transition:opacity .15s}
 .swipe-content{position:relative;transition:transform .2s ease;background:transparent}
 .rec-item{display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;transition:border-color .14s}
 .rec-item:hover{border-color:var(--accent)}
@@ -704,6 +704,13 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
   .fab-wrap{bottom:calc(60px + env(safe-area-inset-bottom,0px))!important}
   /* Push content above bottom nav */
   #appContent{padding-bottom:calc(72px + env(safe-area-inset-bottom,0px))!important}
+  /* Sidebar footer clears bottom nav */
+  .sidebar{padding-bottom:calc(60px + env(safe-area-inset-bottom,0px))}
+  /* Transaction table — hide less critical columns on mobile */
+  .table-wrap table{font-size:.74rem}
+  .table-wrap table th:nth-child(2),.table-wrap table td:nth-child(2),
+  .table-wrap table th:nth-child(6),.table-wrap table td:nth-child(6){display:none}
+  .table-wrap table td:last-child,.table-wrap table th:last-child{padding:4px 6px}
 }
 </style>
 </head>

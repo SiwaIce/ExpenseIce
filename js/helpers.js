@@ -429,13 +429,21 @@ function initSwipe(container, onDelete) {
     const content = wrap.querySelector('.swipe-content'); if (!content) return;
     let startX = 0, dx = 0, swiping = false;
     const onStart = e => { startX = (e.touches ? e.touches[0].clientX : e.clientX); swiping = true; dx = 0; };
-    const onMove = e => { if (!swiping) return; const x = (e.touches ? e.touches[0].clientX : e.clientX); dx = Math.min(0, Math.max(-70, x - startX)); content.style.transition = 'none'; content.style.transform = `translateX(${dx}px)`; };
+    const bg = wrap.querySelector('.swipe-del-bg');
+    const onMove = e => {
+      if (!swiping) return;
+      const x = (e.touches ? e.touches[0].clientX : e.clientX);
+      dx = Math.min(0, Math.max(-70, x - startX));
+      content.style.transition = 'none';
+      content.style.transform = `translateX(${dx}px)`;
+      if (bg) bg.style.opacity = String(Math.min(1, Math.abs(dx) / 45));
+    };
     const onEnd = () => {
       swiping = false;
       if (dx < -45) {
         content.style.transition = 'transform .2s';
         content.style.transform = 'translateX(-65px)';
-        wrap.querySelector('.swipe-del-bg') && (wrap.querySelector('.swipe-del-bg').style.opacity = '1');
+        if (bg) bg.style.opacity = '1';
         const id = wrap.dataset.id;
         setTimeout(() => {
           deleteTransaction(id, () => App.rv(App.cv), () => App.rv(App.cv));
@@ -443,6 +451,7 @@ function initSwipe(container, onDelete) {
       } else {
         content.style.transition = 'transform .2s';
         content.style.transform = 'translateX(0)';
+        if (bg) bg.style.opacity = '0';
       }
     };
     wrap.addEventListener('touchstart', onStart, { passive: true });

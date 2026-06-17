@@ -38,14 +38,25 @@ const CloudSync = {
 
       // Handle redirect result (mobile sign-in)
       this._auth.getRedirectResult().catch(e => {
+        localStorage.removeItem('exp_signingIn');
+        this._renderSidebar();
         if (e.code && e.code !== 'auth/no-auth-event') {
           U.toast('Cloud ล็อกอินไม่สำเร็จ: ' + e.message, 'error');
         }
       });
+      // Safety: clear signing-in flag after 60s if still stuck
+      if (localStorage.getItem('exp_signingIn')) {
+        setTimeout(() => {
+          if (localStorage.getItem('exp_signingIn') && !this._user) {
+            localStorage.removeItem('exp_signingIn');
+            this._renderSidebar();
+          }
+        }, 60000);
+      }
 
       this._auth.onAuthStateChanged(user => {
         this._user = user;
-        localStorage.removeItem('exp_signingIn');
+        if (user) localStorage.removeItem('exp_signingIn');
         this._renderSidebar();
         App.updateUI();
         if (user) {
