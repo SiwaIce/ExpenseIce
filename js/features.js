@@ -2,16 +2,22 @@
 const InsightsView = {
   render() {
     return `<div class="ai-tabs"><button class="ai-tab active" data-ait="insights">💡 AI วิเคราะห์</button><button class="ai-tab" data-ait="chat">🤖 แชท</button></div>
-    <div id="aitInsights"><div class="card"><div class="card-header"><span class="card-title">🤖 AI Insights — วิเคราะห์การใช้จ่าย</span><button class="btn btn-primary btn-sm" id="btnRefreshInsights">🔄 วิเคราะห์ใหม่</button></div><div id="insightsContainer"><div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>กำลังวิเคราะห์ข้อมูล...</span></div></div></div><div class="card"><div class="card-header"><span class="card-title">📅 คาดการณ์สิ้นเดือน</span></div><div id="forecastContainer"></div></div></div>
+    <div id="aitInsights">
+      <div class="card"><div class="card-header"><span class="card-title">🤖 AI Insights — วิเคราะห์การใช้จ่าย</span><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" id="btnMonthReport">📊 รายงานเดือน</button><button class="btn btn-primary btn-sm" id="btnRefreshInsights">🔄 วิเคราะห์ใหม่</button></div></div><div id="insightsContainer"><div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>กำลังวิเคราะห์ข้อมูล...</span></div></div></div>
+      <div class="card"><div class="card-header"><span class="card-title">🚨 รายการผิดปกติ</span></div><div id="anomalyContainer"></div></div>
+      <div class="card"><div class="card-header"><span class="card-title">📅 คาดการณ์สิ้นเดือน</span></div><div id="forecastContainer"></div></div>
+    </div>
     <div id="aitChat" style="display:none"></div>`;
   },
   attachEvents() {
     this.loadInsights();
     this.loadForecast();
+    this.loadAnomalies();
     document.getElementById('btnRefreshInsights')?.addEventListener('click', () => {
       document.getElementById('insightsContainer').innerHTML = '<div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>กำลังวิเคราะห์ใหม่...</span></div>';
       this.loadInsights();
     });
+    document.getElementById('btnMonthReport')?.addEventListener('click', () => this.openMonthlyReport());
     document.querySelectorAll('[data-ait]').forEach(tab => tab.addEventListener('click', () => {
       document.querySelectorAll('[data-ait]').forEach(t => t.classList.remove('active'));
       tab.classList.add('active');
@@ -24,6 +30,87 @@ const InsightsView = {
         setTimeout(() => ChatView.attachEvents(), 50);
       }
     }));
+  },
+  loadAnomalies() {
+    const container = document.getElementById('anomalyContainer'); if (!container) return;
+    const cfg = U.getConfig();
+    const cats = ST.getAll('categories');
+    const allTxns = ST.getAll('transactions').filter(t => t.type === 'expense');
+    const month = U.thisMonth();
+    const now = new Date();
+    // Compute per-category monthly avg over last 3 months (excluding current)
+    const anomalies = [];
+    cats.forEach(cat => {
+      const monthly = [];
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const m = d.toISOString().slice(0, 7);
+        const total = allTxns.filter(t => t.categoryId === cat.id && t.date.startsWith(m)).reduce((s, t) => s + Number(t.amount), 0);
+        if (total > 0) monthly.push(total);
+      }
+      if (monthly.length < 1) return;
+      const avg = monthly.reduce((s, v) => s + v, 0) / monthly.length;
+      const current = allTxns.filter(t => t.categoryId === cat.id && t.date.startsWith(month)).reduce((s, t) => s + Number(t.amount), 0);
+      if (current > avg * 2 && current > 500) {
+        anomalies.push({ cat, current, avg, ratio: current / avg });
+      }
+    });
+    if (!anomalies.length) {
+      container.innerHTML = '<div style="text-align:center;color:var(--text-secondary);font-size:.8rem;padding:12px">✅ ไม่พบรายการผิดปกติเดือนนี้</div>';
+      return;
+    }
+    container.innerHTML = anomalies.sort((a, b) => b.ratio - a.ratio).map(a => `
+      <div class="insight-card" style="border-left:3px solid var(--danger)">
+        <div class="insight-icon">${a.cat.icon}</div>
+        <div class="insight-text">
+          <strong>${a.cat.name}</strong> เดือนนี้ ${U.fmtCurrency(a.current, cfg.currency)}
+          สูงกว่าปกติ <strong style="color:var(--danger)">${a.ratio.toFixed(1)}x</strong>
+          (ค่าเฉลี่ย ${U.fmtCurrency(Math.round(a.avg), cfg.currency)}/เดือน)
+        </div>
+      </div>`).join('');
+  },
+  async openMonthlyReport() {
+    if (!AI._key()) { U.toast(AI._noKeyMsg().split('\n')[0], 'error'); return; }
+    const cfg = U.getConfig();
+    const month = U.thisMonth();
+    const cats = ST.getAll('categories');
+    const txns = ST.getAll('transactions').filter(t => t.date.startsWith(month));
+    const income = txns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
+    const expense = txns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+    const catBreakdown = cats.map(c => {
+      const spent = txns.filter(t => t.type === 'expense' && t.categoryId === c.id).reduce((s, t) => s + Number(t.amount), 0);
+      return spent > 0 ? `${c.name}: ${U.fmtCurrency(spent, cfg.currency)}` : null;
+    }).filter(Boolean).join(', ');
+    // prev month
+    const prevD = new Date(now.getFullYear ? now.getFullYear() : new Date().getFullYear(), new Date().getMonth() - 1, 1);
+    const prevM = prevD.toISOString().slice(0, 7);
+    const prevTxns = ST.getAll('transactions').filter(t => t.date.startsWith(prevM));
+    const prevExp = prevTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:520px"><h3>📊 รายงานการเงิน ${month}</h3><div id="reportBody"><div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>AI กำลังสร้างรายงาน...</span></div></div><div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" id="rptClose">ปิด</button></div></div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#rptClose').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+    try {
+      const prompt = `สร้างรายงานสรุปการเงินรายเดือน ${month} เป็นภาษาไทย แบบ markdown ที่อ่านง่าย
+
+ข้อมูล:
+- รายรับ: ${U.fmtCurrency(income, cfg.currency)}
+- รายจ่าย: ${U.fmtCurrency(expense, cfg.currency)}
+- คงเหลือ: ${U.fmtCurrency(income - expense, cfg.currency)}
+- ค่าใช้จ่ายตามหมวด: ${catBreakdown || 'ยังไม่มี'}
+- รายจ่ายเดือนที่แล้ว: ${U.fmtCurrency(prevExp, cfg.currency)}
+- จำนวนรายการ: ${txns.length}
+
+รายงานควรมี: 1) สรุปภาพรวม 2) หมวดที่ใช้มากสุด 3) เปรียบเทียบเดือนก่อน 4) สิ่งที่ทำได้ดี 5) คำแนะนำสำหรับเดือนหน้า`;
+      const text = await AI.call(prompt, { maxTokens: 1200 });
+      const body = document.getElementById('reportBody');
+      if (body) body.innerHTML = `<div style="line-height:1.7;font-size:.85rem;white-space:pre-wrap;background:var(--bg-input);padding:14px;border-radius:10px;max-height:60vh;overflow-y:auto">${text.replace(/\*\*(.*?)\*\*/g,'<strong>$1</strong>').replace(/^#{1,3}\s(.+)/gm,'<div style="font-weight:700;margin:10px 0 4px;font-size:.92rem">$1</div>')}</div>`;
+    } catch {
+      const body = document.getElementById('reportBody');
+      if (body) body.innerHTML = '<div class="insight-card"><div class="insight-icon">⚠️</div><div class="insight-text">ไม่สามารถสร้างรายงานได้ กรุณาลองใหม่</div></div>';
+    }
   },
   async loadInsights() {
     const container = document.getElementById('insightsContainer'); if (!container) return;
@@ -147,7 +234,7 @@ const BV = {
     const cfg = U.getConfig();
     const month = U.thisMonth();
     const txns = ST.getAll('transactions').filter(t => t.date.startsWith(month) && t.type === 'expense');
-    return `<div class="card"><div class="card-header"><span class="card-title">🎯 งบประมาณรายเดือน — ${month}</span><button class="btn btn-primary btn-sm" id="btnAddB">➕ ตั้งงบ</button></div>${cats.map(cat => {
+    return `<div class="card"><div class="card-header"><span class="card-title">🎯 งบประมาณรายเดือน — ${month}</span><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" id="btnAIBudget">🤖 AI แนะนำ</button><button class="btn btn-primary btn-sm" id="btnAddB">➕ ตั้งงบ</button></div></div>${cats.map(cat => {
       const b = budgets.find(x => x.categoryId === cat.id);
       const spent = txns.filter(t => t.categoryId === cat.id).reduce((s, t) => s + Number(t.amount), 0);
       const pct = b && b.amount > 0 ? Math.min(spent / b.amount * 100, 100) : 0;
@@ -157,10 +244,85 @@ const BV = {
   },
   attachEvents() {
     document.getElementById('btnAddB')?.addEventListener('click', () => this.openModal());
+    document.getElementById('btnAIBudget')?.addEventListener('click', () => this.openAISuggest());
     document.querySelectorAll('[data-be]').forEach(btn => btn.addEventListener('click', () => {
       const ex = ST.getAll('budgets').find(b => b.categoryId === btn.dataset.be);
       this.openModal(btn.dataset.be, ex);
     }));
+  },
+  async openAISuggest() {
+    if (!AI._key()) { U.toast(AI._noKeyMsg().split('\n')[0], 'error'); return; }
+    const cfg = U.getConfig();
+    const cats = ST.getAll('categories').filter(c => c.type === 'expense');
+    const now = new Date();
+    const catAvgs = cats.map(cat => {
+      const monthly = [];
+      for (let i = 1; i <= 3; i++) {
+        const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+        const m = d.toISOString().slice(0, 7);
+        const total = ST.getAll('transactions').filter(t => t.type === 'expense' && t.categoryId === cat.id && t.date.startsWith(m)).reduce((s, t) => s + Number(t.amount), 0);
+        if (total > 0) monthly.push(total);
+      }
+      const avg = monthly.length ? Math.round(monthly.reduce((s, v) => s + v, 0) / monthly.length) : 0;
+      return { id: cat.id, name: cat.name, avg };
+    }).filter(c => c.avg > 0);
+
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:480px"><h3>🤖 AI แนะนำงบประมาณ</h3><div id="aibBody"><div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>AI กำลังวิเคราะห์...</span></div></div><div class="modal-actions"><button class="btn btn-outline" id="aibClose">ปิด</button><button class="btn btn-primary" id="aibApplyAll" style="display:none">✅ ใช้ทั้งหมด</button></div></div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#aibClose').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+
+    try {
+      const dataStr = catAvgs.map(c => `${c.name}: เฉลี่ย ${U.fmtCurrency(c.avg, cfg.currency)}/เดือน`).join('\n');
+      const prompt = `วิเคราะห์การใช้จ่ายและแนะนำงบประมาณรายเดือนที่เหมาะสม ตอบเป็น JSON array เท่านั้น:
+[{"categoryId":"id","suggested":0,"reason":"เหตุผลสั้นๆ ภาษาไทย"}]
+
+ข้อมูลค่าเฉลี่ย 3 เดือนล่าสุด:
+${dataStr}
+
+หมวดหมู่และ ID: ${catAvgs.map(c => `${c.id}=${c.name}`).join(', ')}
+แนะนำงบที่เหมาะสม (อาจต่างจากค่าเฉลี่ยถ้าดูแล้วสูงเกินไป)`;
+      const text = await AI.call(prompt, { maxTokens: 800 });
+      let suggestions = [];
+      try { suggestions = JSON.parse(text.replace(/```json|```/g, '').trim()); } catch {}
+
+      const body = document.getElementById('aibBody');
+      if (!body) return;
+      if (!suggestions.length) { body.innerHTML = '<div class="insight-card"><div class="insight-icon">⚠️</div><div class="insight-text">ไม่มีข้อมูลเพียงพอ กรุณาบันทึกรายการอย่างน้อย 1 เดือนก่อน</div></div>'; return; }
+
+      body.innerHTML = suggestions.map(s => {
+        const cat = cats.find(c => c.id === s.categoryId);
+        if (!cat) return '';
+        return `<div style="display:flex;align-items:center;gap:10px;padding:10px 0;border-bottom:1px solid var(--border)">
+          <span style="font-size:1.2rem">${cat.icon}</span>
+          <div style="flex:1"><div style="font-weight:600;font-size:.86rem">${cat.name}</div><div style="font-size:.72rem;color:var(--text-secondary)">${s.reason||''}</div></div>
+          <div style="text-align:right"><div style="font-weight:700;color:var(--accent)">${U.fmtCurrency(s.suggested, cfg.currency)}</div><button class="btn btn-outline btn-sm" data-aib-cat="${s.categoryId}" data-aib-amt="${s.suggested}" style="font-size:.68rem;margin-top:3px">ใช้</button></div>
+        </div>`;
+      }).join('');
+      o.querySelector('#aibApplyAll').style.display = '';
+
+      body.querySelectorAll('[data-aib-cat]').forEach(btn => btn.addEventListener('click', () => {
+        const catId = btn.dataset.aibCat; const amount = Number(btn.dataset.aibAmt);
+        const ex = ST.getAll('budgets').find(b => b.categoryId === catId);
+        if (ex) ST.update('budgets', ex.id, { amount }); else ST.add('budgets', { categoryId: catId, amount });
+        btn.textContent = '✅'; btn.disabled = true;
+        U.toast('ตั้งงบแล้ว', 'success');
+        App.rv('budget');
+      }));
+      o.querySelector('#aibApplyAll').addEventListener('click', () => {
+        suggestions.forEach(s => {
+          if (!s.suggested || !s.categoryId) return;
+          const ex = ST.getAll('budgets').find(b => b.categoryId === s.categoryId);
+          if (ex) ST.update('budgets', ex.id, { amount: s.suggested }); else ST.add('budgets', { categoryId: s.categoryId, amount: s.suggested });
+        });
+        U.toast('ตั้งงบทั้งหมดแล้ว ✅', 'success');
+        o.remove(); App.rv('budget');
+      });
+    } catch {
+      const body = document.getElementById('aibBody');
+      if (body) body.innerHTML = '<div class="insight-card"><div class="insight-icon">⚠️</div><div class="insight-text">ไม่สามารถเชื่อมต่อ AI ได้</div></div>';
+    }
   },
   openModal(catId = null, existing = null) {
     const cats = ST.getAll('categories').filter(c => c.type === 'expense');

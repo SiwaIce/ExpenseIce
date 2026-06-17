@@ -112,7 +112,7 @@ const Views = {
 
     return `<div class="stats-grid" style="grid-template-columns:repeat(3,1fr)"><div class="stat-card income"><div class="stat-label">รายรับ</div><div class="stat-value">${U.fmtCurrency(sum.totalIncome, cfg.currency)}</div></div><div class="stat-card expense"><div class="stat-label">รายจ่าย</div><div class="stat-value">${U.fmtCurrency(sum.totalExpense, cfg.currency)}</div></div><div class="stat-card balance"><div class="stat-label">คงเหลือ</div><div class="stat-value">${U.fmtCurrency(sum.balance, cfg.currency)}</div></div></div>
     <div class="card"><div class="card-header"><span class="card-title">📋 รายการ (${txns.length})</span>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ${view==='timeline'?'btn-primary':'btn-outline'} btn-sm" data-vt="timeline">📅 Timeline</button><button class="btn ${view==='table'?'btn-primary':'btn-outline'} btn-sm" data-vt="table">📊 ตาราง</button><button class="btn btn-primary btn-sm" id="btnAddT">➕</button><button class="btn btn-outline btn-sm" id="btnExpCSV">📥 CSV</button><button class="btn btn-outline btn-sm" id="btnImpCSV">📤</button><input type="file" id="csvFI" accept=".csv" style="display:none"></div>
+      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ${view==='timeline'?'btn-primary':'btn-outline'} btn-sm" data-vt="timeline">📅 Timeline</button><button class="btn ${view==='table'?'btn-primary':'btn-outline'} btn-sm" data-vt="table">📊 ตาราง</button><button class="btn btn-primary btn-sm" id="btnAddT">➕</button><button class="btn btn-outline btn-sm" id="btnStmtScan">📄 Statement</button><button class="btn btn-outline btn-sm" id="btnExpCSV">📥 CSV</button><button class="btn btn-outline btn-sm" id="btnImpCSV">📤</button><input type="file" id="csvFI" accept=".csv" style="display:none"></div>
     </div>
     <div class="filter-bar"><select id="fType"><option value="all" ${f.type==='all'?'selected':''}>ทั้งหมด</option><option value="income" ${f.type==='income'?'selected':''}>รายรับ</option><option value="expense" ${f.type==='expense'?'selected':''}>รายจ่าย</option></select><select id="fCat"><option value="">ทุกหมวดหมู่</option>${cats.map(c => `<option value="${c.id}" ${f.categoryId===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select><input type="date" id="fFrom" value="${f.dateFrom}"><input type="date" id="fTo" value="${f.dateTo}"><input type="text" id="fSearch" placeholder="🔍 ค้นหา..." value="${f.search}"><button class="btn btn-outline btn-sm" id="btnReset">🔄</button></div>
     ${view==='timeline' ? `<div id="tlContainer">${txns.length===0?'<div class="empty-state"><div class="empty-icon">📭</div>ยังไม่มีรายการ</div>':timelineHTML}</div>` : `<div class="table-wrap"><table><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายการ</th><th>จำนวน</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>${txns.length===0?`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-secondary)">ยังไม่มีรายการ</td></tr>`:txns.map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?',color:'#ccc'};return`<tr><td style="font-size:.78rem">${U.fmtDate(t.date)}</td><td><span class="badge badge-${t.type}">${t.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${cat.color}"></span>${cat.icon} ${cat.name}</td><td style="font-size:.8rem">${t.itemName||'-'}</td><td style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.78rem;color:var(--text-secondary)">${(t.note && t.note !== 'undefined') ? t.note : '-'}</td><td style="display:flex;gap:4px;padding:6px 10px"><button class="btn-ghost btnE" data-id="${t.id}" title="แก้ไข">✏️</button><button class="btn-ghost btnD" data-id="${t.id}" title="ลบ">🗑️</button></td></tr>`}).join('')}</tbody></table></div>`}
@@ -120,6 +120,7 @@ const Views = {
   },
   attachTxnEvents() {
     document.getElementById('btnAddT')?.addEventListener('click', () => POS.openModal(null, null, null));
+    document.getElementById('btnStmtScan')?.addEventListener('click', () => this.openStatementScanner());
     document.getElementById('btnExpCSV')?.addEventListener('click', () => {
       U.dlBlob(EH.exportCSV(ST.getAll('transactions'), ST.getAll('categories')), `txn_${U.today()}.csv`);
       U.toast('ส่งออก CSV สำเร็จ', 'success');
@@ -219,6 +220,100 @@ const Views = {
     document.getElementById('btnPrint')?.addEventListener('click', () => {
       window.print();
       U.toast('เปิด Print Dialog', 'info');
+    });
+  },
+
+  // ---------- BANK STATEMENT SCANNER ----------
+  openStatementScanner() {
+    const cfg = U.getConfig();
+    const cats = ST.getAll('categories');
+    let pendingTxns = [];
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:560px">
+      <h3>📄 Import Bank Statement</h3>
+      <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ถ่ายรูปหรืออัพโหลดภาพ Statement ธนาคาร → AI จะอ่านรายการทั้งหมดให้อัตโนมัติ</p>
+      <label class="btn btn-primary" style="cursor:pointer;display:inline-flex;align-items:center;gap:8px;margin-bottom:10px">
+        📎 เลือกภาพ Statement
+        <input type="file" id="stmtFile" accept="image/*" style="display:none">
+      </label>
+      <div id="stmtStatus" style="font-size:.8rem;margin-bottom:10px"></div>
+      <div id="stmtPreview" style="display:none">
+        <div style="font-weight:600;font-size:.85rem;margin-bottom:8px">รายการที่พบ — เลือกที่ต้องการ Import:</div>
+        <div id="stmtList" style="max-height:320px;overflow-y:auto;display:flex;flex-direction:column;gap:4px"></div>
+        <div style="margin-top:10px;display:flex;gap:6px;align-items:center">
+          <label style="font-size:.78rem;display:flex;align-items:center;gap:4px;cursor:pointer"><input type="checkbox" id="stmtSelAll" checked> เลือกทั้งหมด</label>
+          <span id="stmtCount" style="font-size:.75rem;color:var(--text-secondary);margin-left:auto"></span>
+        </div>
+      </div>
+      <div class="modal-actions" style="margin-top:14px">
+        <button class="btn btn-outline" id="stmtClose">ปิด</button>
+        <button class="btn btn-primary" id="stmtImport" style="display:none">✅ Import รายการที่เลือก</button>
+      </div>
+    </div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#stmtClose').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+
+    o.querySelector('#stmtSelAll')?.addEventListener('change', e => {
+      o.querySelectorAll('.stmt-chk').forEach(c => { c.checked = e.target.checked; });
+      _updateCount();
+    });
+    const _updateCount = () => {
+      const sel = o.querySelectorAll('.stmt-chk:checked').length;
+      const tot = o.querySelectorAll('.stmt-chk').length;
+      const el = o.querySelector('#stmtCount'); if (el) el.textContent = `เลือก ${sel}/${tot} รายการ`;
+    };
+
+    o.querySelector('#stmtFile')?.addEventListener('change', async e => {
+      const file = e.target.files[0]; if (!file) return;
+      if (!AI._key()) { U.toast(AI._noKeyMsg().split('\n')[0], 'error'); return; }
+      const status = o.querySelector('#stmtStatus');
+      if (status) { status.style.color = 'var(--accent)'; status.textContent = '🔄 AI กำลังอ่าน statement...'; }
+      try {
+        const b64 = await new Promise(res => { const r = new FileReader(); r.onload = () => res(r.result.split(',')[1]); r.readAsDataURL(file); });
+        const prompt = `จากภาพ bank statement นี้ ให้สกัดรายการธุรกรรมทุกรายการ ตอบเป็น JSON array เท่านั้น ไม่มีข้อความอื่น:
+[{"date":"YYYY-MM-DD","amount":0,"type":"expense","itemName":"ชื่อรายการ"}]
+- type: "expense"=ถอน/จ่าย/เดบิต, "income"=ฝาก/รับ/เครดิต
+- amount: ตัวเลขบวกเสมอ
+- date: YYYY-MM-DD (ปีปัจจุบัน ${new Date().getFullYear()} ถ้าไม่ระบุ)
+- itemName: ชื่อรายการหรือคำอธิบาย`;
+        const text = await AI.vision(prompt, b64, file.type, { maxTokens: 1500 });
+        const clean = text.replace(/```json|```/g, '').trim();
+        const match = clean.match(/\[[\s\S]*\]/);
+        pendingTxns = match ? JSON.parse(match[0]) : [];
+        if (!pendingTxns.length) throw new Error('ไม่พบรายการ');
+
+        const preview = o.querySelector('#stmtPreview');
+        const list = o.querySelector('#stmtList');
+        if (preview) preview.style.display = '';
+        if (list) list.innerHTML = pendingTxns.map((t, i) => {
+          const cat = cats.find(c => c.type === t.type) || cats[0] || {};
+          return `<div style="display:flex;align-items:center;gap:8px;padding:7px 10px;background:var(--bg-input);border-radius:8px;font-size:.8rem">
+            <input type="checkbox" class="stmt-chk" data-idx="${i}" checked>
+            <span style="color:var(--text-secondary);flex-shrink:0;width:80px">${t.date}</span>
+            <span style="flex:1;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.itemName||'รายการ'}</span>
+            <span style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'};flex-shrink:0">${t.type==='income'?'+':'-'}${U.fmtCurrency(t.amount, cfg.currency)}</span>
+          </div>`;
+        }).join('');
+        list?.querySelectorAll('.stmt-chk').forEach(c => c.addEventListener('change', _updateCount));
+        _updateCount();
+        if (status) { status.style.color = 'var(--success)'; status.textContent = `✅ พบ ${pendingTxns.length} รายการ`; }
+        o.querySelector('#stmtImport').style.display = '';
+        e.target.value = '';
+      } catch(err) {
+        if (status) { status.style.color = 'var(--danger)'; status.textContent = '⚠️ อ่านไม่ได้ — ลองรูปที่ชัดขึ้น'; }
+        e.target.value = '';
+      }
+    });
+
+    o.querySelector('#stmtImport')?.addEventListener('click', () => {
+      const selected = [...o.querySelectorAll('.stmt-chk:checked')].map(c => pendingTxns[Number(c.dataset.idx)]).filter(Boolean);
+      selected.forEach(t => {
+        ST.add('transactions', { type: t.type || 'expense', amount: Number(t.amount) || 0, categoryId: '', itemName: t.itemName || 'รายการ', date: t.date || U.today(), note: 'นำเข้าจาก Statement' });
+      });
+      U.toast(`✅ Import ${selected.length} รายการแล้ว`, 'success');
+      o.remove();
+      App.rv('transactions');
     });
   },
 

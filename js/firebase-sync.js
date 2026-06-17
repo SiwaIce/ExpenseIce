@@ -113,16 +113,18 @@ const CloudSync = {
   async signIn() {
     if (!this._auth) { U.toast('กรุณาตั้งค่า Firebase ก่อน', 'error'); return; }
     const provider = new firebase.auth.GoogleAuthProvider();
+    provider.setCustomParameters({ prompt: 'select_account' });
     try {
-      if (/Mobi|Android|iPhone|iPad/i.test(navigator.userAgent)) {
-        localStorage.setItem('exp_signingIn', '1');
-        await this._auth.signInWithRedirect(provider);
-      } else {
-        await this._auth.signInWithPopup(provider);
-      }
+      await this._auth.signInWithPopup(provider);
     } catch(e) {
-      if (e.code !== 'auth/popup-closed-by-user') {
-        U.toast('ล็อกอินไม่สำเร็จ', 'error');
+      if (e.code === 'auth/popup-blocked') {
+        // Popup blocked (rare on mobile) — fall back to redirect
+        localStorage.setItem('exp_signingIn', '1');
+        this._renderSidebar();
+        await this._auth.signInWithRedirect(provider);
+      } else if (e.code !== 'auth/popup-closed-by-user') {
+        localStorage.removeItem('exp_signingIn');
+        U.toast('ล็อกอินไม่สำเร็จ: ' + (e.message || e.code), 'error');
       }
     }
   },

@@ -43,8 +43,21 @@ const ChatView = {
     this._loading = true;
     this._callAPI().then(reply => {
       document.getElementById(loadId)?.remove();
-      this._appendBubble('ai', reply);
-      this.history.push({ role: 'assistant', content: reply });
+      // Parse and execute [TXN:{...}] block if present
+      const txnMatch = reply.match(/\[TXN:(\{[^}]+\})\]/);
+      if (txnMatch) {
+        try {
+          const td = JSON.parse(txnMatch[1]);
+          if (td.amount > 0) {
+            ST.add('transactions', { type: td.type || 'expense', amount: Number(td.amount), categoryId: td.categoryId || '', itemName: td.itemName || '', date: U.today(), note: 'บันทึกผ่าน AI Chat' });
+            window.dispatchEvent(new Event('sc'));
+            if (typeof App !== 'undefined' && App.cv === 'add') App.rv('add');
+          }
+        } catch {}
+      }
+      const cleanReply = reply.replace(/\[TXN:\{[^}]+\}\]\s*/g, '');
+      this._appendBubble('ai', cleanReply);
+      this.history.push({ role: 'assistant', content: cleanReply });
       this._loading = false;
     }).catch(() => {
       document.getElementById(loadId)?.remove();
@@ -95,6 +108,8 @@ const ChatView = {
     const goalSummary = goals.map(g => `${g.name}: ออม ${U.fmtCurrency(g.currentAmount||0, cfg.currency)} / เป้า ${U.fmtCurrency(g.targetAmount, cfg.currency)}`).join(', ');
     const subsSummary = subs.filter(s=>s.active!==false).map(s=>`${s.name} ${U.fmtCurrency(s.cost||0,cfg.currency)}/เดือน`).join(', ');
     const instSummary = installments.map(i=>`${i.itemName}: เหลือ ${i.remainingMonths} งวด x ${U.fmtCurrency(i.monthlyPayment,cfg.currency)}`).join(', ');
+    const allCats = ST.getAll('categories');
+    const catOptions = allCats.map(c => `${c.id}=${c.name}(${c.type==='expense'?'จ่าย':'รับ'})`).join(', ');
     return `คุณเป็น AI ผู้ช่วยการเงินส่วนตัวที่ฉลาดและเป็นมิตร ตอบเป็นภาษาไทย กระชับ เข้าใจง่าย
 
 ข้อมูลการเงินของผู้ใช้ (เดือน ${month}):
@@ -109,6 +124,11 @@ const ChatView = {
 - ค่าสมาชิกรายเดือน: ${subsSummary || 'ยังไม่มี'}
 - แผนผ่อนชำระ: ${instSummary || 'ไม่มี'}
 - ธุรกรรม 90 วันล่าสุด: ${txns.length} รายการ
+
+หมวดหมู่ที่มี: ${catOptions}
+
+🔴 กฎพิเศษ: ถ้าผู้ใช้ต้องการบันทึกรายการ (เช่น "ซื้อข้าว 60", "จ่ายค่าน้ำ 300", "ได้เงินเดือน 30000") ให้เริ่มต้นตอบด้วย [TXN:{"type":"expense","amount":0,"itemName":"","categoryId":""}] ก่อนเสมอ แล้วตามด้วยข้อความยืนยันภาษาไทย
+ตัวอย่าง: ผู้ใช้: "ซื้อกาแฟ 80" → [TXN:{"type":"expense","amount":80,"itemName":"กาแฟ","categoryId":"cat_food"}] บันทึกค่ากาแฟ 80 บาทแล้วนะครับ ✅
 
 ตอบโดยอ้างอิงข้อมูลจริงข้างต้น ให้คำแนะนำที่ปฏิบัติได้จริง`;
   },

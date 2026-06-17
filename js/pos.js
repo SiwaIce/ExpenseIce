@@ -436,6 +436,31 @@ const POS = {
       if (total > 0 && n > 1) { numVal = String(Math.ceil(total / n)); refreshDisp(); }
       const sr = o.querySelector('#splitRow'); if (sr) sr.style.display = 'none';
     });
+    // Auto-categorize when item name typed
+    const _CAT_RULES = [
+      { id:'cat_food', words:['ข้าว','กาแฟ','ชา','อาหาร','ส้มตำ','ก๋วย','ชานม','หมู','ไก่','เนื้อ','ปลา','ผัด','ต้ม','แกง','ขนม','เค้ก','นม','โลตัส','บิ๊กซี','เซเว่น','7-eleven','7eleven','แมค','kfc','pizza','burger','sushi','ramen','ลาเต้','คาปู','สตาร์บัค','เดลิเวอรี','grab food','foodpanda'] },
+      { id:'cat_transport', words:['น้ำมัน','ปั๊ม','แท็กซี่','grab','bolt','รถไฟ','bts','mrt','เรือ','จอดรถ','parking','ค่าทาง','tollway'] },
+      { id:'cat_shopping', words:['เสื้อ','กางเกง','รองเท้า','กระเป๋า','lazada','shopee','amazon','ซื้อของ','เครื่องสำอาง','ของขวัญ'] },
+      { id:'cat_bills', words:['ค่าไฟ','ค่าน้ำ','อินเตอร์เน็ต','เน็ต','โทรศัพท์','มือถือ','ค่าเช่า','ค่าบ้าน','ประกัน','ค่าส่ง','ค่าธรรมเนียม'] },
+      { id:'cat_health', words:['หมอ','ยา','โรงพยาบาล','คลินิก','วิตามิน','สุขภาพ','ฟัน','ตา'] },
+      { id:'cat_entertain', words:['ภาพยนตร์','หนัง','netflix','spotify','เกม','concert','ท่องเที่ยว','โรงแรม','สปา','บันเทิง','ดนตรี'] },
+    ];
+    o.querySelector('#mN')?.addEventListener('blur', () => {
+      const name = (o.querySelector('#mN')?.value || '').toLowerCase();
+      const sel = o.querySelector('#mC');
+      if (!name || !sel || parseFloat(numVal) > 0) return;
+      const allCatsLocal = ST.getAll('categories');
+      for (const rule of _CAT_RULES) {
+        if (rule.words.some(w => name.includes(w))) {
+          const match = allCatsLocal.find(c => c.id === rule.id);
+          if (match && sel.value !== match.id) {
+            sel.value = match.id;
+            U.toast(`💡 หมวด: ${match.icon} ${match.name}`, 'info');
+          }
+          break;
+        }
+      }
+    });
     // Category pre-fill amount from history
     o.querySelector('#mC')?.addEventListener('change', () => {
       if (parseFloat(numVal) > 0) return;
