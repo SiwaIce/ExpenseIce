@@ -39,40 +39,52 @@ const POS = {
       return cat && cat.type === this.type;
     });
 
-    let posContent = '';
-    if (!this.cat) {
-      const pinnedHTML = pinnedObjs.length > 0 ?
-        `<div style="margin-bottom:12px"><div style="font-size:.68rem;font-weight:700;color:var(--accent);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">📌 ปักหมุด</div><div class="pos-grid">${pinnedObjs.map(it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" style="border:1.5px solid var(--accent)" data-fav-id="${it.id}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}"><button class="pin-btn pinned" data-pin="${it.id}">📌</button><span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span><span class="item-amount">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span><button class="qa-btn" data-qa-fn="${it.id}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button></div>`).join('')}</div></div>` : '';
-      const favHTML = favItems.length > 0 ?
-        `<div style="margin-bottom:12px"><div style="font-size:.68rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">⭐ ใช้บ่อย</div><div class="pos-grid">${favItems.map(it => `<div class="item-card fav ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}"><span class="fav-star">⭐</span><span class="use-cnt">${it.useCount}x</span><span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span><span class="item-amount">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span><button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button></div>`).join('')}</div></div>` : '';
-      posContent = pinnedHTML + favHTML + `<div style="font-size:.68rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:6px">📁 หมวดหมู่</div>
+    const pinnedHTML = pinnedObjs.length > 0 ?
+      `<div style="margin-bottom:14px">
+        <div class="pos-section-label">📌 ปักหมุด</div>
         <div class="pos-grid">
-          ${displayCats.map(cat => {
-            const catItems = items.filter(i => i.categoryId === cat.id);
-            const catSpent = txns.filter(t => t.categoryId === cat.id && t.date.startsWith(U.thisMonth())).reduce((s, t) => s + Number(t.amount), 0);
-            const bs = EH.getBudget(cat.id);
-            return `<div class="cat-card" data-cat="${cat.id}" style="border-top:3px solid ${cat.color}">
-              ${catSpent > 0 ? `<span class="cat-total-badge">${U.fmtCurrency(catSpent, cfg.currency)}</span>` : ''}
-              <span class="cat-icon">${cat.icon}</span><span class="cat-name">${cat.name}</span>
-              <span class="cat-count">${catItems.length} รายการ</span>
-              ${bs ? `<div class="bbar-wrap"><div class="bbar-fill ${bs.cls}" style="width:${bs.pct}%"></div></div>` : ''}
-              <div class="cat-color-bar" style="background:${cat.color}"></div>
-            </div>`;
-          }).join('')}
-          <div class="cat-card" data-cat="custom" style="border-top:3px solid var(--accent);border-style:dashed"><span class="cat-icon">✏️</span><span class="cat-name">กำหนดเอง</span><span class="cat-count">กรอกเอง</span></div>
-        </div>`;
-    } else {
-      const cat = ST.getById('categories', this.cat);
-      let catItems = items.filter(i => i.categoryId === this.cat);
-      if (this.q) { const q = this.q.toLowerCase(); catItems = catItems.filter(i => i.name.toLowerCase().includes(q)); }
-      posContent = `<button class="back-btn" id="backBtn">← กลับ</button>
-        <div style="display:flex;align-items:center;gap:7px;margin-bottom:8px;font-weight:700;font-size:.95rem"><span style="font-size:1.3rem">${cat.icon}</span>${cat.name}</div>
-        <div class="pos-search"><span class="si">🔍</span><input type="text" id="itemQ" placeholder="ค้นหารายการ..." value="${this.q}"></div>
+          ${pinnedObjs.map(it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" style="border:2px solid var(--accent)" data-fav-id="${it.id}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
+            <button class="pin-btn pinned" data-pin="${it.id}">📌</button>
+            <span class="item-icon">${it.icon}</span>
+            <span class="item-name">${it.name}</span>
+            ${it.defaultAmount > 0 ? `<span class="item-amount-sm">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
+            <button class="qa-btn" data-qa-fn="${it.id}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button>
+          </div>`).join('')}
+        </div>
+      </div>` : '';
+
+    const favHTML = favItems.length > 0 ?
+      `<div style="margin-bottom:14px">
+        <div class="pos-section-label">⭐ ใช้บ่อย</div>
         <div class="pos-grid">
-          ${catItems.map(it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-item="${it.id}" data-cat="${this.cat}"><button class="pin-btn ${this._isPinned(it.id)?'pinned':''}" data-pin="${it.id}">📌</button><span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span><span class="item-amount">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span><button class="qa-btn" data-qa="${it.id}">+</button></div>`).join('')}
-          <div class="item-card" data-item="custom" data-cat="${this.cat}" style="border-style:dashed"><span class="item-icon">✏️</span><span class="item-name">กำหนดเอง</span><span class="item-amount" style="color:var(--text-secondary)">กรอกเอง</span></div>
-        </div>`;
-    }
+          ${favItems.map(it => `<div class="item-card fav ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
+            <span class="fav-star">⭐</span>
+            <span class="use-cnt">${it.useCount}x</span>
+            <span class="item-icon">${it.icon}</span>
+            <span class="item-name">${it.name}</span>
+            <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button>
+          </div>`).join('')}
+        </div>
+      </div>` : '';
+
+    const posContent = pinnedHTML + favHTML +
+      `<div class="pos-section-label">📁 หมวดหมู่</div>
+      <div class="pos-grid">
+        ${displayCats.map(cat => {
+          const bs = EH.getBudget(cat.id);
+          return `<div class="cat-card" data-cat="${cat.id}">
+            <div class="cat-color-strip" style="background:${cat.color}"></div>
+            <span class="cat-icon">${cat.icon}</span>
+            <span class="cat-name">${cat.name}</span>
+            ${bs ? `<div class="bbar-wrap" style="margin-top:6px"><div class="bbar-fill ${bs.cls}" style="width:${bs.pct}%"></div></div>` : ''}
+          </div>`;
+        }).join('')}
+        <div class="cat-card cat-card-custom" data-cat="custom">
+          <div class="cat-color-strip" style="background:var(--accent)"></div>
+          <span class="cat-icon">✏️</span>
+          <span class="cat-name">กำหนดเอง</span>
+        </div>
+      </div>`;
 
     const todayTxnHtml = todayTxns.length === 0 ?
       '<div style="text-align:center;color:var(--text-secondary);padding:12px;font-size:.8rem">ยังไม่มีรายการวันนี้</div>' :
@@ -151,39 +163,18 @@ const POS = {
     document.querySelectorAll('.cat-card').forEach(card =>
       card.addEventListener('click', () => {
         const cid = card.dataset.cat;
-        if (cid === 'custom') this.openModal(null, null, null);
-        else { this.cat = cid; this.q = ''; App.rv('add'); }
+        this.openModal(null, cid === 'custom' ? null : cid, null);
       })
     );
-    document.getElementById('backBtn')?.addEventListener('click', () => { this.cat = null; this.q = ''; App.rv('add'); });
-    document.getElementById('itemQ')?.addEventListener('input', e => { this.q = e.target.value; App.rv('add'); });
     document.querySelectorAll('[data-pin]').forEach(btn => btn.addEventListener('click', e => {
       e.stopPropagation();
       this._togglePin(btn.dataset.pin);
-    }));
-    document.querySelectorAll('.item-card:not(.fav)').forEach(card => card.addEventListener('click', e => {
-      if (e.target.closest('.qa-btn') || e.target.closest('.pin-btn')) return;
-      const iid = card.dataset.item; const cid = card.dataset.cat;
-      if (iid === 'custom') this.openModal(null, cid, null);
-      else this.openModal(ST.getById('items', iid), cid, null);
     }));
     document.querySelectorAll('.item-card.fav, .item-card[data-fav-id]').forEach(card => card.addEventListener('click', e => {
       if (e.target.closest('.qa-btn') || e.target.closest('.pin-btn')) return;
       const iid = card.dataset.favId;
       const item = iid ? ST.getById('items', iid) : null;
       this.openModal(item, item ? item.categoryId : null, null);
-    }));
-    document.querySelectorAll('[data-qa]').forEach(btn => btn.addEventListener('click', e => {
-      e.stopPropagation();
-      const it = ST.getById('items', btn.dataset.qa);
-      if (it) {
-        ST.add('transactions', {
-          type: this.type, amount: it.defaultAmount, categoryId: it.categoryId,
-          itemId: it.id, itemName: it.name, date: U.today(), note: ''
-        });
-        this.flash(`${it.icon} ${it.name} ${U.fmtCurrency(it.defaultAmount)}`);
-        App.rv('add');
-      }
     }));
     document.querySelectorAll('[data-qa-fn],[data-qa-n]').forEach(btn => {
       btn.addEventListener('click', e => {
@@ -242,6 +233,7 @@ const POS = {
     const defCat = catId || (isEdit ? editTxn.categoryId : (this.type === 'expense' ? 'cat_food' : 'cat_salary'));
     const defAmt = prefill?.amount || (item ? item.defaultAmount : (isEdit ? editTxn.amount : ''));
     const defName = prefill?.name || (item ? item.name : (isEdit ? editTxn.itemName : ''));
+    const catQuickItems = !isEdit && defCat ? ST.getAll('items').filter(i => i.categoryId === defCat).slice(0, 10) : [];
     const t0 = isEdit ? editTxn.type : this.type;
     const presets = EH.getRecentAmounts(t0);
     const chipMap = {
@@ -262,6 +254,7 @@ const POS = {
       <div class="form-group"><label>ประเภท</label><div class="type-toggle"><button class="type-btn ${t0==='expense'?'ae':''}" data-mt="expense">รายจ่าย</button><button class="type-btn ${t0==='income'?'ai':''}" data-mt="income">รายรับ</button></div><input type="hidden" id="mT" value="${t0}"></div>
       <div class="form-group"><label>จำนวนเงิน</label><div class="amt-display focused" id="npDisp">${U.fmtCurrency(Number(numVal)||0, cfg.currency)}</div><div class="presets" id="mPresets">${presets.map(a => `<button class="preset-btn" data-pv="${a}">${U.fmtCurrency(a, cfg.currency)}</button>`).join('')}</div><div class="numpad">${['7','8','9','4','5','6','1','2','3'].map(n => `<button class="np" data-n="${n}">${n}</button>`).join('')}<button class="np np-del" data-n="del">⌫</button><button class="np" data-n="0">0</button><button class="np" data-n=".">.</button></div></div>
       <div class="form-group"><label>หมวดหมู่</label><select id="mC">${cats.map(c => `<option value="${c.id}" ${defCat===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select></div>
+      ${catQuickItems.length > 0 ? `<div class="form-group"><label style="font-size:.74rem;color:var(--text-secondary)">รายการที่บันทึกไว้</label><div class="nchips" id="qiChips">${catQuickItems.map(it => `<button type="button" class="nchip qi-chip" data-qi-name="${it.name}" data-qi-amt="${it.defaultAmount||0}">${it.icon} ${it.name}</button>`).join('')}</div></div>` : ''}
       <div class="form-group"><label>ชื่อรายการ</label><input type="text" id="mN" value="${defName}" placeholder="เช่น ข้าวผัด, น้ำมัน..."></div>
       <div class="form-group" id="mAccGrp"><label id="mAccLbl">บัญชี</label><div class="acc-select-grid" id="mAccSelect"><span style="font-size:.74rem;color:var(--text-secondary)">กำลังโหลด...</span></div><input type="hidden" id="mAccId" value="${isEdit?editTxn.accountId||'':''}"></div>
       <div class="form-group" id="instToggleGrp" style="display:none"><label class="inst-toggle-row"><input type="checkbox" id="mInstToggle"><span>💳 ผ่อนชำระผ่านบัตรเครดิต</span></label></div>
@@ -353,6 +346,12 @@ const POS = {
       o.querySelector('#mD').value = map[btn.dataset.ds] || U.today();
       o.querySelectorAll('[data-ds]').forEach(b => b.classList.remove('active'));
       btn.classList.add('active');
+    }));
+    o.querySelectorAll('.qi-chip').forEach(chip => chip.addEventListener('click', () => {
+      const name = chip.dataset.qiName; const amt = Number(chip.dataset.qiAmt);
+      const nameEl = o.querySelector('#mN'); if (nameEl) nameEl.value = name;
+      if (amt > 0) { numVal = String(amt); refreshDisp(); }
+      o.querySelectorAll('.qi-chip').forEach(c => c.classList.toggle('active', c === chip));
     }));
     o.querySelectorAll('.nchip').forEach(ch => ch.addEventListener('click', () => {
       const el = o.querySelector('#mNote');

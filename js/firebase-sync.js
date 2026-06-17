@@ -189,20 +189,38 @@ const CloudSync = {
   },
 
   _renderSidebar() {
-    const nameEl = document.getElementById('cloudUserName');
-    const btnEl  = document.getElementById('cloudAuthBtn');
-    if (nameEl && btnEl) {
-      if (this._user) {
-        nameEl.textContent = (this._user.displayName || this._user.email || 'ผู้ใช้').split(' ')[0];
-        nameEl.style.display = '';
-        btnEl.textContent = 'ออก';
-        btnEl.title = 'ออกจากระบบ Cloud';
-        btnEl.dataset.caction = 'signout';
-      } else {
-        nameEl.style.display = 'none';
+    const nameEl   = document.getElementById('cloudUserName');
+    const btnEl    = document.getElementById('cloudAuthBtn');
+    const avatarEl = document.getElementById('userAvatar');
+    const sbUserEl = document.getElementById('sidebarUser');
+
+    if (this._user) {
+      const displayName = this._user.displayName || this._user.email || 'ผู้ใช้';
+      // Sidebar main user row
+      if (avatarEl) {
+        if (this._user.photoURL) {
+          avatarEl.innerHTML = `<img src="${this._user.photoURL}" style="width:100%;height:100%;border-radius:50%;object-fit:cover">`;
+          avatarEl.style.background = 'transparent';
+          avatarEl.style.padding = '0';
+        } else {
+          avatarEl.textContent = displayName[0].toUpperCase();
+          avatarEl.style.background = 'var(--success-light)';
+          avatarEl.style.color = 'var(--success)';
+        }
+      }
+      if (sbUserEl) { sbUserEl.textContent = displayName.split(' ')[0]; sbUserEl.style.fontWeight = '600'; sbUserEl.style.color = 'var(--text)'; }
+      // Cloud row
+      if (nameEl) { nameEl.textContent = '✅ ซิงค์แล้ว'; nameEl.style.display = ''; nameEl.style.color = 'var(--success)'; }
+      if (btnEl)  { btnEl.textContent = 'ออก'; btnEl.title = 'ออกจากระบบ Cloud'; btnEl.dataset.caction = 'signout'; btnEl.style.color = 'var(--danger)'; }
+    } else {
+      if (avatarEl) { avatarEl.innerHTML = '👤'; avatarEl.style.background = ''; avatarEl.style.color = ''; avatarEl.style.padding = ''; }
+      if (sbUserEl) { sbUserEl.textContent = 'ยังไม่ได้ล็อกอิน'; sbUserEl.style.fontWeight = ''; sbUserEl.style.color = ''; }
+      if (nameEl)   { nameEl.style.display = 'none'; nameEl.style.color = ''; }
+      if (btnEl) {
         btnEl.textContent = this.isConfigured() ? '☁️ Sign in' : '☁️ ตั้งค่า';
         btnEl.title = this.isConfigured() ? 'เข้าสู่ระบบด้วย Google' : 'ตั้งค่า Firebase ใน ⚙️ ตั้งค่า';
         btnEl.dataset.caction = this.isConfigured() ? 'signin' : 'settings';
+        btnEl.style.color = '';
       }
     }
     // อัปเดตปุ่มใน Settings card ถ้าเปิดอยู่
