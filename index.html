@@ -371,6 +371,24 @@ button,a,label,input,select,textarea,.nchip,.preset-btn,.dshort,.type-btn,.chat-
 .sync-dot.sync-syncing,.sync-dot.sync-pending{animation:spin .8s linear infinite;display:inline-block}
 .receipt-thumb{width:26px;height:26px;border-radius:4px;object-fit:cover;flex-shrink:0;cursor:pointer;border:1px solid var(--border);transition:transform .15s}
 .receipt-thumb:hover{transform:scale(1.1)}
+/* Header cloud button */
+.hcloud-btn{min-width:32px;border-radius:20px!important;font-size:.82rem;overflow:hidden;transition:all .2s}
+.hcloud-btn.logged-in{background:var(--success-light)!important;color:var(--success)!important;border:1.5px solid var(--success)!important}
+/* FAB */
+.fab-wrap{position:fixed;bottom:28px;right:20px;z-index:200;display:flex;flex-direction:column;align-items:flex-end;gap:14px;pointer-events:none}
+.fab-main{width:56px;height:56px;border-radius:50%;background:var(--accent);color:#fff;border:none;font-size:1.9rem;line-height:1;cursor:pointer;box-shadow:0 4px 18px rgba(99,102,241,.45);transition:all .25s;pointer-events:auto;touch-action:manipulation;display:flex;align-items:center;justify-content:center}
+.fab-main:active{transform:scale(.93)}
+.fab-main.open{transform:rotate(45deg);background:var(--danger);box-shadow:0 4px 18px rgba(239,68,68,.4)}
+.fab-menu{display:flex;flex-direction:column;align-items:flex-end;gap:10px}
+.fab-item{display:flex;align-items:center;gap:10px;opacity:0;transform:translateY(12px) scale(.88);transition:opacity .2s,transform .2s;pointer-events:none}
+.fab-wrap.open .fab-item{opacity:1;transform:none;pointer-events:auto}
+.fab-wrap.open .fab-item:nth-child(1){transition-delay:.0s}
+.fab-wrap.open .fab-item:nth-child(2){transition-delay:.05s}
+.fab-wrap.open .fab-item:nth-child(3){transition-delay:.1s}
+.fab-wrap.open .fab-item:nth-child(4){transition-delay:.15s}
+.fab-item-btn{width:46px;height:46px;border-radius:50%;background:var(--bg-card);border:1.5px solid var(--border);box-shadow:var(--shadow-md);font-size:1.15rem;cursor:pointer;touch-action:manipulation;transition:transform .15s}
+.fab-item-btn:active{transform:scale(.9)}
+.fab-item-label{background:var(--bg-card);color:var(--text);font-size:.78rem;font-weight:600;padding:5px 12px;border-radius:20px;box-shadow:var(--shadow-md);white-space:nowrap;border:1px solid var(--border)}
 @keyframes spin{to{transform:rotate(360deg)}}
 /* AI Chatbot */
 .ai-tabs{display:flex;gap:6px;margin-bottom:14px}
@@ -436,12 +454,25 @@ button,a,label,input,select,textarea,.nchip,.preset-btn,.dshort,.type-btn,.chat-
     <div class="header-right">
       <button class="btn btn-ghost btn-sm" id="btnRefresh" title="รีเฟรช">🔄</button>
       <button class="btn btn-ghost btn-sm" id="btnTheme" title="สลับธีม">🌓</button>
+      <button class="btn btn-ghost btn-sm hcloud-btn" id="headerCloudBtn" title="Cloud Sync">☁️</button>
     </div>
   </header>
   <div class="content" id="appContent"></div>
 </div>
 <div class="toast-container" id="toastContainer"></div>
 <div id="modalRoot"></div>
+
+<!-- FAB -->
+<div class="fab-wrap" id="fabWrap">
+  <div class="fab-menu" id="fabMenu">
+    <div class="fab-item" data-fab="settings"><button class="fab-item-btn">⚙️</button><span class="fab-item-label">ตั้งค่า</span></div>
+    <div class="fab-item" data-fab="ai"><button class="fab-item-btn">🤖</button><span class="fab-item-label">AI Dashboard</span></div>
+    <div class="fab-item" data-fab="add"><button class="fab-item-btn">➕</button><span class="fab-item-label">บันทึกรายการ</span></div>
+    <div class="fab-item" data-fab="scan"><button class="fab-item-btn">📷</button><span class="fab-item-label">สแกนใบเสร็จ</span></div>
+  </div>
+  <button class="fab-main" id="fabBtn" title="เมนูลัด">＋</button>
+</div>
+<input type="file" id="fabReceiptInput" accept="image/*" capture="environment" style="display:none">
 
 <script src="js/pinlock.js"></script>
 <script src="js/storage.js"></script>
@@ -464,6 +495,47 @@ button,a,label,input,select,textarea,.nchip,.preset-btn,.dshort,.type-btn,.chat-
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => navigator.serviceWorker.register('./sw.js').catch(() => {}));
 }
+
+// FAB
+window.addEventListener('DOMContentLoaded', () => {
+  const fabBtn  = document.getElementById('fabBtn');
+  const fabWrap = document.getElementById('fabWrap');
+  if (!fabBtn || !fabWrap) return;
+
+  fabBtn.addEventListener('click', () => {
+    const isOpen = fabWrap.classList.toggle('open');
+    fabBtn.classList.toggle('open', isOpen);
+  });
+
+  document.addEventListener('click', e => {
+    if (!fabWrap.contains(e.target)) {
+      fabWrap.classList.remove('open');
+      fabBtn.classList.remove('open');
+    }
+  });
+
+  document.querySelectorAll('.fab-item').forEach(item => {
+    item.addEventListener('click', () => {
+      fabWrap.classList.remove('open');
+      fabBtn.classList.remove('open');
+      const action = item.dataset.fab;
+      if (action === 'scan') {
+        if (typeof App !== 'undefined' && App.cv !== 'add') {
+          App.rv('add');
+          setTimeout(() => document.getElementById('receiptInput')?.click(), 350);
+        } else {
+          document.getElementById('receiptInput')?.click();
+        }
+      } else if (action === 'add') {
+        if (typeof App !== 'undefined') App.rv('add');
+      } else if (action === 'ai') {
+        if (typeof App !== 'undefined') App.rv('insights');
+      } else if (action === 'settings') {
+        if (typeof App !== 'undefined') App.rv('settings');
+      }
+    });
+  });
+});
 </script>
 </body>
 </html>

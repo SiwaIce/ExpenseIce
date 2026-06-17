@@ -223,6 +223,24 @@ const CloudSync = {
         btnEl.style.color = '';
       }
     }
+    // Header cloud button
+    const hBtn = document.getElementById('headerCloudBtn');
+    if (hBtn) {
+      if (this._user) {
+        const name = this._user.displayName || this._user.email || 'U';
+        hBtn.innerHTML = this._user.photoURL
+          ? `<img src="${this._user.photoURL}" style="width:22px;height:22px;border-radius:50%;object-fit:cover;vertical-align:middle">`
+          : `<span style="font-weight:700;font-size:.8rem">${name[0].toUpperCase()}</span>`;
+        hBtn.title = `${name} · คลิกเพื่อออกจากระบบ`;
+        hBtn.classList.add('logged-in');
+        hBtn.onclick = async () => { if (await U.confirm('ออกจากระบบ Cloud?')) CloudSync.signOut(); };
+      } else {
+        hBtn.innerHTML = '☁️';
+        hBtn.title = this.isConfigured() ? 'Sign in with Google' : 'ตั้งค่า Cloud Sync';
+        hBtn.classList.remove('logged-in');
+        hBtn.onclick = () => this.isConfigured() ? this.signIn() : App.rv('settings');
+      }
+    }
     // อัปเดตปุ่มใน Settings card ถ้าเปิดอยู่
     const signInBtn  = document.getElementById('btnCloudSignIn');
     const signOutBtn = document.getElementById('btnCloudSignOut');
