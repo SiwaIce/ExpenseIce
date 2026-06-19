@@ -34,6 +34,30 @@ const POS = {
     U.updateConfig({ pinnedItems: pinned });
     App.rv('add');
   },
+  _seedGroups() {
+    if (ST.getAll('item_groups').length > 0) return;
+    [
+      { categoryId:'cat_food', name:'มื้อเช้า', icon:'🌅' },
+      { categoryId:'cat_food', name:'มื้อกลางวัน', icon:'☀️' },
+      { categoryId:'cat_food', name:'มื้อเย็น', icon:'🌆' },
+      { categoryId:'cat_food', name:'กาแฟ/เครื่องดื่ม', icon:'☕' },
+      { categoryId:'cat_food', name:'ของว่าง', icon:'🍿' },
+      { categoryId:'cat_food', name:'เดลิเวอรี่', icon:'🛵' },
+      { categoryId:'cat_transport', name:'แท็กซี่/Grab', icon:'🚕' },
+      { categoryId:'cat_transport', name:'ขนส่งสาธารณะ', icon:'🚇' },
+      { categoryId:'cat_transport', name:'น้ำมัน', icon:'⛽' },
+      { categoryId:'cat_transport', name:'ที่จอดรถ', icon:'🅿️' },
+      { categoryId:'cat_shopping', name:'ซุปเปอร์มาร์เก็ต', icon:'🛒' },
+      { categoryId:'cat_shopping', name:'ออนไลน์', icon:'📦' },
+      { categoryId:'cat_shopping', name:'เสื้อผ้า', icon:'👔' },
+      { categoryId:'cat_health', name:'ยา/วิตามิน', icon:'💊' },
+      { categoryId:'cat_health', name:'หมอ/คลินิก', icon:'🏥' },
+      { categoryId:'cat_entertain', name:'หนัง/ดนตรี', icon:'🎬' },
+      { categoryId:'cat_entertain', name:'กีฬา', icon:'⚽' },
+      { categoryId:'cat_bills', name:'ไฟฟ้า/น้ำ', icon:'💡' },
+      { categoryId:'cat_bills', name:'อินเทอร์เน็ต/โทรศัพท์', icon:'📡' },
+    ].forEach(d => ST.add('item_groups', d));
+  },
   render() {
     const cats = ST.getAll('categories');
     const items = ST.getAll('items');
@@ -126,12 +150,12 @@ const POS = {
     </div>` : '';
 
     const selCatObj = this.selCat ? displayCats.find(c => c.id === this.selCat) : null;
-    const selCatItems = this.selCat ? items.filter(i => i.categoryId === this.selCat) : [];
-    const selCatItemsHTML = selCatItems.map(it => {
-      const pinBtn = it.id && !this._isPinned(it.id) ? `<button class="pin-btn" data-pin="${it.id}" title="ปักหมุด">📌</button>` : '';
-      const qaBtn = it.defaultAmount > 0 ? `<button class="qa-btn" data-qa-fn="${it.id}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId}">+</button>` : '';
-      return `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId}">${pinBtn}<span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span>${qaBtn}</div>`;
-    }).join('');
+    const selGroups = this.selCat ? ST.getAll('item_groups').filter(g => g.categoryId === this.selCat) : [];
+    const selGroupsHTML = selGroups.map(g => `<div class="cat-card" data-group="${g.id}" data-group-name="${g.name}" data-group-icon="${g.icon||'📋'}">
+      <div class="cat-color-strip" style="background:${selCatObj?.color||'var(--accent)'}"></div>
+      <span class="cat-icon">${g.icon||'📋'}</span>
+      <span class="cat-name">${g.name}</span>
+    </div>`).join('');
     const catSection = this.selCat
       ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <button class="btn btn-outline btn-sm" id="btnBackCat" style="padding:5px 10px;font-size:.78rem">← กลับ</button>
@@ -139,13 +163,20 @@ const POS = {
         </div>
         <div class="pos-section-label">📋 หมวดรอง</div>
         <div class="pos-grid">
-          ${selCatItemsHTML}
+          ${selGroupsHTML}
           <div class="cat-card cat-card-custom" data-cat="custom" data-custom-cat="${this.selCat}">
             <div class="cat-color-strip" style="background:var(--accent)"></div>
             <span class="cat-icon">✏️</span>
             <span class="cat-name">กำหนดเอง</span>
           </div>
-        </div>`
+        </div>
+        <div id="addGroupForm" style="display:none;gap:6px;align-items:center;margin-top:8px">
+          <input type="text" id="newGroupName" placeholder="ชื่อหมวดรอง..." style="flex:1;font-size:.84rem">
+          <input type="text" id="newGroupIcon" placeholder="🏷" style="width:46px;text-align:center;font-size:1.1rem">
+          <button class="btn btn-sm btn-primary" id="btnSaveGroup">บันทึก</button>
+          <button class="btn btn-sm btn-outline" id="btnCancelGroup">✕</button>
+        </div>
+        <button class="btn btn-outline btn-sm" id="btnAddGroup" style="width:100%;font-size:.74rem;margin-top:8px">⊕ เพิ่มหมวดรอง</button>`
       : `<div class="pos-section-label">📁 หมวดหมู่</div>
         <div class="pos-grid">
           ${displayCats.map(cat => {
@@ -253,6 +284,27 @@ const POS = {
     );
     document.getElementById('btnBackCat')?.addEventListener('click', () => {
       this.selCat = null;
+      App.rv('add');
+    });
+    document.querySelectorAll('[data-group]').forEach(card => {
+      card.addEventListener('click', () => {
+        this.openModal(null, this.selCat, null, { subCatName: card.dataset.groupName, subCatIcon: card.dataset.groupIcon });
+      });
+    });
+    document.getElementById('btnAddGroup')?.addEventListener('click', () => {
+      const form = document.getElementById('addGroupForm');
+      if (form) { form.style.display = 'flex'; document.getElementById('newGroupName')?.focus(); }
+      document.getElementById('btnAddGroup').style.display = 'none';
+    });
+    document.getElementById('btnCancelGroup')?.addEventListener('click', () => {
+      document.getElementById('addGroupForm').style.display = 'none';
+      document.getElementById('btnAddGroup').style.display = '';
+    });
+    document.getElementById('btnSaveGroup')?.addEventListener('click', () => {
+      const name = document.getElementById('newGroupName')?.value?.trim();
+      const icon = document.getElementById('newGroupIcon')?.value?.trim() || '📋';
+      if (!name) return;
+      ST.add('item_groups', { name, icon, categoryId: this.selCat });
       App.rv('add');
     });
     document.querySelectorAll('[data-pin]').forEach(btn => btn.addEventListener('click', e => {
@@ -367,9 +419,10 @@ const POS = {
     const isMobile = window.innerWidth <= 640;
     const o = document.createElement('div'); o.className = isMobile ? 'bs-overlay' : 'modal-overlay';
     const _buildModalActions = () => `<div class="modal-actions" style="flex:0 0 auto;padding:12px 16px 14px;margin-top:0;border-top:1px solid var(--border)"><button class="btn btn-outline" id="mCan">ยกเลิก</button><button class="btn ${t0==='expense'?'btn-expense':'btn-income'}" id="mSave">💾 บันทึก</button></div>`;
+    const modalTitle = isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : prefill?.subCatName ? `${prefill.subCatIcon||'📋'} ${prefill.subCatName}` : '➕ เพิ่มรายการ';
     const buildModalHTML = () => isMobile
-      ? `<div class="bs-sheet" style="display:flex;flex-direction:column;max-height:93vh;overflow:hidden"><div class="bs-handle" id="bsHandle"></div><h3 style="font-size:1rem;font-weight:600;margin:0 0 10px;flex:0 0 auto">${isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : '➕ เพิ่มรายการ'}</h3><div style="flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:2px 0">${_buildModalBody()}</div>${_buildModalActions()}</div>`
-      : `<div class="modal" style="display:flex;flex-direction:column;max-height:90vh"><h3 style="flex:0 0 auto">${isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : '➕ เพิ่มรายการ'}</h3><div style="flex:1;overflow-y:auto;min-height:0">${_buildModalBody()}</div>${_buildModalActions()}</div>`;
+      ? `<div class="bs-sheet" style="display:flex;flex-direction:column;max-height:93vh;overflow:hidden"><div class="bs-handle" id="bsHandle"></div><h3 style="font-size:1rem;font-weight:600;margin:0 0 10px;flex:0 0 auto">${modalTitle}</h3><div style="flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:2px 0">${_buildModalBody()}</div>${_buildModalActions()}</div>`
+      : `<div class="modal" style="display:flex;flex-direction:column;max-height:90vh"><h3 style="flex:0 0 auto">${modalTitle}</h3><div style="flex:1;overflow-y:auto;min-height:0">${_buildModalBody()}</div>${_buildModalActions()}</div>`;
     const _buildModalBody = () => `
       <div class="form-group"><label>ประเภท</label><div class="type-toggle"><button class="type-btn ${t0==='expense'?'ae':''}" data-mt="expense">รายจ่าย</button><button class="type-btn ${t0==='income'?'ai':''}" data-mt="income">รายรับ</button></div><input type="hidden" id="mT" value="${t0}"></div>
       <div class="form-group" id="mOutgoingGrp" style="${t0 !== 'expense' ? 'display:none' : ''}"><div style="display:flex;flex-direction:column;gap:6px"><label class="inst-toggle-row"><input type="checkbox" id="mReimburse" ${isEdit && editTxn && editTxn.reimbursable ? 'checked' : ''}><span>🔄 รอเบิกคืน <span style="font-size:.72rem;color:var(--text-secondary)">(จ่ายแทน เบิกทีหลัง)</span></span></label><label class="inst-toggle-row"><input type="checkbox" id="mLent" ${isEdit && editTxn && editTxn.lent ? 'checked' : ''}><span>🤝 ให้ยืม <span style="font-size:.72rem;color:var(--text-secondary)">(รอรับเงินคืน)</span></span></label><div id="mLentToGrp" style="${isEdit && editTxn && editTxn.lent ? '' : 'display:none'}"><input type="text" id="mLentTo" placeholder="ชื่อคนที่ยืม..." value="${isEdit && editTxn && editTxn.lentTo ? editTxn.lentTo : ''}" style="margin-top:5px"></div></div></div>

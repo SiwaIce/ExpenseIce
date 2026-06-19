@@ -65,12 +65,13 @@ const ST = {
       installments: 'inst_', transactions: 'txn_', categories: 'cat_', items: 'itm_',
       recurring: 'rec_', budgets: 'bud_', accounts: 'acc_',
       credit_cards: 'cc_', wallet_accounts: 'wa_', account_transfers: 'at_',
-      savings_goals: 'sg_', subscriptions: 'subs_', loan_plans: 'lp_'
+      savings_goals: 'sg_', subscriptions: 'subs_', loan_plans: 'lp_',
+      item_groups: 'ig_'
     };
     return (p[c] || 'cfg_') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   },
   clearAll() {
-    ['transactions','categories','config','items','recurring','budgets','accounts','credit_cards','wallet_accounts','account_transfers','installments','savings_goals','subscriptions','loan_plans']
+    ['transactions','categories','config','items','item_groups','recurring','budgets','accounts','credit_cards','wallet_accounts','account_transfers','installments','savings_goals','subscriptions','loan_plans']
     .forEach(c => localStorage.removeItem(this._p + c));
   }
 };
