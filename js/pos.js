@@ -3,6 +3,7 @@ const POS = {
   type: 'expense',
   cat: null,
   q: '',
+  selCat: null,
   _pendingReceiptFile: null,
   _prepareReceiptImage(file) {
     return new Promise((resolve, reject) => {
@@ -72,19 +73,20 @@ const POS = {
         </div>
       </div>` : '';
 
-    const favHTML = favItems.length > 0 ?
-      `<div style="margin-bottom:14px">
-        <div class="pos-section-label">⭐ ใช้บ่อย</div>
-        <div class="pos-grid">
-          ${favItems.map(it => `<div class="item-card fav ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
+    const _favCard = it => `<div class="item-card fav ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
             <span class="fav-star">⭐</span>
             <span class="use-cnt">${it.useCount}x</span>
             ${it.id && !this._isPinned(it.id) ? `<button class="pin-btn" data-pin="${it.id}" title="ปักหมุด">📌</button>` : ''}
             <span class="item-icon">${it.icon}</span>
             <span class="item-name">${it.name}</span>
             <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button>
-          </div>`).join('')}
-        </div>
+          </div>`;
+    const favExtra = favItems.slice(3);
+    const favHTML = favItems.length > 0 ?
+      `<div style="margin-bottom:14px">
+        <div class="pos-section-label">⭐ ใช้บ่อย</div>
+        <div class="pos-grid">${favItems.slice(0, 3).map(_favCard).join('')}</div>
+        ${favExtra.length > 0 ? `<div class="pos-grid" id="favExtraGrid" style="display:none">${favExtra.map(_favCard).join('')}</div><button class="btn btn-outline btn-sm" id="btnFavMore" style="width:100%;margin-top:6px;font-size:.74rem">ดูเพิ่ม (${favExtra.length}) ▾</button>` : ''}
       </div>` : '';
 
     // Time-based suggestions
@@ -96,12 +98,15 @@ const POS = {
       : null;
     const timeFavs = (timeHints && this.type === 'expense')
       ? favItems.filter(it => timeHints.cats.includes(it.categoryId)).slice(0, 4) : [];
-    const timeSuggestHTML = timeFavs.length > 0 ? `<div style="margin-bottom:14px">
-      <div class="pos-section-label">${timeHints.label} แนะนำ</div>
-      <div class="pos-grid">${timeFavs.map(it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
+    const _sugCard = it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
         <span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span>
         <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button>
-      </div>`).join('')}</div>
+      </div>`;
+    const sugExtra = timeFavs.slice(3);
+    const timeSuggestHTML = timeFavs.length > 0 ? `<div style="margin-bottom:14px">
+      <div class="pos-section-label">${timeHints.label} แนะนำ</div>
+      <div class="pos-grid">${timeFavs.slice(0, 3).map(_sugCard).join('')}</div>
+      ${sugExtra.length > 0 ? `<div class="pos-grid" id="sugExtraGrid" style="display:none">${sugExtra.map(_sugCard).join('')}</div><button class="btn btn-outline btn-sm" id="btnSugMore" style="width:100%;margin-top:6px;font-size:.74rem">ดูเพิ่ม (${sugExtra.length}) ▾</button>` : ''}
     </div>` : '';
 
     // Compact today widget
@@ -120,24 +125,45 @@ const POS = {
       }).join('')}</div>
     </div>` : '';
 
-    const posContent = pinnedHTML + favHTML + timeSuggestHTML + todayWidget +
-      `<div class="pos-section-label">📁 หมวดหมู่</div>
-      <div class="pos-grid">
-        ${displayCats.map(cat => {
-          const bs = EH.getBudget(cat.id);
-          return `<div class="cat-card" data-cat="${cat.id}">
-            <div class="cat-color-strip" style="background:${cat.color}"></div>
-            <span class="cat-icon">${cat.icon}</span>
-            <span class="cat-name">${cat.name}</span>
-            ${bs ? `<div class="bbar-wrap" style="margin-top:6px"><div class="bbar-fill ${bs.cls}" style="width:${bs.pct}%"></div></div>` : ''}
-          </div>`;
-        }).join('')}
-        <div class="cat-card cat-card-custom" data-cat="custom">
-          <div class="cat-color-strip" style="background:var(--accent)"></div>
-          <span class="cat-icon">✏️</span>
-          <span class="cat-name">กำหนดเอง</span>
+    const selCatObj = this.selCat ? displayCats.find(c => c.id === this.selCat) : null;
+    const selCatItems = this.selCat ? items.filter(i => i.categoryId === this.selCat) : [];
+    const selCatItemsHTML = selCatItems.map(it => {
+      const pinBtn = it.id && !this._isPinned(it.id) ? `<button class="pin-btn" data-pin="${it.id}" title="ปักหมุด">📌</button>` : '';
+      const qaBtn = it.defaultAmount > 0 ? `<button class="qa-btn" data-qa-fn="${it.id}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId}">+</button>` : '';
+      return `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId}">${pinBtn}<span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span>${qaBtn}</div>`;
+    }).join('');
+    const catSection = this.selCat
+      ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <button class="btn btn-outline btn-sm" id="btnBackCat" style="padding:5px 10px;font-size:.78rem">← กลับ</button>
+          <span style="font-size:.9rem;font-weight:600">${selCatObj ? selCatObj.icon+' '+selCatObj.name : ''}</span>
         </div>
-      </div>`;
+        <div class="pos-section-label">📋 หมวดรอง</div>
+        <div class="pos-grid">
+          ${selCatItemsHTML}
+          <div class="cat-card cat-card-custom" data-cat="custom" data-custom-cat="${this.selCat}">
+            <div class="cat-color-strip" style="background:var(--accent)"></div>
+            <span class="cat-icon">✏️</span>
+            <span class="cat-name">กำหนดเอง</span>
+          </div>
+        </div>`
+      : `<div class="pos-section-label">📁 หมวดหมู่</div>
+        <div class="pos-grid">
+          ${displayCats.map(cat => {
+            const bs = EH.getBudget(cat.id);
+            return `<div class="cat-card" data-cat="${cat.id}">
+              <div class="cat-color-strip" style="background:${cat.color}"></div>
+              <span class="cat-icon">${cat.icon}</span>
+              <span class="cat-name">${cat.name}</span>
+              ${bs ? `<div class="bbar-wrap" style="margin-top:6px"><div class="bbar-fill ${bs.cls}" style="width:${bs.pct}%"></div></div>` : ''}
+            </div>`;
+          }).join('')}
+          <div class="cat-card cat-card-custom" data-cat="custom">
+            <div class="cat-color-strip" style="background:var(--accent)"></div>
+            <span class="cat-icon">✏️</span>
+            <span class="cat-name">กำหนดเอง</span>
+          </div>
+        </div>`;
+    const posContent = pinnedHTML + favHTML + timeSuggestHTML + todayWidget + catSection;
 
     const todayTxnHtml = todayTxns.length === 0 ?
       '<div style="text-align:center;color:var(--text-secondary);padding:12px;font-size:.8rem">ยังไม่มีรายการวันนี้</div>' :
@@ -211,19 +237,44 @@ const POS = {
   attachEvents() {
     document.querySelectorAll('.type-btn').forEach(btn =>
       btn.addEventListener('click', () => {
-        this.type = btn.dataset.type; this.cat = null; this.q = ''; App.rv('add');
+        this.type = btn.dataset.type; this.cat = null; this.q = ''; this.selCat = null; App.rv('add');
       })
     );
     document.querySelectorAll('.cat-card').forEach(card =>
       card.addEventListener('click', () => {
         const cid = card.dataset.cat;
-        this.openModal(null, cid === 'custom' ? null : cid, null);
+        if (cid === 'custom') {
+          this.openModal(null, card.dataset.customCat || null, null);
+        } else {
+          this.selCat = cid;
+          App.rv('add');
+        }
       })
     );
+    document.getElementById('btnBackCat')?.addEventListener('click', () => {
+      this.selCat = null;
+      App.rv('add');
+    });
     document.querySelectorAll('[data-pin]').forEach(btn => btn.addEventListener('click', e => {
       e.stopPropagation();
       this._togglePin(btn.dataset.pin);
     }));
+    document.getElementById('btnFavMore')?.addEventListener('click', () => {
+      const grid = document.getElementById('favExtraGrid');
+      const btn = document.getElementById('btnFavMore');
+      if (!grid) return;
+      const open = grid.style.display === 'none';
+      grid.style.display = open ? '' : 'none';
+      if (btn) btn.textContent = open ? 'ซ่อน ▴' : `ดูเพิ่ม (${grid.children.length}) ▾`;
+    });
+    document.getElementById('btnSugMore')?.addEventListener('click', () => {
+      const grid = document.getElementById('sugExtraGrid');
+      const btn = document.getElementById('btnSugMore');
+      if (!grid) return;
+      const open = grid.style.display === 'none';
+      grid.style.display = open ? '' : 'none';
+      if (btn) btn.textContent = open ? 'ซ่อน ▴' : `ดูเพิ่ม (${grid.children.length}) ▾`;
+    });
     document.querySelectorAll('.item-card.fav, .item-card[data-fav-id]').forEach(card => card.addEventListener('click', e => {
       if (e.target.closest('.qa-btn') || e.target.closest('.pin-btn')) return;
       const iid = card.dataset.favId;

@@ -96,6 +96,8 @@ const Views = {
       hasReceipt: hp.get('rcpt') === '1'
     };
     const hasAdv = !!(f.amountMin || f.amountMax || f.accountId || f.hasReceipt);
+    const totalActiveFilters = [f.type !== 'all', !!f.categoryId, !!f.search, !!f.amountMin, !!f.amountMax, !!f.accountId, f.hasReceipt].filter(Boolean).length;
+    const filterOpen = localStorage.getItem('exp_txnFilter') === '1' || totalActiveFilters > 0 || advOpen;
     const txns = EH.getTxns(f);
     const sum = EH.calcSum(txns);
     const grouped = {};
@@ -119,10 +121,24 @@ const Views = {
       </div>`;
     }).join('');
 
+    const activeCat = f.categoryId ? cats.find(c => c.id === f.categoryId) : null;
+    const _fchip = t => `<span style="padding:1px 7px;background:var(--accent-light);border-radius:20px;font-size:.71rem;color:var(--accent);font-weight:600">${t}</span>`;
+    const filterChipsHTML = [
+      f.type !== 'all' ? _fchip(f.type === 'income' ? '💚 รายรับ' : '🔴 รายจ่าย') : '',
+      activeCat ? _fchip(`${activeCat.icon} ${activeCat.name}`) : '',
+      f.search ? _fchip(`🔍 ${f.search}`) : ''
+    ].filter(Boolean).join('');
+
     return `<div class="stats-grid" style="grid-template-columns:repeat(3,1fr)"><div class="stat-card income"><div class="stat-label">รายรับ</div><div class="stat-value">${U.fmtCurrency(sum.totalIncome, cfg.currency)}</div></div><div class="stat-card expense"><div class="stat-label">รายจ่าย</div><div class="stat-value">${U.fmtCurrency(sum.totalExpense, cfg.currency)}</div></div><div class="stat-card balance"><div class="stat-label">คงเหลือ</div><div class="stat-value">${U.fmtCurrency(sum.balance, cfg.currency)}</div></div></div>
     <div class="card"><div class="card-header"><span class="card-title">📋 รายการ (${txns.length})</span>
-      <div style="display:flex;gap:6px;flex-wrap:wrap"><button class="btn ${view==='timeline'?'btn-primary':'btn-outline'} btn-sm" data-vt="timeline">📅 Timeline</button><button class="btn ${view==='table'?'btn-primary':'btn-outline'} btn-sm" data-vt="table">📊 ตาราง</button><button class="btn btn-primary btn-sm" id="btnAddT">➕</button><button class="btn btn-outline btn-sm" id="btnStmtScan">📄 Statement</button><button class="btn btn-outline btn-sm" id="btnSlipScan">📲 สแกนสลิป</button><button class="btn btn-outline btn-sm" id="btnExpCSV">📥 CSV</button><button class="btn btn-outline btn-sm" id="btnImpCSV">📤</button><input type="file" id="csvFI" accept=".csv" style="display:none"></div>
+      <div style="display:flex;gap:5px;flex-wrap:wrap;align-items:center"><button class="btn ${view==='timeline'?'btn-primary':'btn-outline'} btn-sm" data-vt="timeline" title="ไทม์ไลน์">📅</button><button class="btn ${view==='table'?'btn-primary':'btn-outline'} btn-sm" data-vt="table" title="ตาราง">📊</button><button class="btn btn-primary btn-sm" id="btnAddT">➕ เพิ่ม</button><button class="btn btn-outline btn-sm" id="btnStmtScan" title="นำเข้า Statement">📄</button><button class="btn btn-outline btn-sm" id="btnSlipScan" title="สแกนสลิป">📲</button><button class="btn btn-outline btn-sm" id="btnExpCSV" title="Export CSV">📥</button><button class="btn btn-outline btn-sm" id="btnImpCSV" title="Import CSV">📤</button><input type="file" id="csvFI" accept=".csv" style="display:none"></div>
     </div>
+    <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
+      <div style="flex:1;display:flex;gap:3px;flex-wrap:wrap;align-items:center;min-width:0;overflow:hidden">${filterChipsHTML}<span style="font-size:.71rem;color:var(--text-secondary);white-space:nowrap">${f.dateFrom.slice(5).replace('-','/')} – ${f.dateTo.slice(5).replace('-','/')}</span></div>
+      <button class="btn btn-sm ${filterOpen||totalActiveFilters>0?'btn-primary':'btn-outline'}" id="btnToggleFilter" style="flex-shrink:0;white-space:nowrap">🔍${totalActiveFilters>0?` (${totalActiveFilters})`:''} ${filterOpen?'▴':'▾'}</button>
+      <button class="btn btn-outline btn-sm" id="btnReset" style="flex-shrink:0" title="ล้างตัวกรอง">🔄</button>
+    </div>
+    <div id="filterPanel" style="display:${filterOpen?'':'none'}">
     <div class="filter-bar">
       <select id="fType"><option value="all" ${f.type==='all'?'selected':''}>ทั้งหมด</option><option value="income" ${f.type==='income'?'selected':''}>รายรับ</option><option value="expense" ${f.type==='expense'?'selected':''}>รายจ่าย</option></select>
       <select id="fCat"><option value="">ทุกหมวดหมู่</option>${cats.map(c => `<option value="${c.id}" ${f.categoryId===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
@@ -130,7 +146,6 @@ const Views = {
       <input type="date" id="fTo" value="${f.dateTo}">
       <input type="text" id="fSearch" placeholder="🔍 ชื่อ / หมายเหตุ..." value="${f.search}" style="min-width:130px">
       <button class="btn btn-sm ${(advOpen||hasAdv)?'btn-primary':'btn-outline'}" id="btnAdvFilter" title="ตัวกรองขั้นสูง" style="flex:0 0 auto">⚙️${hasAdv?' ✦':''}</button>
-      <button class="btn btn-outline btn-sm" id="btnReset" style="flex:0 0 auto">🔄</button>
     </div>
     <div id="advFilterPanel" style="display:${advOpen||hasAdv?'flex':'none'};flex-wrap:wrap;gap:7px;padding:10px 12px;background:var(--bg-input);border-radius:10px;margin-bottom:10px;border:1px solid var(--border)">
       <div style="width:100%;font-size:.72rem;font-weight:700;color:var(--text-secondary);margin-bottom:2px">⚙️ ตัวกรองขั้นสูง</div>
@@ -138,6 +153,7 @@ const Views = {
       <input type="number" id="fAmtMin" placeholder="จำนวนต่ำสุด" value="${f.amountMin}" min="0" style="flex:1;min-width:110px">
       <input type="number" id="fAmtMax" placeholder="จำนวนสูงสุด" value="${f.amountMax}" min="0" style="flex:1;min-width:110px">
       <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;cursor:pointer;flex:0 0 auto;white-space:nowrap"><input type="checkbox" id="fHasReceipt" ${f.hasReceipt?'checked':''}> มีใบเสร็จเท่านั้น</label>
+    </div>
     </div>
     ${view==='timeline' ? `<div id="tlContainer">${txns.length===0?'<div class="empty-state"><div class="empty-icon">📭</div>ยังไม่มีรายการ</div>':timelineHTML}</div>` : `<div class="table-wrap"><table><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายการ</th><th>จำนวน</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>${txns.length===0?`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-secondary)">ยังไม่มีรายการ</td></tr>`:txns.map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?',color:'#ccc'};return`<tr><td style="font-size:.78rem">${U.fmtDate(t.date)}</td><td><span class="badge badge-${t.type}">${t.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${cat.color}"></span>${cat.icon} ${cat.name}</td><td style="font-size:.8rem">${t.itemName||'-'}</td><td style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.78rem;color:var(--text-secondary)">${(t.note && t.note !== 'undefined') ? t.note : '-'}</td><td style="display:flex;gap:4px;padding:6px 10px"><button class="btn-ghost btnE" data-id="${t.id}" title="แก้ไข">✏️</button><button class="btn-ghost btnD" data-id="${t.id}" title="ลบ">🗑️</button></td></tr>`}).join('')}</tbody></table></div>`}
     </div>`;
@@ -163,6 +179,15 @@ const Views = {
       e.target.value = '';
     });
     document.getElementById('btnReset')?.addEventListener('click', () => { window.location.hash = ''; App.rv('transactions'); });
+    document.getElementById('btnToggleFilter')?.addEventListener('click', () => {
+      const panel = document.getElementById('filterPanel');
+      if (!panel) return;
+      const open = panel.style.display === 'none';
+      panel.style.display = open ? '' : 'none';
+      localStorage.setItem('exp_txnFilter', open ? '1' : '');
+      const btn = document.getElementById('btnToggleFilter');
+      if (btn) btn.className = `btn btn-sm ${open ? 'btn-primary' : 'btn-outline'}`;
+    });
     document.querySelectorAll('[data-vt]').forEach(btn => btn.addEventListener('click', () => {
       const hp = new URLSearchParams(window.location.hash.replace('#', ''));
       hp.set('view', btn.dataset.vt);
