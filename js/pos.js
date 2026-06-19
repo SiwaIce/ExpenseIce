@@ -34,6 +34,99 @@ const POS = {
     U.updateConfig({ pinnedItems: pinned });
     App.rv('add');
   },
+  _buildCatSection() {
+    const cats = ST.getAll('categories');
+    const displayCats = cats.filter(c => c.type === this.type);
+    const selCatObj = this.selCat ? displayCats.find(c => c.id === this.selCat) : null;
+    const selGroups = this.selCat ? ST.getAll('item_groups').filter(g => g.categoryId === this.selCat) : [];
+    const selGroupsHTML = selGroups.map(g => `<div class="cat-card" data-group="${g.id}" data-group-name="${g.name}" data-group-icon="${g.icon||'📋'}">
+      <div class="cat-color-strip" style="background:${selCatObj?.color||'var(--accent)'}"></div>
+      <span class="cat-icon">${g.icon||'📋'}</span>
+      <span class="cat-name">${g.name}</span>
+    </div>`).join('');
+    return this.selCat
+      ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+          <button class="btn btn-outline btn-sm" id="btnBackCat" style="padding:5px 10px;font-size:.78rem">← กลับ</button>
+          <span style="font-size:.9rem;font-weight:600">${selCatObj ? selCatObj.icon+' '+selCatObj.name : ''}</span>
+        </div>
+        <div class="pos-section-label">📋 หมวดรอง</div>
+        <div class="pos-grid">
+          ${selGroupsHTML}
+          <div class="cat-card cat-card-custom" data-cat="custom" data-custom-cat="${this.selCat}">
+            <div class="cat-color-strip" style="background:var(--accent)"></div>
+            <span class="cat-icon">✏️</span>
+            <span class="cat-name">กำหนดเอง</span>
+          </div>
+        </div>
+        <div id="addGroupForm" style="display:none;gap:6px;align-items:center;margin-top:8px">
+          <input type="text" id="newGroupName" placeholder="ชื่อหมวดรอง..." style="flex:1;font-size:.84rem">
+          <input type="text" id="newGroupIcon" placeholder="🏷" style="width:46px;text-align:center;font-size:1.1rem">
+          <button class="btn btn-sm btn-primary" id="btnSaveGroup">บันทึก</button>
+          <button class="btn btn-sm btn-outline" id="btnCancelGroup">✕</button>
+        </div>
+        <button class="btn btn-outline btn-sm" id="btnAddGroup" style="width:100%;font-size:.74rem;margin-top:8px">⊕ เพิ่มหมวดรอง</button>`
+      : `<div class="pos-section-label">📁 หมวดหมู่</div>
+        <div class="pos-grid">
+          ${displayCats.map(cat => {
+            const bs = EH.getBudget(cat.id);
+            return `<div class="cat-card" data-cat="${cat.id}">
+              <div class="cat-color-strip" style="background:${cat.color}"></div>
+              <span class="cat-icon">${cat.icon}</span>
+              <span class="cat-name">${cat.name}</span>
+              ${bs ? `<div class="bbar-wrap" style="margin-top:6px"><div class="bbar-fill ${bs.cls}" style="width:${bs.pct}%"></div></div>` : ''}
+            </div>`;
+          }).join('')}
+          <div class="cat-card cat-card-custom" data-cat="custom">
+            <div class="cat-color-strip" style="background:var(--accent)"></div>
+            <span class="cat-icon">✏️</span>
+            <span class="cat-name">กำหนดเอง</span>
+          </div>
+        </div>`;
+  },
+  _updateCatSection() {
+    const el = document.getElementById('posCatSection');
+    if (!el) { App.rv('add'); return; }
+    el.innerHTML = this._buildCatSection();
+    this._attachCatEvents();
+  },
+  _attachCatEvents() {
+    document.querySelectorAll('.cat-card').forEach(card =>
+      card.addEventListener('click', () => {
+        const cid = card.dataset.cat;
+        if (cid === 'custom') {
+          this.openModal(null, card.dataset.customCat || null, null);
+        } else {
+          this.selCat = cid;
+          this._updateCatSection();
+        }
+      })
+    );
+    document.getElementById('btnBackCat')?.addEventListener('click', () => {
+      this.selCat = null;
+      this._updateCatSection();
+    });
+    document.querySelectorAll('[data-group]').forEach(card => {
+      card.addEventListener('click', () => {
+        this.openModal(null, this.selCat, null, { subCatName: card.dataset.groupName, subCatIcon: card.dataset.groupIcon });
+      });
+    });
+    document.getElementById('btnAddGroup')?.addEventListener('click', () => {
+      const form = document.getElementById('addGroupForm');
+      if (form) { form.style.display = 'flex'; document.getElementById('newGroupName')?.focus(); }
+      document.getElementById('btnAddGroup').style.display = 'none';
+    });
+    document.getElementById('btnCancelGroup')?.addEventListener('click', () => {
+      document.getElementById('addGroupForm').style.display = 'none';
+      document.getElementById('btnAddGroup').style.display = '';
+    });
+    document.getElementById('btnSaveGroup')?.addEventListener('click', () => {
+      const name = document.getElementById('newGroupName')?.value?.trim();
+      const icon = document.getElementById('newGroupIcon')?.value?.trim() || '📋';
+      if (!name) return;
+      ST.add('item_groups', { name, icon, categoryId: this.selCat });
+      this._updateCatSection();
+    });
+  },
   _seedGroups() {
     if (ST.getAll('item_groups').length > 0) return;
     [
@@ -194,7 +287,7 @@ const POS = {
             <span class="cat-name">กำหนดเอง</span>
           </div>
         </div>`;
-    const posContent = pinnedHTML + favHTML + timeSuggestHTML + todayWidget + catSection;
+    const posContent = pinnedHTML + favHTML + timeSuggestHTML + todayWidget + '<div id="posCatSection">' + catSection + '</div>';
 
     const todayTxnHtml = todayTxns.length === 0 ?
       '<div style="text-align:center;color:var(--text-secondary);padding:12px;font-size:.8rem">ยังไม่มีรายการวันนี้</div>' :
@@ -271,42 +364,7 @@ const POS = {
         this.type = btn.dataset.type; this.cat = null; this.q = ''; this.selCat = null; App.rv('add');
       })
     );
-    document.querySelectorAll('.cat-card').forEach(card =>
-      card.addEventListener('click', () => {
-        const cid = card.dataset.cat;
-        if (cid === 'custom') {
-          this.openModal(null, card.dataset.customCat || null, null);
-        } else {
-          this.selCat = cid;
-          App.rv('add');
-        }
-      })
-    );
-    document.getElementById('btnBackCat')?.addEventListener('click', () => {
-      this.selCat = null;
-      App.rv('add');
-    });
-    document.querySelectorAll('[data-group]').forEach(card => {
-      card.addEventListener('click', () => {
-        this.openModal(null, this.selCat, null, { subCatName: card.dataset.groupName, subCatIcon: card.dataset.groupIcon });
-      });
-    });
-    document.getElementById('btnAddGroup')?.addEventListener('click', () => {
-      const form = document.getElementById('addGroupForm');
-      if (form) { form.style.display = 'flex'; document.getElementById('newGroupName')?.focus(); }
-      document.getElementById('btnAddGroup').style.display = 'none';
-    });
-    document.getElementById('btnCancelGroup')?.addEventListener('click', () => {
-      document.getElementById('addGroupForm').style.display = 'none';
-      document.getElementById('btnAddGroup').style.display = '';
-    });
-    document.getElementById('btnSaveGroup')?.addEventListener('click', () => {
-      const name = document.getElementById('newGroupName')?.value?.trim();
-      const icon = document.getElementById('newGroupIcon')?.value?.trim() || '📋';
-      if (!name) return;
-      ST.add('item_groups', { name, icon, categoryId: this.selCat });
-      App.rv('add');
-    });
+    this._attachCatEvents();
     document.querySelectorAll('[data-pin]').forEach(btn => btn.addEventListener('click', e => {
       e.stopPropagation();
       this._togglePin(btn.dataset.pin);
@@ -331,7 +389,8 @@ const POS = {
       if (e.target.closest('.qa-btn') || e.target.closest('.pin-btn')) return;
       const iid = card.dataset.favId;
       const item = iid ? ST.getById('items', iid) : null;
-      this.openModal(item, item ? item.categoryId : null, null);
+      const catId = (item ? item.categoryId : null) || card.dataset.favCat || null;
+      this.openModal(item, catId, null);
     }));
     document.querySelectorAll('[data-qa-fn],[data-qa-n]').forEach(btn => {
       btn.addEventListener('click', e => {
