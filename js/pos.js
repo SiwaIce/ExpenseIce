@@ -196,6 +196,7 @@ const POS = {
             ${it.id && !this._isPinned(it.id) ? `<button class="pin-btn" data-pin="${it.id}" title="ปักหมุด">📌</button>` : ''}
             <span class="item-icon">${it.icon}</span>
             <span class="item-name">${it.name}</span>
+            ${it.defaultAmount > 0 ? `<span class="item-amount-sm">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
             <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button>
           </div>`;
     const favExtra = favItems.slice(3);
@@ -217,6 +218,7 @@ const POS = {
       ? favItems.filter(it => timeHints.cats.includes(it.categoryId)).slice(0, 4) : [];
     const _sugCard = it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
         <span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span>
+        ${it.defaultAmount > 0 ? `<span class="item-amount-sm">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
         <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button>
       </div>`;
     const sugExtra = timeFavs.slice(3);
@@ -300,7 +302,7 @@ const POS = {
               <span style="font-size:.92rem">${cat.icon}</span>
               <div style="flex:1;min-width:0">
                 <div style="font-size:.74rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.itemName || cat.name || 'รายการ'}</div>
-                ${(t.note && t.note !== 'undefined') ? `<div style="font-size:.64rem;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.note}</div>` : ''}
+                <div style="font-size:.62rem;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.time ? '🕐 '+t.time : ''}${(t.note && t.note !== 'undefined') ? (t.time ? ' · ' : '') + t.note : ''}</div>
               </div>
               <span style="font-size:.77rem;font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'};flex-shrink:0">${U.fmtCurrency(t.amount, cfg.currency)}</span>
               ${t.receiptUrl ? `<img src="${t.receiptUrl}" class="receipt-thumb" title="ดูใบเสร็จ" onclick="event.stopPropagation();window.open('${t.receiptUrl}','_blank')">` : ''}
@@ -397,11 +399,12 @@ const POS = {
         e.stopPropagation();
         const iid = btn.dataset.qaFn; const name = btn.dataset.qaN; const amt = Number(btn.dataset.qaA) || 0; const cat = btn.dataset.qaC || '';
         const item = iid ? ST.getById('items', iid) : null;
+        const _now = new Date().toTimeString().slice(0,5);
         if (item) {
-          ST.add('transactions', { type: this.type, amount: item.defaultAmount, categoryId: item.categoryId, itemId: item.id, itemName: item.name, date: U.today(), note: '' });
+          ST.add('transactions', { type: this.type, amount: item.defaultAmount, categoryId: item.categoryId, itemId: item.id, itemName: item.name, date: U.today(), time: _now, note: '' });
           this.flash(`${item.icon} ${item.name} ${U.fmtCurrency(item.defaultAmount)}`);
         } else if (name) {
-          ST.add('transactions', { type: this.type, amount: amt, categoryId: cat, itemName: name, date: U.today(), note: '' });
+          ST.add('transactions', { type: this.type, amount: amt, categoryId: cat, itemName: name, date: U.today(), time: _now, note: '' });
           this.flash(`${name} ${U.fmtCurrency(amt)}`);
         }
         App.rv('add');
@@ -737,7 +740,7 @@ const POS = {
         const reimbursable = type === 'expense' && !!(o.querySelector('#mReimburse')?.checked);
         const lent = type === 'expense' && !!(o.querySelector('#mLent')?.checked);
         const lentTo = lent ? (o.querySelector('#mLentTo')?.value || '') : '';
-        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, date, note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '', lent, lentStatus: lent ? 'pending' : '', lentTo });
+        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, date, time: new Date().toTimeString().slice(0,5), note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '', lent, lentStatus: lent ? 'pending' : '', lentTo });
         // Upload pending receipt image to Firebase Storage
         const pendingFile = POS._pendingReceiptFile;
         POS._pendingReceiptFile = null;
