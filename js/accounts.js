@@ -15,15 +15,19 @@ const AccountsView = {
     const totalDebt = cards.reduce((s, c) => s + Number(c.used || 0), 0);
     const pendingR = txns.filter(t => t.reimbursable && t.reimburseStatus === 'pending');
     const reimburseTotal = pendingR.reduce((s, t) => s + Number(t.amount), 0);
+    const pendingLent = txns.filter(t => t.lent && t.lentStatus === 'pending');
+    const lentTotal = pendingLent.reduce((s, t) => s + Number(t.amount), 0);
+    const pendingAllTotal = reimburseTotal + lentTotal;
+    const pendingAllCount = pendingR.length + pendingLent.length;
 
     const summaryHTML = `<div class="stats-grid" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
       <div class="stat-card income"><div class="stat-label">เงิน+บัญชีรวม</div><div class="stat-value">${U.fmtCurrency(totalWallet, cfg.currency)}</div></div>
       <div class="stat-card expense"><div class="stat-label">หนี้บัตรเครดิต</div><div class="stat-value">${U.fmtCurrency(totalDebt, cfg.currency)}</div></div>
       <div class="stat-card balance"><div class="stat-label">ทรัพย์สินสุทธิ</div><div class="stat-value">${U.fmtCurrency(totalWallet - totalDebt, cfg.currency)}</div></div>
       <div class="stat-card" style="border-left:3px solid var(--warning);cursor:pointer" data-acctab="reimburse">
-        <div class="stat-label">🔄 รอเบิกคืน</div>
-        <div class="stat-value" style="color:var(--warning)">${U.fmtCurrency(reimburseTotal, cfg.currency)}</div>
-        <div style="font-size:.65rem;color:var(--text-secondary)">${pendingR.length} รายการรอเบิก</div>
+        <div class="stat-label">🤝 ค้างรับทั้งหมด</div>
+        <div class="stat-value" style="color:var(--warning)">${U.fmtCurrency(pendingAllTotal, cfg.currency)}</div>
+        <div style="font-size:.65rem;color:var(--text-secondary)">${pendingR.length > 0 ? `🔄 ${pendingR.length} เบิก` : ''}${pendingLent.length > 0 ? `${pendingR.length > 0 ? ' • ' : ''}🤝 ${pendingLent.length} ยืม` : ''}${pendingAllCount === 0 ? 'ไม่มีรายการค้าง' : ''}</div>
       </div>
     </div>`;
 
@@ -31,7 +35,7 @@ const AccountsView = {
       { id: 'wallets', label: `🏧 บัญชี${wallets.length ? ' ('+wallets.length+')' : ''}` },
       { id: 'cards',   label: `💳 บัตร${cards.length ? ' ('+cards.length+')' : ''}` },
       { id: 'transfers', label: '↔️ โอน' },
-      { id: 'reimburse', label: `🔄 รอเบิก${pendingR.length ? ' ('+pendingR.length+')' : ''}` },
+      { id: 'reimburse', label: `🤝 ค้างรับ${pendingAllCount ? ' ('+pendingAllCount+')' : ''}` },
     ];
     const tabBar = `<div class="acc-tab-bar">${tabDefs.map(t => `<button class="acc-tab ${tab===t.id?'active':''}" data-acctab="${t.id}">${t.label}</button>`).join('')}</div>`;
 
@@ -107,27 +111,29 @@ const AccountsView = {
         }).join('')}</tbody></table></div>`}
     </div>`;
 
-    // ── Reimburse tab ──
+    // ── Reimburse / Lent tab ──
     const cats = ST.getAll('categories');
+    const _renderTrackItem = (t, btnAttr, btnLabel) => {
+      const cat = cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?'};
+      return `<div class="reimb-item">
+        <div class="tl-ico" style="background:${cat.color||'#ccc'}22"><span style="font-size:1.1rem">${cat.icon}</span></div>
+        <div style="flex:1;min-width:0">
+          <div style="font-weight:600;font-size:.85rem">${t.itemName||cat.name}</div>
+          <div style="font-size:.7rem;color:var(--text-secondary)">${U.fmtDate(t.date)}${t.lentTo?' • ให้ยืม: '+t.lentTo:''}${t.note?' • '+t.note:''}</div>
+        </div>
+        <div style="text-align:right;flex-shrink:0">
+          <div style="font-weight:700;color:var(--expense)">${U.fmtCurrency(t.amount,cfg.currency)}</div>
+          <button class="btn btn-success btn-sm" style="margin-top:4px;font-size:.7rem" ${btnAttr}="${t.id}">${btnLabel}</button>
+        </div>
+      </div>`;
+    };
     const reimburseContent = `<div class="card">
-      <div class="card-header"><span class="card-title">🔄 รอเบิกคืน</span>
-        <span style="font-size:.75rem;color:var(--text-secondary)">รวม ${U.fmtCurrency(reimburseTotal,cfg.currency)}</span>
+      <div class="card-header"><span class="card-title">🤝 ค้างรับ</span>
+        <span style="font-size:.75rem;color:var(--text-secondary)">รวม ${U.fmtCurrency(pendingAllTotal,cfg.currency)}</span>
       </div>
-      ${pendingR.length === 0 ? '<div class="empty-state"><div class="empty-icon">✅</div>ไม่มีรายการรอเบิก</div>' :
-        pendingR.sort((a,b)=>b.date.localeCompare(a.date)).map(t => {
-          const cat = cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?'};
-          return `<div class="reimb-item">
-            <div class="tl-ico" style="background:${cat.color||'#ccc'}22"><span style="font-size:1.1rem">${cat.icon}</span></div>
-            <div style="flex:1;min-width:0">
-              <div style="font-weight:600;font-size:.85rem">${t.itemName||cat.name}</div>
-              <div style="font-size:.7rem;color:var(--text-secondary)">${U.fmtDate(t.date)}${t.note?' • '+t.note:''}</div>
-            </div>
-            <div style="text-align:right;flex-shrink:0">
-              <div style="font-weight:700;color:var(--expense)">${U.fmtCurrency(t.amount,cfg.currency)}</div>
-              <button class="btn btn-success btn-sm" style="margin-top:4px;font-size:.7rem" data-reimb="${t.id}">✅ รับคืนแล้ว</button>
-            </div>
-          </div>`;
-        }).join('')}
+      ${pendingR.length > 0 ? `<div style="font-size:.72rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em;margin-bottom:6px">🔄 รอเบิกคืน (${pendingR.length} รายการ)</div>${pendingR.sort((a,b)=>b.date.localeCompare(a.date)).map(t => _renderTrackItem(t,'data-reimb','✅ รับคืนแล้ว')).join('')}` : ''}
+      ${pendingLent.length > 0 ? `<div style="font-size:.72rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.04em;margin:${pendingR.length>0?'12px 0 6px':'0 0 6px'}">🤝 ให้ยืม (${pendingLent.length} รายการ)</div>${pendingLent.sort((a,b)=>b.date.localeCompare(a.date)).map(t => _renderTrackItem(t,'data-lent','✅ ได้รับคืนแล้ว')).join('')}` : ''}
+      ${pendingAllCount === 0 ? '<div class="empty-state"><div class="empty-icon">✅</div>ไม่มีรายการค้าง</div>' : ''}
     </div>`;
 
     const tabContent = { wallets: walletsContent, cards: cardsContent, transfers: transfersContent, reimburse: reimburseContent }[tab] || walletsContent;
@@ -179,6 +185,18 @@ const AccountsView = {
       if (!ok) return;
       ST.update('transactions', txn.id, { reimburseStatus: 'received' });
       ST.add('transactions', { type: 'income', amount: txn.amount, categoryId: txn.categoryId, itemName: `เบิกคืน: ${txn.itemName}`, date: U.today(), note: 'เบิกคืนจากรายการที่จ่ายแทน' });
+      window.dispatchEvent(new Event('sc'));
+      U.toast(`✅ บันทึกรายรับ ${U.fmtCurrency(txn.amount, U.getConfig().currency)} แล้ว`, 'success');
+      App.rv('accounts');
+    }));
+    // Lent — mark returned
+    document.querySelectorAll('[data-lent]').forEach(btn => btn.addEventListener('click', async () => {
+      const txn = ST.getById('transactions', btn.dataset.lent); if (!txn) return;
+      const who = txn.lentTo ? `จาก "${txn.lentTo}"` : '';
+      const ok = await U.confirm(`ได้รับเงินคืน${who} "${txn.itemName}" ${U.fmtCurrency(txn.amount, U.getConfig().currency)} แล้วใช่ไหม?\n(จะบันทึกเป็นรายรับให้อัตโนมัติ)`);
+      if (!ok) return;
+      ST.update('transactions', txn.id, { lentStatus: 'returned' });
+      ST.add('transactions', { type: 'income', amount: txn.amount, categoryId: txn.categoryId, itemName: `รับคืน: ${txn.itemName}`, date: U.today(), note: `รับเงินคืนจาก ${txn.lentTo || 'ผู้ยืม'}` });
       window.dispatchEvent(new Event('sc'));
       U.toast(`✅ บันทึกรายรับ ${U.fmtCurrency(txn.amount, U.getConfig().currency)} แล้ว`, 'success');
       App.rv('accounts');

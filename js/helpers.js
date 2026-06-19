@@ -371,26 +371,59 @@ const AI = {
 function buildAccSelHTML(type, selectedId = '') {
   const wallets = ST.getAll('wallet_accounts');
   const cards = ST.getAll('credit_cards');
-  let html = '';
+  const cfg = U.getConfig();
+  const hasCards = type === 'expense' && cards.length > 0;
+  const hasBoth = wallets.length > 0 && hasCards;
+
+  let walletsHTML = '';
   wallets.forEach(w => {
     const active = selectedId === w.id ? 'active' : '';
-    html += `<button type="button" class="acc-sel-btn ${active}" data-accid="${w.id}" style="border-left:3px solid ${w.color}">${w.icon} ${w.name}</button>`;
+    const bal = U.fmtCurrency(w.balance || 0, cfg.currency);
+    walletsHTML += `<button type="button" class="acc-sel-btn ${active}" data-accid="${w.id}" style="border-left:3px solid ${w.color}">${w.icon} ${w.name} <span style="font-size:.65rem;opacity:.7">(${bal})</span></button>`;
   });
-  if (type === 'expense') {
+
+  let cardsHTML = '';
+  if (hasCards) {
     cards.forEach(cc => {
       const avail = Math.max(0, (cc.limit || 0) - (cc.used || 0));
       const active = selectedId === cc.id ? 'active' : '';
-      html += `<button type="button" class="acc-sel-btn cc-btn ${active}" data-accid="${cc.id}" data-ccid="${cc.id}">💳 ${cc.name} <span style="font-size:.65rem;opacity:.7">(เครดิตเหลือ ${U.fmtCurrency(avail)})</span></button>`;
+      cardsHTML += `<button type="button" class="acc-sel-btn cc-btn ${active}" data-accid="${cc.id}" data-ccid="${cc.id}">💳 ${cc.name} <span style="font-size:.65rem;opacity:.7">(เครดิตเหลือ ${U.fmtCurrency(avail)})</span></button>`;
     });
   }
-  if (!html) html = '<span style="font-size:.74rem;color:var(--text-secondary)">ยังไม่มีบัญชี — <a href="#" id="goAddAcc" style="color:var(--accent)">เพิ่มบัญชีก่อน</a></span>';
-  return html;
+
+  if (!walletsHTML && !cardsHTML) return '<span style="font-size:.74rem;color:var(--text-secondary)">ยังไม่มีบัญชี — <a href="#" id="goAddAcc" style="color:var(--accent)">เพิ่มบัญชีก่อน</a></span>';
+  if (!hasBoth) return walletsHTML + cardsHTML;
+
+  const isCardSel = !!(selectedId && cards.some(c => c.id === selectedId));
+  return `<div class="acc-tab-bar" style="display:flex;gap:0;margin-bottom:8px;border-bottom:1px solid var(--border)">
+    <button type="button" class="acc-sel-tab${!isCardSel ? ' active' : ''}" data-acctab="wallets" style="flex:1;padding:5px 0;font-size:.78rem;font-weight:600;background:none;border:none;cursor:pointer;border-bottom:2px solid ${!isCardSel ? 'var(--accent)' : 'transparent'};color:${!isCardSel ? 'var(--accent)' : 'var(--text-secondary)'}">🏦 กระเป๋า/เงินสด</button>
+    <button type="button" class="acc-sel-tab${isCardSel ? ' active' : ''}" data-acctab="cards" style="flex:1;padding:5px 0;font-size:.78rem;font-weight:600;background:none;border:none;cursor:pointer;border-bottom:2px solid ${isCardSel ? 'var(--accent)' : 'transparent'};color:${isCardSel ? 'var(--accent)' : 'var(--text-secondary)'}">💳 บัตรเครดิต</button>
+  </div>
+  <div id="accWalletPanel"${isCardSel ? ' style="display:none"' : ''}>${walletsHTML}</div>
+  <div id="accCardPanel"${!isCardSel ? ' style="display:none"' : ''}>${cardsHTML}</div>`;
 }
 
 function attachAccSelEvents(modal, type, onChange) {
   const container = modal.querySelector('#mAccSelect');
   if (!container) return;
   container.innerHTML = buildAccSelHTML(type, modal.querySelector('#mAccId')?.value || '');
+  container.querySelectorAll('.acc-sel-tab').forEach(tab => {
+    tab.addEventListener('click', () => {
+      container.querySelectorAll('.acc-sel-tab').forEach(t => {
+        t.style.borderBottomColor = 'transparent';
+        t.style.color = 'var(--text-secondary)';
+        t.classList.remove('active');
+      });
+      tab.style.borderBottomColor = 'var(--accent)';
+      tab.style.color = 'var(--accent)';
+      tab.classList.add('active');
+      const isCards = tab.dataset.acctab === 'cards';
+      const wp = container.querySelector('#accWalletPanel');
+      const cp = container.querySelector('#accCardPanel');
+      if (wp) wp.style.display = isCards ? 'none' : '';
+      if (cp) cp.style.display = isCards ? '' : 'none';
+    });
+  });
   container.querySelectorAll('[data-accid]').forEach(btn => {
     btn.addEventListener('click', () => {
       container.querySelectorAll('[data-accid]').forEach(b => b.classList.remove('active'));

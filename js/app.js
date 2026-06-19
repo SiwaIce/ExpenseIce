@@ -154,6 +154,10 @@ const App = {
     });
   },
   nav(view) {
+    if (this.cv === view) {
+      document.getElementById('appContent')?.scrollTo({ top: 0, behavior: 'smooth' });
+      return;
+    }
     this.cv = view;
     document.querySelectorAll('.sidebar-nav a').forEach(a => a.classList.remove('active'));
     const link = document.querySelector(`.sidebar-nav a[data-view="${view}"]`);
@@ -172,6 +176,7 @@ const App = {
   },
   rv(view) {
     const c = document.getElementById('appContent');
+    c.scrollTop = 0;
     switch (view) {
       case 'add': c.innerHTML = POS.render(); setTimeout(() => POS.attachEvents(), 30); break;
       case 'transactions': c.innerHTML = Views.renderTxns(); setTimeout(() => Views.attachTxnEvents(), 50); break;

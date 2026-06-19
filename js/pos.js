@@ -315,11 +315,13 @@ const POS = {
     let numVal = String(defAmt || '');
     const isMobile = window.innerWidth <= 640;
     const o = document.createElement('div'); o.className = isMobile ? 'bs-overlay' : 'modal-overlay';
+    const _buildModalActions = () => `<div class="modal-actions" style="flex:0 0 auto;padding:12px 16px 14px;margin-top:0;border-top:1px solid var(--border)"><button class="btn btn-outline" id="mCan">ยกเลิก</button><button class="btn ${t0==='expense'?'btn-expense':'btn-income'}" id="mSave">💾 บันทึก</button></div>`;
     const buildModalHTML = () => isMobile
-      ? `<div class="bs-sheet"><div class="bs-handle" id="bsHandle"></div><h3 style="font-size:1rem;font-weight:600;margin-bottom:14px">${isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : '➕ เพิ่มรายการ'}</h3>${_buildModalBody()}</div>`
-      : `<div class="modal"><h3>${isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : '➕ เพิ่มรายการ'}</h3>${_buildModalBody()}</div>`;
+      ? `<div class="bs-sheet" style="display:flex;flex-direction:column;max-height:93vh"><div class="bs-handle" id="bsHandle"></div><h3 style="font-size:1rem;font-weight:600;margin:0 0 10px;flex:0 0 auto">${isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : '➕ เพิ่มรายการ'}</h3><div style="flex:1;overflow-y:auto;min-height:0;padding:2px 0">${_buildModalBody()}</div>${_buildModalActions()}</div>`
+      : `<div class="modal" style="display:flex;flex-direction:column;max-height:90vh"><h3 style="flex:0 0 auto">${isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : '➕ เพิ่มรายการ'}</h3><div style="flex:1;overflow-y:auto;min-height:0">${_buildModalBody()}</div>${_buildModalActions()}</div>`;
     const _buildModalBody = () => `
       <div class="form-group"><label>ประเภท</label><div class="type-toggle"><button class="type-btn ${t0==='expense'?'ae':''}" data-mt="expense">รายจ่าย</button><button class="type-btn ${t0==='income'?'ai':''}" data-mt="income">รายรับ</button></div><input type="hidden" id="mT" value="${t0}"></div>
+      <div class="form-group" id="mOutgoingGrp" style="${t0 !== 'expense' ? 'display:none' : ''}"><div style="display:flex;flex-direction:column;gap:6px"><label class="inst-toggle-row"><input type="checkbox" id="mReimburse" ${isEdit && editTxn && editTxn.reimbursable ? 'checked' : ''}><span>🔄 รอเบิกคืน <span style="font-size:.72rem;color:var(--text-secondary)">(จ่ายแทน เบิกทีหลัง)</span></span></label><label class="inst-toggle-row"><input type="checkbox" id="mLent" ${isEdit && editTxn && editTxn.lent ? 'checked' : ''}><span>🤝 ให้ยืม <span style="font-size:.72rem;color:var(--text-secondary)">(รอรับเงินคืน)</span></span></label><div id="mLentToGrp" style="${isEdit && editTxn && editTxn.lent ? '' : 'display:none'}"><input type="text" id="mLentTo" placeholder="ชื่อคนที่ยืม..." value="${isEdit && editTxn && editTxn.lentTo ? editTxn.lentTo : ''}" style="margin-top:5px"></div></div></div>
       <div class="form-group"><label>จำนวนเงิน</label><div style="display:flex;gap:6px;align-items:center"><div class="amt-display focused" id="npDisp" style="flex:1">${U.fmtCurrency(Number(numVal)||0, cfg.currency)}</div><button class="btn-ghost" id="voiceBtn" title="พูดจำนวนเงิน" style="font-size:1.05rem;padding:6px 9px;border:1px solid var(--border);flex-shrink:0">🎤</button><button class="btn-ghost" id="splitBtn" title="แบ่งบิล" style="font-size:.75rem;padding:6px 8px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap">÷ แบ่ง</button></div><div id="splitRow" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;padding:8px;background:var(--bg-input);border-radius:8px"><span style="font-size:.78rem">แบ่ง</span><input type="number" id="splitN" value="2" min="2" max="20" style="width:55px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:.85rem;background:var(--bg-card);color:var(--text)"><span style="font-size:.78rem">คน คนละ</span><span id="splitResult" style="font-weight:700;color:var(--accent);font-size:.88rem">-</span><button class="btn btn-sm btn-outline" id="splitApply" style="font-size:.74rem;padding:3px 10px">ใช้</button></div><div class="presets" id="mPresets">${presets.map(a => `<button class="preset-btn" data-pv="${a}">${U.fmtCurrency(a, cfg.currency)}</button>`).join('')}</div><div class="numpad">${['7','8','9','4','5','6','1','2','3'].map(n => `<button class="np" data-n="${n}">${n}</button>`).join('')}<button class="np np-del" data-n="del">⌫</button><button class="np" data-n="0">0</button><button class="np" data-n=".">.</button></div></div>
       <div class="form-group"><label>หมวดหมู่</label><select id="mC">${cats.map(c => `<option value="${c.id}" ${defCat===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select></div>
       ${catQuickItems.length > 0 ? `<div class="form-group"><label style="font-size:.74rem;color:var(--text-secondary)">รายการที่บันทึกไว้</label><div class="nchips" id="qiChips">${catQuickItems.map(it => `<button type="button" class="nchip qi-chip" data-qi-name="${it.name}" data-qi-amt="${it.defaultAmount||0}">${it.icon} ${it.name}</button>`).join('')}</div></div>` : ''}
@@ -329,8 +331,6 @@ const POS = {
       <div id="instFields" style="display:none"><div class="form-row"><div class="form-group"><label>จำนวนงวด</label><select id="mInstMonths"><option value="3">3 งวด</option><option value="6">6 งวด</option><option value="10" selected>10 งวด</option><option value="12">12 งวด</option><option value="24">24 งวด</option></select></div><div class="form-group"><label>ดอกเบี้ย %/ปี</label><input type="number" id="mInstRate" value="0" min="0" max="100" step="0.1" placeholder="0"></div></div><div class="form-group"><label>วันเริ่มผ่อน</label><input type="date" id="mInstStart" value="${isEdit?editTxn.date||U.today():U.today()}"></div><div id="instCalcBox" class="inst-summary" style="display:none"></div></div>
       <div class="form-group"><label>วันที่</label><input type="date" id="mD" value="${isEdit?editTxn.date:(prefill?.date||U.today())}"><div class="dshorts"><button class="dshort ${!isEdit?'active':''}" data-ds="today">วันนี้</button><button class="dshort" data-ds="yesterday">เมื่อวาน</button><button class="dshort" data-ds="2d">2 วันก่อน</button><button class="dshort" data-ds="3d">3 วันก่อน</button></div></div>
       <div class="form-group"><label>หมายเหตุ</label><textarea id="mNote" placeholder="หมายเหตุ...">${isEdit ? (editTxn.note && editTxn.note !== 'undefined' ? editTxn.note : '') : ''}</textarea><div class="nchips">${chips.map(ch => `<button class="nchip" data-ch="${ch}">${ch}</button>`).join('')}</div></div>
-      ${t0 === 'expense' ? `<div class="form-group"><label class="inst-toggle-row"><input type="checkbox" id="mReimburse" ${isEdit && editTxn.reimbursable ? 'checked' : ''}><span>🔄 รอเบิกคืน <span style="font-size:.72rem;color:var(--text-secondary)">(จ่ายแทนก่อน เบิกทีหลัง)</span></span></label></div>` : ''}
-      <div class="modal-actions"><button class="btn btn-outline" id="mCan">ยกเลิก</button><button class="btn ${t0==='expense'?'btn-expense':'btn-income'}" id="mSave">💾 บันทึก</button></div>
     `;
     o.innerHTML = buildModalHTML();
     document.getElementById('modalRoot').appendChild(o);
@@ -345,10 +345,15 @@ const POS = {
       o.querySelector('#mSave').className = `btn ${t==='expense'?'btn-expense':'btn-income'}`;
       o.querySelector('#mAccLbl').textContent = t === 'income' ? 'บัญชีรับเงิน' : 'จ่ายจากบัญชี';
       attachAccSelEvents(o, t, checkInstVis);
+      const outGrp = o.querySelector('#mOutgoingGrp');
+      if (outGrp) outGrp.style.display = t === 'expense' ? '' : 'none';
       if (t === 'income') {
         const grp = o.querySelector('#instToggleGrp'); if (grp) grp.style.display = 'none';
         const tog = o.querySelector('#mInstToggle'); if (tog) tog.checked = false;
         const flds = o.querySelector('#instFields'); if (flds) flds.style.display = 'none';
+        const reimb = o.querySelector('#mReimburse'); if (reimb) reimb.checked = false;
+        const mLentCb = o.querySelector('#mLent'); if (mLentCb) mLentCb.checked = false;
+        const mLentToGrp = o.querySelector('#mLentToGrp'); if (mLentToGrp) mLentToGrp.style.display = 'none';
       }
     }));
     setTimeout(() => {
@@ -426,6 +431,10 @@ const POS = {
       const el = o.querySelector('#mNote');
       el.value = el.value ? (el.value + ', ' + ch.dataset.ch) : ch.dataset.ch;
     }));
+    o.querySelector('#mLent')?.addEventListener('change', () => {
+      const grp = o.querySelector('#mLentToGrp');
+      if (grp) grp.style.display = o.querySelector('#mLent')?.checked ? '' : 'none';
+    });
     // Voice input — number extraction immediately, then AI parses full sentence if key available
     o.querySelector('#voiceBtn')?.addEventListener('click', () => {
       const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -553,7 +562,9 @@ const POS = {
           }
         }
         const reimbEdit = type === 'expense' && !!(o.querySelector('#mReimburse')?.checked);
-        ST.update('transactions', editTxn.id, { type, amount, categoryId, itemName, date, note, accountId, reimbursable: reimbEdit, reimburseStatus: reimbEdit ? (editTxn.reimburseStatus || 'pending') : '' });
+        const lentEdit = type === 'expense' && !!(o.querySelector('#mLent')?.checked);
+        const lentToEdit = lentEdit ? (o.querySelector('#mLentTo')?.value || '') : '';
+        ST.update('transactions', editTxn.id, { type, amount, categoryId, itemName, date, note, accountId, reimbursable: reimbEdit, reimburseStatus: reimbEdit ? (editTxn.reimburseStatus || 'pending') : '', lent: lentEdit, lentStatus: lentEdit ? (editTxn.lentStatus || 'pending') : '', lentTo: lentToEdit });
       } else {
         const isInstCC = type === 'expense' && accountId ? !!ST.getById('credit_cards', accountId) : false;
         const instEnabled = isInstCC && !!(o.querySelector('#mInstToggle')?.checked);
@@ -561,7 +572,9 @@ const POS = {
         const instRate = parseFloat(o.querySelector('#mInstRate')?.value) || 0;
         const instStart = o.querySelector('#mInstStart')?.value || date;
         const reimbursable = type === 'expense' && !!(o.querySelector('#mReimburse')?.checked);
-        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, date, note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '' });
+        const lent = type === 'expense' && !!(o.querySelector('#mLent')?.checked);
+        const lentTo = lent ? (o.querySelector('#mLentTo')?.value || '') : '';
+        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, date, note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '', lent, lentStatus: lent ? 'pending' : '', lentTo });
         // Upload pending receipt image to Firebase Storage
         const pendingFile = POS._pendingReceiptFile;
         POS._pendingReceiptFile = null;
