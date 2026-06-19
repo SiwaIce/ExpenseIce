@@ -395,12 +395,14 @@ function buildAccSelHTML(type, selectedId = '') {
   if (!hasBoth) return walletsHTML + cardsHTML;
 
   const isCardSel = !!(selectedId && cards.some(c => c.id === selectedId));
-  return `<div class="acc-tab-bar" style="display:flex;gap:0;margin-bottom:8px;border-bottom:1px solid var(--border)">
-    <button type="button" class="acc-sel-tab${!isCardSel ? ' active' : ''}" data-acctab="wallets" style="flex:1;padding:5px 0;font-size:.78rem;font-weight:600;background:none;border:none;cursor:pointer;border-bottom:2px solid ${!isCardSel ? 'var(--accent)' : 'transparent'};color:${!isCardSel ? 'var(--accent)' : 'var(--text-secondary)'}">🏦 กระเป๋า/เงินสด</button>
-    <button type="button" class="acc-sel-tab${isCardSel ? ' active' : ''}" data-acctab="cards" style="flex:1;padding:5px 0;font-size:.78rem;font-weight:600;background:none;border:none;cursor:pointer;border-bottom:2px solid ${isCardSel ? 'var(--accent)' : 'transparent'};color:${isCardSel ? 'var(--accent)' : 'var(--text-secondary)'}">💳 บัตรเครดิต</button>
-  </div>
-  <div id="accWalletPanel"${isCardSel ? ' style="display:none"' : ''}>${walletsHTML}</div>
-  <div id="accCardPanel"${!isCardSel ? ' style="display:none"' : ''}>${cardsHTML}</div>`;
+  return `<div style="width:100%;flex-basis:100%">
+    <div style="display:flex;gap:0;margin-bottom:8px;border-bottom:1px solid var(--border)">
+      <button type="button" class="acc-sel-tab${!isCardSel ? ' active' : ''}" data-acctab="wallets" style="flex:1;padding:6px 0;font-size:.78rem;font-weight:600;background:none;border:none;cursor:pointer;border-bottom:2px solid ${!isCardSel ? 'var(--accent)' : 'transparent'};color:${!isCardSel ? 'var(--accent)' : 'var(--text-secondary)'}">🏦 กระเป๋า/เงินสด</button>
+      <button type="button" class="acc-sel-tab${isCardSel ? ' active' : ''}" data-acctab="cards" style="flex:1;padding:6px 0;font-size:.78rem;font-weight:600;background:none;border:none;cursor:pointer;border-bottom:2px solid ${isCardSel ? 'var(--accent)' : 'transparent'};color:${isCardSel ? 'var(--accent)' : 'var(--text-secondary)'}">💳 บัตรเครดิต</button>
+    </div>
+    <div id="accWalletPanel" style="display:flex;gap:6px;flex-wrap:wrap${isCardSel ? ';display:none' : ''}">${walletsHTML}</div>
+    <div id="accCardPanel" style="display:flex;gap:6px;flex-wrap:wrap${!isCardSel ? ';display:none' : ''}">${cardsHTML}</div>
+  </div>`;
 }
 
 function attachAccSelEvents(modal, type, onChange) {
@@ -420,8 +422,8 @@ function attachAccSelEvents(modal, type, onChange) {
       const isCards = tab.dataset.acctab === 'cards';
       const wp = container.querySelector('#accWalletPanel');
       const cp = container.querySelector('#accCardPanel');
-      if (wp) wp.style.display = isCards ? 'none' : '';
-      if (cp) cp.style.display = isCards ? '' : 'none';
+      if (wp) wp.style.display = isCards ? 'none' : 'flex';
+      if (cp) cp.style.display = isCards ? 'flex' : 'none';
     });
   });
   container.querySelectorAll('[data-accid]').forEach(btn => {
