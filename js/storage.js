@@ -1,10 +1,19 @@
 // ===== STORAGE & UTILS =====
 const ST = {
   _p: 'exp_',
+  _cache: {},
+  // Cache parsed collections in memory — _raw was re-parsing localStorage JSON on every
+  // call, and a single render calls getAll/getById dozens of times. Cache is kept in sync
+  // by _save and dropped by invalidate() whenever localStorage is written outside _save.
   _raw(c) {
-    try { return JSON.parse(localStorage.getItem(this._p + c)) || []; }
-    catch (e) { return []; }
+    if (this._cache[c]) return this._cache[c];
+    let v;
+    try { v = JSON.parse(localStorage.getItem(this._p + c)) || []; }
+    catch (e) { v = []; }
+    this._cache[c] = v;
+    return v;
   },
+  invalidate(c) { if (c) delete this._cache[c]; else this._cache = {}; },
   getAll(c) { return this._raw(c).filter(i => !i.deletedAt); },
   getAllDeleted(c) { return this._raw(c).filter(i => !!i.deletedAt); },
   getById(c, id) { return this.getAll(c).find(i => i.id === id) || null; },
@@ -53,10 +62,11 @@ const ST = {
     ['transactions','credit_cards','wallet_accounts','installments','savings_goals','subscriptions','loan_plans'].forEach(c => {
       const raw = this._raw(c);
       const kept = raw.filter(i => !i.deletedAt || new Date(i.deletedAt) > cutoff);
-      if (kept.length !== raw.length) localStorage.setItem(this._p + c, JSON.stringify(kept));
+      if (kept.length !== raw.length) this._save(c, kept);
     });
   },
   _save(c, a) {
+    this._cache[c] = a;
     localStorage.setItem(this._p + c, JSON.stringify(a));
     window.dispatchEvent(new CustomEvent('sc', { detail: { c } }));
   },
@@ -73,6 +83,7 @@ const ST = {
   clearAll() {
     ['transactions','categories','config','items','item_groups','recurring','budgets','accounts','credit_cards','wallet_accounts','account_transfers','installments','savings_goals','subscriptions','loan_plans']
     .forEach(c => localStorage.removeItem(this._p + c));
+    this._cache = {};
   }
 };
 

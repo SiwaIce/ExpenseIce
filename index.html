@@ -735,6 +735,11 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
   .txn-table th:nth-child(6),.txn-table td:nth-child(6){display:none}
   /* Transfers: hide หมายเหตุ(5) → เหลือ วันที่|จาก|ถึง|จำนวน */
   .transfer-table th:nth-child(5),.transfer-table td:nth-child(5){display:none}
+  /* Fit transfer table to wrapper: fixed layout + truncate long account names */
+  .transfer-table{table-layout:fixed;width:100%}
+  .transfer-table th,.transfer-table td{overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+  .transfer-table th:nth-child(1),.transfer-table td:nth-child(1){width:74px}
+  .transfer-table th:nth-child(4),.transfer-table td:nth-child(4){width:72px}
   /* ── Override enhanced-CSS inflation on mobile ── */
   .stat-card{padding:9px 11px!important;border-radius:12px!important}
   .stat-value{font-size:.8rem!important;font-weight:800;letter-spacing:-.2px}
@@ -759,12 +764,25 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 .tl-ico>span{display:flex;align-items:center;justify-content:center;line-height:1}
 .tl-act .btn-ghost{display:inline-flex;align-items:center;justify-content:center}
 #tlContainer,#todayList{padding-bottom:6px}
+#todayList .swipe-wrap{flex-shrink:0}
 .tl-day-group:last-child{margin-bottom:74px}
 .empty-cta{margin-top:14px;display:inline-flex;align-items:center;gap:6px}
 .toolbar-menu{position:relative;flex-shrink:0}
 .toolbar-menu-pop{position:absolute;right:0;top:calc(100% + 4px);background:var(--bg-card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.16);padding:5px;z-index:60;display:flex;flex-direction:column;gap:2px;min-width:178px}
 .toolbar-menu-pop button{display:flex;align-items:center;gap:9px;width:100%;justify-content:flex-start;background:transparent;border:none;padding:9px 11px;border-radius:8px;font-size:.82rem;color:var(--text);cursor:pointer;white-space:nowrap}
 .toolbar-menu-pop button:hover{background:var(--bg-input)}
+/* Quick-account bar on record page */
+.qacc-bar{display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:12px;padding:8px 10px;background:var(--bg-input);border-radius:11px}
+.qacc-lbl{font-size:.7rem;font-weight:700;color:var(--text-secondary);flex-shrink:0}
+.qacc-chip{font-size:.76rem;font-weight:600;padding:5px 11px;border-radius:18px;border:1.5px solid var(--border);background:var(--bg-card);color:var(--text);cursor:pointer;white-space:nowrap;max-width:130px;overflow:hidden;text-overflow:ellipsis;transition:all .12s}
+.qacc-chip.active{border-color:var(--accent);background:var(--accent);color:#fff}
+.qacc-chip.qacc-none{color:var(--text-secondary)}
+.qacc-chip.qacc-none.active{background:var(--text-secondary);border-color:var(--text-secondary);color:#fff}
+/* Subcategory chips (inside record modal) */
+.modal-subcats{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
+.subcat-chip{font-size:.78rem;font-weight:600;padding:6px 12px;border-radius:18px;border:1.5px solid var(--border);background:var(--bg-card);color:var(--text);cursor:pointer;white-space:nowrap;transition:all .12s}
+.subcat-chip:hover,.subcat-chip:active{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
+.subcat-chip.active{border-color:var(--accent);background:var(--accent);color:#fff}
 </style>
 </head>
 <body>

@@ -73,6 +73,43 @@ const EH = {
         return item ? { ...item, useCount: v.count } : null;
       }).filter(Boolean);
   },
+  // Suggest items based on what the user actually records in the CURRENT part of the day,
+  // using each transaction's saved time (HH:MM). Returns null when there isn't enough
+  // time data, so the caller can fall back to the old category-based hint.
+  _timeBuckets: [
+    { lo: 5, hi: 10, label: '🌅 ช่วงเช้า' },
+    { lo: 10, hi: 14, label: '☀️ ช่วงเที่ยง' },
+    { lo: 14, hi: 17, label: '🌤️ ช่วงบ่าย' },
+    { lo: 17, hi: 21, label: '🌆 ช่วงเย็น' },
+    { lo: 21, hi: 29, label: '🌙 ช่วงค่ำ' }
+  ],
+  _inBucket(h, b) { return b.hi <= 24 ? (h >= b.lo && h < b.hi) : (h >= b.lo || h < b.hi - 24); },
+  getTimeSuggestions(type) {
+    const txns = ST.getAll('transactions').filter(t => t.type === type && t.time);
+    if (txns.length < 3) return null;
+    const hour = new Date().getHours();
+    const cur = this._timeBuckets.find(b => this._inBucket(hour, b)) || this._timeBuckets[0];
+    const freq = {};
+    txns.forEach(t => {
+      const h = parseInt((t.time || '').split(':')[0]);
+      if (isNaN(h) || !this._inBucket(h, cur)) return;
+      const k = t.itemId || ('n:' + t.itemName);
+      if (!k || k === 'n:') return;
+      if (!freq[k]) freq[k] = { count: 0, last: t };
+      freq[k].count++; freq[k].last = t;
+    });
+    const ranked = Object.entries(freq).sort((a, b) => b[1].count - a[1].count);
+    if (ranked.length === 0) return null;
+    const items = ranked.slice(0, 6).map(([k, v]) => {
+      let item;
+      if (k.startsWith('n:')) {
+        const cat = v.last.categoryId ? (ST.getById('categories', v.last.categoryId) || {}) : {};
+        item = { name: k.slice(2), icon: cat.icon || '📝', defaultAmount: v.last.amount || 0, categoryId: v.last.categoryId || '' };
+      } else item = ST.getById('items', k);
+      return item ? { ...item, useCount: v.count } : null;
+    }).filter(Boolean);
+    return items.length ? { label: cur.label, items } : null;
+  },
   getBudget(catId) {
     const b = ST.getAll('budgets').find(x => x.categoryId === catId);
     if (!b) return null;

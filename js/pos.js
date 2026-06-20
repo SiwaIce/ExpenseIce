@@ -207,15 +207,23 @@ const POS = {
         ${favExtra.length > 0 ? `<div class="pos-grid" id="favExtraGrid" style="display:none">${favExtra.map(_favCard).join('')}</div><button class="btn btn-outline btn-sm" id="btnFavMore" style="width:100%;margin-top:6px;font-size:.74rem">ดูเพิ่ม (${favExtra.length}) ▾</button>` : ''}
       </div>` : '';
 
-    // Time-based suggestions
-    const hour = new Date().getHours();
-    const timeHints = hour >= 6 && hour < 10 ? { label: '🌅 เช้า', cats: ['cat_food','cat_transport'] }
-      : hour >= 10 && hour < 14 ? { label: '☀️ เที่ยง', cats: ['cat_food'] }
-      : hour >= 14 && hour < 18 ? { label: '🌤️ บ่าย', cats: ['cat_food','cat_entertain'] }
-      : hour >= 17 && hour < 23 ? { label: '🌆 เย็น', cats: ['cat_food','cat_transport'] }
-      : null;
-    const timeFavs = (timeHints && this.type === 'expense')
-      ? favItems.filter(it => timeHints.cats.includes(it.categoryId)).slice(0, 4) : [];
+    // Time-based suggestions — prefer what the user actually records at this time of day (#1),
+    // fall back to a category-based hint when there isn't enough time history yet.
+    let timeLabel = '', timeFavs = [];
+    if (this.type === 'expense') {
+      const sug = EH.getTimeSuggestions('expense');
+      if (sug) { timeLabel = sug.label; timeFavs = sug.items; }
+      else {
+        const hour = new Date().getHours();
+        const timeHints = hour >= 6 && hour < 10 ? { label: '🌅 ช่วงเช้า', cats: ['cat_food','cat_transport'] }
+          : hour >= 10 && hour < 14 ? { label: '☀️ ช่วงเที่ยง', cats: ['cat_food'] }
+          : hour >= 14 && hour < 17 ? { label: '🌤️ ช่วงบ่าย', cats: ['cat_food','cat_entertain'] }
+          : hour >= 17 && hour < 21 ? { label: '🌆 ช่วงเย็น', cats: ['cat_food','cat_transport'] }
+          : { label: '🌙 ช่วงค่ำ', cats: ['cat_food','cat_entertain'] };
+        timeLabel = timeHints.label;
+        timeFavs = favItems.filter(it => timeHints.cats.includes(it.categoryId)).slice(0, 4);
+      }
+    }
     const _sugCard = it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
         <span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span>
         ${it.defaultAmount > 0 ? `<span class="item-amount-sm">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
@@ -223,7 +231,7 @@ const POS = {
       </div>`;
     const sugExtra = timeFavs.slice(3);
     const timeSuggestHTML = timeFavs.length > 0 ? `<div style="margin-bottom:14px">
-      <div class="pos-section-label">${timeHints.label} แนะนำ</div>
+      <div class="pos-section-label">${timeLabel} แนะนำ</div>
       <div class="pos-grid">${timeFavs.slice(0, 3).map(_sugCard).join('')}</div>
       ${sugExtra.length > 0 ? `<div class="pos-grid" id="sugExtraGrid" style="display:none">${sugExtra.map(_sugCard).join('')}</div><button class="btn btn-outline btn-sm" id="btnSugMore" style="width:100%;margin-top:6px;font-size:.74rem">ดูเพิ่ม (${sugExtra.length}) ▾</button>` : ''}
     </div>` : '';
@@ -323,6 +331,7 @@ const POS = {
               <button class="type-btn ${this.type==='income'?'ai':''}" data-type="income">รายรับ</button>
             </div>
           </div>
+          ${this._accBarHTML()}
           ${posContent}
           <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px">
             <label class="btn btn-outline btn-sm" style="cursor:pointer;font-size:.76rem" title="สแกนใบเสร็จด้วย AI">📷 สแกนใบเสร็จ<input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none"></label>
@@ -366,6 +375,11 @@ const POS = {
       })
     );
     this._attachCatEvents();
+    // Quick-account chip selection (just toggle the active chip, no full re-render)
+    document.querySelectorAll('[data-qacc]').forEach(btn => btn.addEventListener('click', () => {
+      this._setActiveAcc(btn.dataset.qacc);
+      document.querySelectorAll('[data-qacc]').forEach(b => b.classList.toggle('active', b === btn));
+    }));
     document.querySelectorAll('[data-pin]').forEach(btn => btn.addEventListener('click', e => {
       e.stopPropagation();
       this._togglePin(btn.dataset.pin);
@@ -399,11 +413,18 @@ const POS = {
         const iid = btn.dataset.qaFn; const name = btn.dataset.qaN; const amt = Number(btn.dataset.qaA) || 0; const cat = btn.dataset.qaC || '';
         const item = iid ? ST.getById('items', iid) : null;
         const _now = new Date().toTimeString().slice(0,5);
+        // Prefer the account this item was last paid from, else the active quick account
+        const acc = (item && this._itemAcc(item.id)) || this._activeAcc();
         if (item) {
-          ST.add('transactions', { type: this.type, amount: item.defaultAmount, categoryId: item.categoryId, itemId: item.id, itemName: item.name, date: U.today(), time: _now, note: '' });
+          const tx = ST.add('transactions', { type: this.type, amount: item.defaultAmount, categoryId: item.categoryId, itemId: item.id, itemName: item.name, date: U.today(), time: _now, note: '', accountId: acc });
+          window.__flashTxnId = tx.id;
+          this._applyAcctDelta(acc, this.type, item.defaultAmount, false);
+          if (acc) this._rememberItemAcc(item.id, acc);
           this.flash(`${item.icon} ${item.name} ${U.fmtCurrency(item.defaultAmount)}`);
         } else if (name) {
-          ST.add('transactions', { type: this.type, amount: amt, categoryId: cat, itemName: name, date: U.today(), time: _now, note: '' });
+          const tx = ST.add('transactions', { type: this.type, amount: amt, categoryId: cat, itemName: name, date: U.today(), time: _now, note: '', accountId: acc });
+          window.__flashTxnId = tx.id;
+          this._applyAcctDelta(acc, this.type, amt, false);
           this.flash(`${name} ${U.fmtCurrency(amt)}`);
         }
         App.rv('add');
@@ -472,12 +493,74 @@ const POS = {
     const el = document.createElement('div'); el.className = 'qa-flash'; el.textContent = '✅ ' + text;
     document.body.appendChild(el); setTimeout(() => el.remove(), 2100);
   },
+  // ── Quick account (บัญชีลัด) helpers ──
+  _allAccs() {
+    const wallets = ST.getAll('wallet_accounts').map(w => ({ id: w.id, icon: w.icon || '🏦', name: w.name }));
+    const cards = ST.getAll('credit_cards').map(c => ({ id: c.id, icon: '💳', name: c.name }));
+    return [...wallets, ...cards];
+  },
+  _quickAccs() {
+    const all = this._allAccs();
+    const ids = (U.getConfig().quickAccounts || []).filter(id => all.some(a => a.id === id));
+    const list = ids.length ? ids.map(id => all.find(a => a.id === id)) : all.slice(0, 3);
+    return list.filter(Boolean);
+  },
+  _activeAcc() {
+    const id = localStorage.getItem('exp_activeAcc') || '';
+    return id && this._allAccs().some(a => a.id === id) ? id : '';
+  },
+  _setActiveAcc(id) { localStorage.setItem('exp_activeAcc', id || ''); },
+  // Remember which account an item was last paid from (#8)
+  _itemAcc(itemId) { return itemId ? (U.getConfig().itemAccounts || {})[itemId] || '' : ''; },
+  _rememberItemAcc(itemId, accId) {
+    if (!itemId || !accId) return;
+    const m = { ...(U.getConfig().itemAccounts || {}) }; m[itemId] = accId;
+    U.updateConfig({ itemAccounts: m });
+  },
+  // Apply (or reverse) a transaction's effect on an account balance
+  _applyAcctDelta(accountId, type, amount, reverse) {
+    if (!accountId || !amount) return;
+    const sign = reverse ? -1 : 1;
+    const w = ST.getById('wallet_accounts', accountId);
+    const cc = ST.getById('credit_cards', accountId);
+    if (w) { const delta = (type === 'income' ? amount : -amount) * sign; ST.update('wallet_accounts', accountId, { balance: (w.balance || 0) + delta }); }
+    else if (cc && type === 'expense') { ST.update('credit_cards', accountId, { used: Math.max(0, (cc.used || 0) + amount * sign) }); }
+  },
+  _accBarHTML() {
+    const accs = this._quickAccs();
+    if (accs.length === 0) return '';
+    const active = this._activeAcc();
+    return `<div class="qacc-bar">
+      <span class="qacc-lbl">ตัดจาก</span>
+      ${accs.map(a => `<button class="qacc-chip ${active === a.id ? 'active' : ''}" data-qacc="${a.id}" title="${a.name}">${a.icon} ${a.name}</button>`).join('')}
+      <button class="qacc-chip qacc-none ${!active ? 'active' : ''}" data-qacc="" title="ไม่ตัดบัญชี">ไม่ระบุ</button>
+    </div>`;
+  },
+  // Frequently-used subcategory chips (#5) — pick groups under categories of the current type,
+  // Subcategory chips shown inside the record modal, for the chosen main category (#3).
+  // Ranked by how often a transaction was named after them. activeName highlights one.
+  _modalSubcatsHTML(categoryId, activeName) {
+    if (!categoryId) return '';
+    const groups = ST.getAll('item_groups').filter(g => g.categoryId === categoryId);
+    if (groups.length === 0) return '';
+    const txns = ST.getAll('transactions');
+    const cnt = {}; groups.forEach(g => { cnt[g.id] = txns.filter(t => t.itemName === g.name).length; });
+    const sorted = groups.slice().sort((a, b) => (cnt[b.id] || 0) - (cnt[a.id] || 0));
+    return sorted.map(g => `<button type="button" class="subcat-chip ${activeName === g.name ? 'active' : ''}" data-sc-name="${g.name.replace(/"/g, '&quot;')}" data-sc-icon="${g.icon || '📋'}">${g.icon || '📋'} ${g.name}</button>`).join('');
+  },
   openModal(item, catId, editTxn, prefill = null) {
     const cats = ST.getAll('categories'); const cfg = U.getConfig();
     const isEdit = !!editTxn;
     const defCat = catId || (isEdit ? editTxn.categoryId : (this.type === 'expense' ? 'cat_food' : 'cat_salary'));
+    // When the category is known from context (tapped item / subcategory / custom-with-category / edit),
+    // the name-based auto-categorizer must NOT override it — e.g. item "อาหารหมา" under "ค่าเลี้ยงสัตว์"
+    // was being forced back to "อาหาร". Locked also once the user picks a category manually.
+    let catLocked = !!catId || isEdit;
+    // Default account: when editing keep its own; otherwise prefer the item's remembered
+    // account (#8), then the active quick account (#10).
+    const defAcc = isEdit ? (editTxn.accountId || '') : (this._itemAcc(item && item.id) || this._activeAcc() || '');
     const defAmt = prefill?.amount || (item ? item.defaultAmount : (isEdit ? editTxn.amount : ''));
-    const defName = prefill?.name || (item ? item.name : (isEdit ? editTxn.itemName : ''));
+    const defName = prefill?.name || prefill?.subCatName || (item ? item.name : (isEdit ? editTxn.itemName : ''));
     const catQuickItems = !isEdit && defCat ? ST.getAll('items').filter(i => i.categoryId === defCat).slice(0, 10) : [];
     const t0 = isEdit ? editTxn.type : this.type;
     const presets = EH.getRecentAmounts(t0);
@@ -502,9 +585,10 @@ const POS = {
       <div class="form-group" id="mOutgoingGrp" style="${t0 !== 'expense' ? 'display:none' : ''}"><div style="display:flex;flex-direction:column;gap:6px"><label class="inst-toggle-row"><input type="checkbox" id="mReimburse" ${isEdit && editTxn && editTxn.reimbursable ? 'checked' : ''}><span>🔄 รอเบิกคืน <span style="font-size:.72rem;color:var(--text-secondary)">(จ่ายแทน เบิกทีหลัง)</span></span></label><label class="inst-toggle-row"><input type="checkbox" id="mLent" ${isEdit && editTxn && editTxn.lent ? 'checked' : ''}><span>🤝 ให้ยืม <span style="font-size:.72rem;color:var(--text-secondary)">(รอรับเงินคืน)</span></span></label><div id="mLentToGrp" style="${isEdit && editTxn && editTxn.lent ? '' : 'display:none'}"><input type="text" id="mLentTo" placeholder="ชื่อคนที่ยืม..." value="${isEdit && editTxn && editTxn.lentTo ? editTxn.lentTo : ''}" style="margin-top:5px"></div></div></div>
       <div class="form-group"><label>จำนวนเงิน</label><div style="display:flex;gap:6px;align-items:center"><div class="amt-display focused" id="npDisp" style="flex:1">${U.fmtCurrency(Number(numVal)||0, cfg.currency)}</div><button class="btn-ghost" id="voiceBtn" title="พูดจำนวนเงิน" style="font-size:1.05rem;padding:6px 9px;border:1px solid var(--border);flex-shrink:0">🎤</button><button class="btn-ghost" id="splitBtn" title="แบ่งบิล" style="font-size:.75rem;padding:6px 8px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap">÷ แบ่ง</button></div><div id="splitRow" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;padding:8px;background:var(--bg-input);border-radius:8px"><span style="font-size:.78rem">แบ่ง</span><input type="number" id="splitN" value="2" min="2" max="20" style="width:55px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:.85rem;background:var(--bg-card);color:var(--text)"><span style="font-size:.78rem">คน คนละ</span><span id="splitResult" style="font-weight:700;color:var(--accent);font-size:.88rem">-</span><button class="btn btn-sm btn-outline" id="splitApply" style="font-size:.74rem;padding:3px 10px">ใช้</button></div><div class="presets" id="mPresets">${presets.map(a => `<button class="preset-btn" data-pv="${a}">${U.fmtCurrency(a, cfg.currency)}</button>`).join('')}</div><div class="numpad">${['7','8','9','4','5','6','1','2','3'].map(n => `<button class="np" data-n="${n}">${n}</button>`).join('')}<button class="np np-del" data-n="del">⌫</button><button class="np" data-n="0">0</button><button class="np" data-n=".">.</button></div></div>
       <div class="form-group"><label>หมวดหมู่</label><select id="mC">${cats.map(c => `<option value="${c.id}" ${defCat===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select></div>
+      <div class="form-group" id="mSubcatGrp" style="${this._modalSubcatsHTML(defCat, prefill?.subCatName || defName) ? '' : 'display:none'}"><label style="font-size:.74rem;color:var(--text-secondary)">หมวดย่อย</label><div class="modal-subcats" id="mSubcats">${this._modalSubcatsHTML(defCat, prefill?.subCatName || defName)}</div></div>
       ${catQuickItems.length > 0 ? `<div class="form-group"><label style="font-size:.74rem;color:var(--text-secondary)">รายการที่บันทึกไว้</label><div class="nchips" id="qiChips">${catQuickItems.map(it => `<button type="button" class="nchip qi-chip" data-qi-name="${it.name}" data-qi-amt="${it.defaultAmount||0}">${it.icon} ${it.name}</button>`).join('')}</div></div>` : ''}
       <div class="form-group"><label>ชื่อรายการ</label><input type="text" id="mN" value="${defName}" placeholder="เช่น ข้าวผัด, น้ำมัน..."></div>
-      <div class="form-group" id="mAccGrp"><label id="mAccLbl">บัญชี</label><div class="acc-select-grid" id="mAccSelect"><span style="font-size:.74rem;color:var(--text-secondary)">กำลังโหลด...</span></div><input type="hidden" id="mAccId" value="${isEdit?editTxn.accountId||'':''}"></div>
+      <div class="form-group" id="mAccGrp"><label id="mAccLbl">บัญชี</label><div class="acc-select-grid" id="mAccSelect"><span style="font-size:.74rem;color:var(--text-secondary)">กำลังโหลด...</span></div><input type="hidden" id="mAccId" value="${defAcc}"></div>
       <div class="form-group" id="instToggleGrp" style="display:none"><label class="inst-toggle-row"><input type="checkbox" id="mInstToggle"><span>💳 ผ่อนชำระผ่านบัตรเครดิต</span></label></div>
       <div id="instFields" style="display:none"><div class="form-row"><div class="form-group"><label>จำนวนงวด</label><select id="mInstMonths"><option value="3">3 งวด</option><option value="6">6 งวด</option><option value="10" selected>10 งวด</option><option value="12">12 งวด</option><option value="24">24 งวด</option></select></div><div class="form-group"><label>ดอกเบี้ย %/ปี</label><input type="number" id="mInstRate" value="0" min="0" max="100" step="0.1" placeholder="0"></div></div><div class="form-group"><label>วันเริ่มผ่อน</label><input type="date" id="mInstStart" value="${isEdit?editTxn.date||U.today():U.today()}"></div><div id="instCalcBox" class="inst-summary" style="display:none"></div></div>
       <div class="form-group"><label>วันที่</label><input type="date" id="mD" value="${isEdit?editTxn.date:(prefill?.date||U.today())}"><div class="dshorts"><button class="dshort ${!isEdit?'active':''}" data-ds="today">วันนี้</button><button class="dshort" data-ds="yesterday">เมื่อวาน</button><button class="dshort" data-ds="2d">2 วันก่อน</button><button class="dshort" data-ds="3d">3 วันก่อน</button></div></div>
@@ -680,6 +764,7 @@ const POS = {
       { id:'cat_entertain', words:['ภาพยนตร์','หนัง','netflix','spotify','เกม','concert','ท่องเที่ยว','โรงแรม','สปา','บันเทิง','ดนตรี'] },
     ];
     o.querySelector('#mN')?.addEventListener('blur', async () => {
+      if (catLocked) return; // respect category chosen from context or manually
       const name = (o.querySelector('#mN')?.value || '').toLowerCase();
       const sel = o.querySelector('#mC');
       if (!name || !sel) return;
@@ -703,8 +788,25 @@ const POS = {
         } catch {}
       }
     });
+    // Subcategory chips inside the modal (#3): refresh when the category changes,
+    // tap to set the item name to that subcategory.
+    const _refreshSubcats = () => {
+      const grp = o.querySelector('#mSubcatGrp'); const box = o.querySelector('#mSubcats');
+      if (!grp || !box) return;
+      const active = (o.querySelector('#mN')?.value || '').trim();
+      const html = this._modalSubcatsHTML(o.querySelector('#mC')?.value, active);
+      box.innerHTML = html;
+      grp.style.display = html ? '' : 'none';
+    };
+    o.querySelector('#mSubcats')?.addEventListener('click', e => {
+      const chip = e.target.closest('.subcat-chip'); if (!chip) return;
+      const nameEl = o.querySelector('#mN'); if (nameEl) { nameEl.value = chip.dataset.scName; catLocked = true; }
+      o.querySelectorAll('#mSubcats .subcat-chip').forEach(c => c.classList.toggle('active', c === chip));
+    });
     // Category pre-fill amount from history
     o.querySelector('#mC')?.addEventListener('change', () => {
+      catLocked = true; // user chose a category — stop auto-categorize from overriding
+      _refreshSubcats();
       if (parseFloat(numVal) > 0) return;
       const catId = o.querySelector('#mC').value;
       const catTxns = ST.getAll('transactions').filter(t => t.categoryId === catId && Number(t.amount) > 0);
@@ -795,6 +897,7 @@ const POS = {
           ST.update('credit_cards', accountId, { used: (cc.used || 0) + amount });
         }
       }
+      if (item && item.id && accountId) POS._rememberItemAcc(item.id, accountId);
       U.toast(isEdit ? 'อัปเดตแล้ว ✅' : 'บันทึกแล้ว ✅', 'success');
       o.remove();
       App.rv(App.cv === 'transactions' ? 'transactions' : 'add');

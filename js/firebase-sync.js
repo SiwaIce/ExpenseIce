@@ -176,7 +176,7 @@ const CloudSync = {
         const local = ST._raw(c);
         if (!Array.isArray(remote) || !Array.isArray(local)) {
           // For config (object), remote wins only if newer
-          if (remote && !Array.isArray(remote)) localStorage.setItem('exp_' + c, JSON.stringify(remote));
+          if (remote && !Array.isArray(remote)) { localStorage.setItem('exp_' + c, JSON.stringify(remote)); ST.invalidate(c); }
           continue;
         }
         // Per-record merge: last _updatedAt wins
@@ -187,6 +187,7 @@ const CloudSync = {
           if (!merged[r.id] || (r._updatedAt || 0) > (merged[r.id]._updatedAt || 0)) merged[r.id] = r;
         });
         localStorage.setItem('exp_' + c, JSON.stringify(Object.values(merged)));
+        ST.invalidate(c);
       }
     } catch(e) {
       console.error('Sync pull error:', e);

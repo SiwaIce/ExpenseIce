@@ -153,7 +153,7 @@ const Views = {
       <select id="fAcc" style="flex:1;min-width:130px"><option value="">ทุกบัญชี</option>${allAccounts.map(a=>`<option value="${a.id}" ${f.accountId===a.id?'selected':''}>${a.label}</option>`).join('')}</select>
       <input type="number" id="fAmtMin" placeholder="จำนวนต่ำสุด" value="${f.amountMin}" min="0" style="flex:1;min-width:110px">
       <input type="number" id="fAmtMax" placeholder="จำนวนสูงสุด" value="${f.amountMax}" min="0" style="flex:1;min-width:110px">
-      <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;cursor:pointer;flex:0 0 auto;white-space:nowrap"><input type="checkbox" id="fHasReceipt" ${f.hasReceipt?'checked':''}> มีใบเสร็จเท่านั้น</label>
+      <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;cursor:pointer;flex:1 1 100%;min-width:0"><input type="checkbox" id="fHasReceipt" style="flex:0 0 auto" ${f.hasReceipt?'checked':''}> <span>มีใบเสร็จเท่านั้น</span></label>
     </div>
     </div>
     ${view==='timeline' ? `<div id="tlContainer">${txns.length===0?`<div class="empty-state"><div class="empty-icon">📭</div>${totalActiveFilters>0?'ไม่พบรายการตามตัวกรอง':'ยังไม่มีรายการ'}<div><button class="btn btn-primary empty-cta" id="btnEmptyAdd">➕ บันทึกรายการแรก</button></div></div>`:timelineHTML}</div>` : `<div class="table-wrap"><table class="txn-table"><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายการ</th><th>จำนวน</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>${txns.length===0?`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-secondary)">ยังไม่มีรายการ</td></tr>`:txns.map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?',color:'#ccc'};return`<tr><td style="font-size:.78rem">${U.fmtDate(t.date)}${t.time?`<div style="font-size:.68rem;color:var(--text-secondary)">🕐${t.time}</div>`:''}</td><td><span class="badge badge-${t.type}">${t.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${cat.color}"></span>${cat.icon} ${cat.name}</td><td style="font-size:.8rem">${t.itemName||'-'}</td><td style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.78rem;color:var(--text-secondary)">${(t.note && t.note !== 'undefined') ? t.note : '-'}</td><td style="display:flex;gap:4px;padding:6px 10px"><button class="btn-ghost btnE" data-id="${t.id}" title="แก้ไข">✏️</button><button class="btn-ghost btnD" data-id="${t.id}" title="ลบ">🗑️</button></td></tr>`}).join('')}</tbody></table></div>`}
@@ -173,9 +173,16 @@ const Views = {
         tbMenu.className = `btn btn-sm ${open ? 'btn-primary' : 'btn-outline'}`;
       });
       tbPop.addEventListener('click', () => { tbPop.style.display = 'none'; tbMenu.className = 'btn btn-outline btn-sm'; });
-      document.addEventListener('click', function onDoc(ev) {
-        if (!tbPop.contains(ev.target) && ev.target !== tbMenu) { tbPop.style.display = 'none'; if (tbMenu) tbMenu.className = 'btn btn-outline btn-sm'; }
-      });
+      // Close on outside click. Reuse a single document listener so re-renders don't
+      // stack a new one each time (that leaked a listener per transactions render).
+      if (this._tbDocHandler) document.removeEventListener('click', this._tbDocHandler);
+      this._tbDocHandler = (ev) => {
+        const pop = document.getElementById('tbMenuPop'); const mn = document.getElementById('btnTbMenu');
+        if (pop && pop.style.display !== 'none' && !pop.contains(ev.target) && ev.target !== mn) {
+          pop.style.display = 'none'; if (mn) mn.className = 'btn btn-outline btn-sm';
+        }
+      };
+      document.addEventListener('click', this._tbDocHandler);
     }
     document.getElementById('btnStmtScan')?.addEventListener('click', () => this.openStatementScanner());
     document.getElementById('btnSlipScan')?.addEventListener('click', () => this.openSlipScanner());
@@ -208,8 +215,9 @@ const Views = {
     document.querySelectorAll('[data-vt]').forEach(btn => btn.addEventListener('click', () => {
       const hp = new URLSearchParams(window.location.hash.replace('#', ''));
       hp.set('view', btn.dataset.vt);
-      window.location.hash = hp.toString();
-      App.rv('transactions');
+      const s = hp.toString();
+      if (window.location.hash.replace(/^#/, '') === s) App.rv('transactions');
+      else window.location.hash = s;
     }));
     document.getElementById('btnAdvFilter')?.addEventListener('click', () => {
       const panel = document.getElementById('advFilterPanel');
@@ -221,7 +229,12 @@ const Views = {
     });
     ['fType', 'fCat', 'fFrom', 'fTo', 'fAcc'].forEach(id => document.getElementById(id)?.addEventListener('change', () => this.applyTxnFilter()));
     ['fAmtMin', 'fAmtMax'].forEach(id => document.getElementById(id)?.addEventListener('input', () => this.applyTxnFilter()));
-    document.getElementById('fSearch')?.addEventListener('input', () => this.applyTxnFilter());
+    // Debounce search so the list doesn't re-render mid-word (which stole focus after 1 char)
+    const sInput = document.getElementById('fSearch');
+    if (sInput) {
+      let sTimer;
+      sInput.addEventListener('input', () => { clearTimeout(sTimer); sTimer = setTimeout(() => this.applyTxnFilter(), 350); });
+    }
     document.getElementById('fHasReceipt')?.addEventListener('change', () => this.applyTxnFilter());
     const editFn = (id) => { const t = ST.getById('transactions', id); if (t) POS.openModal(null, null, t); };
     const delFn = async (id) => {
@@ -255,24 +268,60 @@ const Views = {
     }
     // Month view handlers
     const _hashM = () => new URLSearchParams(window.location.hash.replace('#',''));
-    const _goM = nhp => { window.location.hash = nhp.toString(); App.rv('transactions'); };
+    // Set the hash and let the single hashchange listener re-render. Only render
+    // manually when the hash is unchanged (hashchange wouldn't fire). Calling both
+    // would double-render and stack event handlers (month nav jumped 1,2,4,8...).
+    const _goM = nhp => {
+      const s = nhp.toString();
+      if (window.location.hash.replace(/^#/, '') === s) App.rv('transactions');
+      else window.location.hash = s;
+    };
+    const _isYear = () => _hashM().get('pmode') === 'year';
     document.getElementById('monthSelInput')?.addEventListener('change', e => {
       const nhp = _hashM(); nhp.set('month', e.target.value); nhp.delete('mcat'); nhp.delete('mitem'); _goM(nhp);
     });
+    document.getElementById('yearSelInput')?.addEventListener('change', e => {
+      const nhp = _hashM(); nhp.set('year', e.target.value); nhp.delete('mcat'); nhp.delete('mitem'); _goM(nhp);
+    });
+    // Period mode toggle (month / year)
+    document.querySelectorAll('[data-pmode]').forEach(btn => btn.addEventListener('click', () => {
+      const nhp = _hashM();
+      if (btn.dataset.pmode === 'year') {
+        const yr = (nhp.get('month') || U.thisMonth()).slice(0,4);
+        nhp.set('pmode', 'year'); nhp.set('year', yr);
+      } else {
+        nhp.delete('pmode');
+      }
+      nhp.delete('mcat'); nhp.delete('mitem'); _goM(nhp);
+    }));
     document.getElementById('btnPrevM')?.addEventListener('click', () => {
       const nhp = _hashM();
-      const [y,mo] = (nhp.get('month')||U.thisMonth()).split('-').map(Number);
-      const d = new Date(y, mo-2, 1);
-      nhp.set('month', `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+      if (_isYear()) {
+        const y = parseInt(nhp.get('year') || String(new Date().getFullYear()));
+        nhp.set('year', String(y - 1));
+      } else {
+        const [y,mo] = (nhp.get('month')||U.thisMonth()).split('-').map(Number);
+        const d = new Date(y, mo-2, 1);
+        nhp.set('month', `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+      }
       nhp.delete('mcat'); nhp.delete('mitem'); _goM(nhp);
     });
     document.getElementById('btnNextM')?.addEventListener('click', () => {
       const nhp = _hashM();
-      const [y,mo] = (nhp.get('month')||U.thisMonth()).split('-').map(Number);
-      const d = new Date(y, mo, 1);
-      nhp.set('month', `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+      if (_isYear()) {
+        const y = parseInt(nhp.get('year') || String(new Date().getFullYear()));
+        nhp.set('year', String(y + 1));
+      } else {
+        const [y,mo] = (nhp.get('month')||U.thisMonth()).split('-').map(Number);
+        const d = new Date(y, mo, 1);
+        nhp.set('month', `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`);
+      }
       nhp.delete('mcat'); nhp.delete('mitem'); _goM(nhp);
     });
+    // Year view: tap a month → jump into that month
+    document.querySelectorAll('[data-mmonth]').forEach(el => el.addEventListener('click', () => {
+      const nhp = _hashM(); nhp.delete('pmode'); nhp.delete('year'); nhp.set('month', el.dataset.mmonth); nhp.delete('mcat'); nhp.delete('mitem'); _goM(nhp);
+    }));
     document.querySelectorAll('[data-mcat]').forEach(el => el.addEventListener('click', () => {
       const nhp = _hashM(); nhp.set('mcat', el.dataset.mcat); nhp.delete('mitem'); _goM(nhp);
     }));
@@ -286,6 +335,12 @@ const Views = {
       _goM(nhp);
     }));
     const tl = document.getElementById('tlContainer'); if (tl) initSwipe(tl);
+    // Restore focus + caret to the search box after a search-triggered re-render
+    if (window.__txnSearchCaret != null) {
+      const si = document.getElementById('fSearch');
+      if (si) { si.focus(); const p = Math.min(window.__txnSearchCaret, si.value.length); try { si.setSelectionRange(p, p); } catch (e) {} }
+      window.__txnSearchCaret = null;
+    }
   },
   applyTxnFilter() {
     const p = new URLSearchParams(window.location.hash.replace('#', ''));
@@ -300,8 +355,13 @@ const Views = {
     const amax = document.getElementById('fAmtMax')?.value || ''; if (amax) p.set('amax', amax); else p.delete('amax');
     const acc = document.getElementById('fAcc')?.value || ''; if (acc) p.set('acc', acc); else p.delete('acc');
     const rcpt = document.getElementById('fHasReceipt')?.checked; if (rcpt) p.set('rcpt', '1'); else p.delete('rcpt');
-    window.location.hash = p.toString();
-    App.rv('transactions');
+    // Remember caret so focus can be restored to the search box after re-render
+    const sEl = document.getElementById('fSearch');
+    if (sEl && document.activeElement === sEl) window.__txnSearchCaret = sEl.selectionStart;
+    else window.__txnSearchCaret = null;
+    const s = p.toString();
+    if (window.location.hash.replace(/^#/, '') === s) App.rv('transactions');
+    else window.location.hash = s;
   },
 
   // ---------- REPORTS ----------
@@ -570,12 +630,29 @@ const Views = {
       { id: 'purple', color: '#8b5cf6', label: 'Purple' }
     ];
     const aiProv = cfg.aiProvider || 'claude';
+    const _qaccCard = (() => {
+      const accs = [...ST.getAll('wallet_accounts').map(w => ({ id: w.id, icon: w.icon || '🏦', name: w.name })), ...ST.getAll('credit_cards').map(c => ({ id: c.id, icon: '💳', name: c.name }))];
+      if (accs.length === 0) return '';
+      const sel = cfg.quickAccounts || [];
+      return `<div class="card"><div class="card-header"><span class="card-title">⚡ บัญชีลัด (บันทึกด่วน)</span></div>
+        <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:10px">เลือกได้สูงสุด 3 บัญชี/บัตร เพื่อเป็นปุ่มลัดในหน้าบันทึก — เวลากดบันทึกด่วนจะตัดเงินจากบัญชีที่เลือกไว้</p>
+        <div style="display:flex;flex-direction:column;gap:7px">
+          ${accs.map(a => `<label style="display:flex;align-items:center;gap:9px;font-size:.86rem;cursor:pointer;padding:7px 10px;border:1px solid var(--border);border-radius:9px"><input type="checkbox" class="qaccChk" data-id="${a.id}" ${sel.includes(a.id) ? 'checked' : ''}> ${a.icon} ${a.name}</label>`).join('')}
+        </div></div>`;
+    })();
     return `<div class="card"><div class="card-header"><span class="card-title">⚙️ การตั้งค่า</span></div><div class="form-group"><label>ชื่อผู้ใช้</label><input type="text" id="sUN" value="${cfg.userName||'ผู้ใช้'}"></div>
 <div class="form-group"><label>🤖 AI Provider</label><div style="display:flex;gap:8px;margin-bottom:8px"><button class="btn btn-sm ${aiProv==='claude'?'btn-primary':'btn-outline'}" id="sPrvClaude" data-prv="claude">🟣 Claude (Anthropic)</button><button class="btn btn-sm ${aiProv==='gemini'?'btn-primary':'btn-outline'}" id="sPrvGemini" data-prv="gemini">🔵 Gemini (Google)</button></div><input type="hidden" id="sAiProvider" value="${aiProv}"></div>
 <div class="form-group" id="grpClaudeKey" style="${aiProv==='gemini'?'display:none':''}"><label>Anthropic API Key <span style="font-size:.7rem;color:var(--text-secondary)">(Claude)</span></label><input type="password" id="sApiKey" value="${cfg.apiKey||''}" placeholder="sk-ant-api03-..."><div style="font-size:.72rem;color:var(--text-secondary);margin-top:4px">รับได้ที่ console.anthropic.com · มีค่าใช้จ่าย</div>${aiProv==='claude'&&!cfg.apiKey?'<div style="font-size:.72rem;color:var(--danger);margin-top:2px">⚠️ ยังไม่ได้ตั้งค่า</div>':''}</div>
-<div class="form-group" id="grpGeminiKey" style="${aiProv!=='gemini'?'display:none':''}"><label>Gemini API Key <span style="font-size:.7rem;color:var(--success)">✅ ฟรี!</span></label><input type="password" id="sGeminiKey" value="${cfg.geminiApiKey||''}" placeholder="AIzaSy..."><div style="font-size:.72rem;color:var(--text-secondary);margin-top:4px">รับฟรีที่ aistudio.google.com · 1,500 req/วัน</div>${aiProv==='gemini'&&!cfg.geminiApiKey?'<div style="font-size:.72rem;color:var(--danger);margin-top:2px">⚠️ ยังไม่ได้ตั้งค่า</div>':''}</div><div class="form-group"><label>สกุลเงิน</label><select id="sCur"><option value="THB" ${cfg.currency==='THB'?'selected':''}>บาท (฿)</option><option value="USD" ${cfg.currency==='USD'?'selected':''}>ดอลลาร์ ($)</option><option value="EUR" ${cfg.currency==='EUR'?'selected':''}>ยูโร (€)</option><option value="JPY" ${cfg.currency==='JPY'?'selected':''}>เยน (¥)</option><option value="GBP" ${cfg.currency==='GBP'?'selected':''}>ปอนด์ (£)</option></select></div><div class="form-group"><label>สีธีม (Accent Color)</label><div class="ac-swatches">${accentColors.map(ac=>`<div class="ac-sw ${(cfg.accent||'indigo')===ac.id?'active':''}" style="background:${ac.color}" data-ac="${ac.id}" title="${ac.label}"></div>`).join('')}</div></div><button class="btn btn-primary" id="btnSaveS">💾 บันทึก</button></div><div class="card"><div class="card-header"><span class="card-title">☁️ Cloud Sync</span><span id="syncStatus" class="sync-dot ${CloudSync.isLoggedIn()?'sync-synced':'sync-offline'}" title="${CloudSync.isLoggedIn()?'ซิงค์แล้ว':'ออฟไลน์'}">${CloudSync.isLoggedIn()?'✅':'☁️'}</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ซิงค์ข้อมูลกับ Firebase Firestore — ใช้ได้ทุกอุปกรณ์ iOS, Android, PC</p><div class="form-group"><label>Firebase Config (JSON)</label><textarea id="sFBConfig" rows="5" style="font-size:.72rem;font-family:monospace;resize:vertical" placeholder='&#123;"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."&#125;'>${cfg.firebaseConfig||''}</textarea></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-primary btn-sm" id="btnSaveFB">💾 บันทึก Config</button>${CloudSync.isLoggedIn()?`<button class="btn btn-outline btn-sm" id="btnForcePush">⬆️ Push</button><button class="btn btn-outline btn-sm" id="btnForcePull">⬇️ Pull</button><button class="btn btn-outline btn-sm" id="btnCloudSignOut" style="color:var(--danger)">🚪 ออกจากระบบ</button>`:CloudSync.isConfigured()?`<button class="btn btn-success btn-sm" id="btnCloudSignIn">🔑 Sign in with Google</button>`:''}</div><details style="margin-top:4px"><summary style="font-size:.78rem;color:var(--text-secondary);cursor:pointer">📋 วิธีตั้งค่า Firebase (ขยายดู)</summary><ol style="font-size:.74rem;color:var(--text-secondary);padding:8px 0 0 16px;line-height:2.1"><li>ไปที่ <b>console.firebase.google.com</b> → สร้างโปรเจคใหม่</li><li>เพิ่ม Web App (<b>&lt;/&gt;</b>) → คัดลอก <b>firebaseConfig</b> ทั้งก้อน JSON</li><li>เปิด <b>Firestore Database</b> → สร้างฐานข้อมูล → <b>Test Mode</b></li><li>เปิด <b>Authentication</b> → Sign-in method → เปิดใช้ <b>Google</b></li><li>เพิ่ม domain ที่ใช้งาน (localhost หรือ URL) ใน Authorized domains</li><li>วาง config → กด <b>บันทึก Config</b> → กด <b>☁️ Sign in</b> ใน sidebar</li></ol></details></div><div class="card"><div class="card-header"><span class="card-title">📁 หมวดหมู่ & รายการ</span><button class="btn btn-primary btn-sm" id="btnAddCat">➕ หมวดหมู่</button></div><div class="tabs"><div class="tab active" data-st="cats">หมวดหมู่ (${cats.length})</div><div class="tab" data-st="items">รายการ (${items.length})</div><div class="tab" data-st="groups">หมวดรอง (${groups.length})</div></div><div id="st-cats"><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>ประเภท</th><th>สี</th><th></th></tr></thead><tbody>${cats.map(c=>`<tr><td style="font-size:1.2rem">${c.icon}</td><td>${c.name}</td><td><span class="badge badge-${c.type}">${c.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${c.color}"></span>${c.color}</td><td><button class="btn-ghost btnEC" data-id="${c.id}">✏️</button><button class="btn-ghost btnDC" data-id="${c.id}" style="color:var(--danger)">🗑️</button></td></tr>`).join('')}</tbody></table></div></div><div id="st-items" style="display:none"><div style="margin-bottom:7px"><button class="btn btn-success btn-sm" id="btnAddItem">➕ รายการ</button></div><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>หมวดหมู่</th><th>จำนวนเริ่มต้น</th><th></th></tr></thead><tbody>${items.map(i=>{const cat=cats.find(c=>c.id===i.categoryId)||{icon:'❓',name:'?'};return`<tr><td style="font-size:1rem">${i.icon}</td><td>${i.name}</td><td>${cat.icon} ${cat.name}</td><td>${U.fmtCurrency(i.defaultAmount, cfg.currency)}</td><td><button class="btn-ghost btnEI" data-id="${i.id}">✏️</button><button class="btn-ghost btnDI" data-id="${i.id}" style="color:var(--danger)">🗑️</button></td></tr>`}).join('')}</tbody></table></div></div><div id="st-groups" style="display:none"><div style="margin-bottom:7px"><button class="btn btn-success btn-sm" id="btnAddGroupS">➕ หมวดรอง</button></div><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>หมวดหลัก</th><th></th></tr></thead><tbody>${groups.map(g=>{const cat=cats.find(c=>c.id===g.categoryId)||{icon:'❓',name:'?'};return`<tr><td style="font-size:1rem">${g.icon||'📋'}</td><td>${g.name}</td><td>${cat.icon} ${cat.name}</td><td><button class="btn-ghost btnEG" data-id="${g.id}">✏️</button><button class="btn-ghost btnDG" data-id="${g.id}" style="color:var(--danger)">🗑️</button></td></tr>`}).join('')}</tbody></table></div></div></div><div class="card"><div class="card-header"><span class="card-title">💾 สำรองข้อมูล</span></div><p style="color:var(--text-secondary);margin-bottom:10px;font-size:.84rem">Export ข้อมูลทั้งหมดเป็น JSON เพื่อสำรอง หรือ Import เพื่อกู้คืน</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="btnExportJSON">📤 Export JSON</button><button class="btn btn-outline" id="btnExportCSV">📊 Export CSV</button><label class="btn btn-outline" style="cursor:pointer">📥 Import JSON<input type="file" id="inputImportJSON" accept=".json" style="display:none"></label><label class="btn btn-outline" style="cursor:pointer">📋 Import CSV (ธนาคาร)<input type="file" id="inputImportCSV" accept=".csv,.txt" style="display:none"></label></div></div><div class="card"><div class="card-header"><span class="card-title">🔐 PIN Lock</span><span style="font-size:.72rem;color:var(--text-secondary)">${cfg.pinHash ? '✅ เปิดใช้งาน' : 'ปิดอยู่'}</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ป้องกันการเข้าถึงแอปด้วย PIN 4 หลัก</p><div style="display:flex;gap:8px;flex-wrap:wrap">${cfg.pinHash ? `<button class="btn btn-outline btn-sm" id="btnChangePin">🔄 เปลี่ยน PIN</button><button class="btn btn-outline btn-sm" id="btnRemovePin" style="color:var(--danger)">🗑️ ปิด PIN</button>` : `<button class="btn btn-primary btn-sm" id="btnSetPin">🔐 ตั้ง PIN</button>`}</div></div><div class="card" style="border:2px solid var(--danger)"><div class="card-header"><span class="card-title" style="color:var(--danger)">⚠️ โซนอันตราย</span></div><p style="color:var(--text-secondary);margin-bottom:9px;font-size:.84rem">รีเซ็ตจะลบข้อมูลทั้งหมด</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-danger" id="btnReset">🗑️ รีเซ็ตทั้งหมด</button><button class="btn btn-outline btn-sm" id="btnResetOB">🎯 แสดง Onboarding ใหม่</button></div></div>`;
+<div class="form-group" id="grpGeminiKey" style="${aiProv!=='gemini'?'display:none':''}"><label>Gemini API Key <span style="font-size:.7rem;color:var(--success)">✅ ฟรี!</span></label><input type="password" id="sGeminiKey" value="${cfg.geminiApiKey||''}" placeholder="AIzaSy..."><div style="font-size:.72rem;color:var(--text-secondary);margin-top:4px">รับฟรีที่ aistudio.google.com · 1,500 req/วัน</div>${aiProv==='gemini'&&!cfg.geminiApiKey?'<div style="font-size:.72rem;color:var(--danger);margin-top:2px">⚠️ ยังไม่ได้ตั้งค่า</div>':''}</div><div class="form-group"><label>สกุลเงิน</label><select id="sCur"><option value="THB" ${cfg.currency==='THB'?'selected':''}>บาท (฿)</option><option value="USD" ${cfg.currency==='USD'?'selected':''}>ดอลลาร์ ($)</option><option value="EUR" ${cfg.currency==='EUR'?'selected':''}>ยูโร (€)</option><option value="JPY" ${cfg.currency==='JPY'?'selected':''}>เยน (¥)</option><option value="GBP" ${cfg.currency==='GBP'?'selected':''}>ปอนด์ (£)</option></select></div><div class="form-group"><label>สีธีม (Accent Color)</label><div class="ac-swatches">${accentColors.map(ac=>`<div class="ac-sw ${(cfg.accent||'indigo')===ac.id?'active':''}" style="background:${ac.color}" data-ac="${ac.id}" title="${ac.label}"></div>`).join('')}</div></div><button class="btn btn-primary" id="btnSaveS">💾 บันทึก</button></div><div class="card"><div class="card-header"><span class="card-title">☁️ Cloud Sync</span><span id="syncStatus" class="sync-dot ${CloudSync.isLoggedIn()?'sync-synced':'sync-offline'}" title="${CloudSync.isLoggedIn()?'ซิงค์แล้ว':'ออฟไลน์'}">${CloudSync.isLoggedIn()?'✅':'☁️'}</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ซิงค์ข้อมูลกับ Firebase Firestore — ใช้ได้ทุกอุปกรณ์ iOS, Android, PC</p><div class="form-group"><label>Firebase Config (JSON)</label><textarea id="sFBConfig" rows="5" style="font-size:.72rem;font-family:monospace;resize:vertical" placeholder='&#123;"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."&#125;'>${cfg.firebaseConfig||''}</textarea></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-primary btn-sm" id="btnSaveFB">💾 บันทึก Config</button>${CloudSync.isLoggedIn()?`<button class="btn btn-outline btn-sm" id="btnForcePush">⬆️ Push</button><button class="btn btn-outline btn-sm" id="btnForcePull">⬇️ Pull</button><button class="btn btn-outline btn-sm" id="btnCloudSignOut" style="color:var(--danger)">🚪 ออกจากระบบ</button>`:CloudSync.isConfigured()?`<button class="btn btn-success btn-sm" id="btnCloudSignIn">🔑 Sign in with Google</button>`:''}</div><details style="margin-top:4px"><summary style="font-size:.78rem;color:var(--text-secondary);cursor:pointer">📋 วิธีตั้งค่า Firebase (ขยายดู)</summary><ol style="font-size:.74rem;color:var(--text-secondary);padding:8px 0 0 16px;line-height:2.1"><li>ไปที่ <b>console.firebase.google.com</b> → สร้างโปรเจคใหม่</li><li>เพิ่ม Web App (<b>&lt;/&gt;</b>) → คัดลอก <b>firebaseConfig</b> ทั้งก้อน JSON</li><li>เปิด <b>Firestore Database</b> → สร้างฐานข้อมูล → <b>Test Mode</b></li><li>เปิด <b>Authentication</b> → Sign-in method → เปิดใช้ <b>Google</b></li><li>เพิ่ม domain ที่ใช้งาน (localhost หรือ URL) ใน Authorized domains</li><li>วาง config → กด <b>บันทึก Config</b> → กด <b>☁️ Sign in</b> ใน sidebar</li></ol></details></div>${_qaccCard}<div class="card"><div class="card-header"><span class="card-title">📁 หมวดหมู่ & รายการ</span><button class="btn btn-primary btn-sm" id="btnAddCat">➕ หมวดหมู่</button></div><div class="tabs"><div class="tab active" data-st="cats">หมวดหมู่ (${cats.length})</div><div class="tab" data-st="items">รายการ (${items.length})</div><div class="tab" data-st="groups">หมวดรอง (${groups.length})</div></div><div id="st-cats"><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>ประเภท</th><th>สี</th><th></th></tr></thead><tbody>${cats.map(c=>`<tr><td style="font-size:1.2rem">${c.icon}</td><td>${c.name}</td><td><span class="badge badge-${c.type}">${c.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${c.color}"></span>${c.color}</td><td><button class="btn-ghost btnEC" data-id="${c.id}">✏️</button><button class="btn-ghost btnDC" data-id="${c.id}" style="color:var(--danger)">🗑️</button></td></tr>`).join('')}</tbody></table></div></div><div id="st-items" style="display:none"><div style="margin-bottom:7px"><button class="btn btn-success btn-sm" id="btnAddItem">➕ รายการ</button></div><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>หมวดหมู่</th><th>จำนวนเริ่มต้น</th><th></th></tr></thead><tbody>${items.map(i=>{const cat=cats.find(c=>c.id===i.categoryId)||{icon:'❓',name:'?'};return`<tr><td style="font-size:1rem">${i.icon}</td><td>${i.name}</td><td>${cat.icon} ${cat.name}</td><td>${U.fmtCurrency(i.defaultAmount, cfg.currency)}</td><td><button class="btn-ghost btnEI" data-id="${i.id}">✏️</button><button class="btn-ghost btnDI" data-id="${i.id}" style="color:var(--danger)">🗑️</button></td></tr>`}).join('')}</tbody></table></div></div><div id="st-groups" style="display:none"><div style="margin-bottom:7px"><button class="btn btn-success btn-sm" id="btnAddGroupS">➕ หมวดรอง</button></div><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>หมวดหลัก</th><th></th></tr></thead><tbody>${groups.map(g=>{const cat=cats.find(c=>c.id===g.categoryId)||{icon:'❓',name:'?'};return`<tr><td style="font-size:1rem">${g.icon||'📋'}</td><td>${g.name}</td><td>${cat.icon} ${cat.name}</td><td><button class="btn-ghost btnEG" data-id="${g.id}">✏️</button><button class="btn-ghost btnDG" data-id="${g.id}" style="color:var(--danger)">🗑️</button></td></tr>`}).join('')}</tbody></table></div></div></div><div class="card"><div class="card-header"><span class="card-title">💾 สำรองข้อมูล</span></div><p style="color:var(--text-secondary);margin-bottom:10px;font-size:.84rem">Export ข้อมูลทั้งหมดเป็น JSON เพื่อสำรอง หรือ Import เพื่อกู้คืน</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="btnExportJSON">📤 Export JSON</button><button class="btn btn-outline" id="btnExportCSV">📊 Export CSV</button><label class="btn btn-outline" style="cursor:pointer">📥 Import JSON<input type="file" id="inputImportJSON" accept=".json" style="display:none"></label><label class="btn btn-outline" style="cursor:pointer">📋 Import CSV (ธนาคาร)<input type="file" id="inputImportCSV" accept=".csv,.txt" style="display:none"></label></div></div><div class="card"><div class="card-header"><span class="card-title">🔐 PIN Lock</span><span style="font-size:.72rem;color:var(--text-secondary)">${cfg.pinHash ? '✅ เปิดใช้งาน' : 'ปิดอยู่'}</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ป้องกันการเข้าถึงแอปด้วย PIN 4 หลัก</p><div style="display:flex;gap:8px;flex-wrap:wrap">${cfg.pinHash ? `<button class="btn btn-outline btn-sm" id="btnChangePin">🔄 เปลี่ยน PIN</button><button class="btn btn-outline btn-sm" id="btnRemovePin" style="color:var(--danger)">🗑️ ปิด PIN</button>` : `<button class="btn btn-primary btn-sm" id="btnSetPin">🔐 ตั้ง PIN</button>`}</div></div><div class="card" style="border:2px solid var(--danger)"><div class="card-header"><span class="card-title" style="color:var(--danger)">⚠️ โซนอันตราย</span></div><p style="color:var(--text-secondary);margin-bottom:9px;font-size:.84rem">รีเซ็ตจะลบข้อมูลทั้งหมด</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-danger" id="btnReset">🗑️ รีเซ็ตทั้งหมด</button><button class="btn btn-outline btn-sm" id="btnResetOB">🎯 แสดง Onboarding ใหม่</button></div></div>`;
   },
   attachSettingsEvents() {
+    // Quick-account picker (max 3)
+    document.querySelectorAll('.qaccChk').forEach(chk => chk.addEventListener('change', () => {
+      let sel = [...document.querySelectorAll('.qaccChk')].filter(c => c.checked).map(c => c.dataset.id);
+      if (sel.length > 3) { chk.checked = false; U.toast('เลือกได้สูงสุด 3 บัญชี', 'error'); sel = sel.filter(id => id !== chk.dataset.id); }
+      U.updateConfig({ quickAccounts: sel });
+      U.toast('บันทึกบัญชีลัดแล้ว ✅', 'success');
+    }));
     // AI provider toggle
     document.querySelectorAll('[data-prv]').forEach(btn => btn.addEventListener('click', () => {
       const prv = btn.dataset.prv;
@@ -647,6 +724,7 @@ const Views = {
           if (Array.isArray(data[k])) localStorage.setItem('exp_' + k, JSON.stringify(data[k]));
         });
         if (data._config) localStorage.setItem('exp_config', JSON.stringify(data._config));
+        ST.invalidate();
         U.toast('Import สำเร็จ 📥', 'success');
         App.applyTheme(); App.updateUI(); App.rv('settings');
       } catch (err) {
@@ -816,26 +894,74 @@ const Views = {
 
   _buildMonthView(hp, cats, cfg) {
     const allTxns = ST.getAll('transactions').filter(t => !t._deleted);
-    const months = [...new Set(allTxns.map(t => t.date.slice(0,7)))].sort().reverse();
-    const selMonth = hp.get('month') || U.thisMonth();
+    const mode = hp.get('pmode') === 'year' ? 'year' : 'month';
     const selCat = hp.get('mcat') || '';
     const selItem = hp.get('mitem') || '';
-    if (!months.includes(selMonth)) months.unshift(selMonth);
 
-    const monthLabel = m => {
-      const [y, mo] = m.split('-');
-      try { return new Date(parseInt(y), parseInt(mo)-1, 1).toLocaleDateString('th-TH', {year:'numeric', month:'long'}); } catch(e) { return m; }
-    };
+    // ── Period selection (month or year) ──
+    let periodTxns, navHTML, periodTitle, monthlyBreakdownHTML = '';
+    if (mode === 'year') {
+      const years = [...new Set(allTxns.map(t => t.date.slice(0,4)))].sort().reverse();
+      const selYear = hp.get('year') || String(new Date().getFullYear());
+      if (!years.includes(selYear)) years.unshift(selYear);
+      periodTitle = 'สรุปรายปี';
+      periodTxns = allTxns.filter(t => t.date.startsWith(selYear + '-'));
+      navHTML = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <button class="btn btn-outline btn-sm" id="btnPrevM" style="flex-shrink:0;padding:4px 12px;font-size:1rem">←</button>
+        <select id="yearSelInput" style="flex:1;font-weight:700;text-align:center;font-size:.88rem;padding:5px 8px">
+          ${years.map(y=>`<option value="${y}"${y===selYear?' selected':''}>ปี ${parseInt(y)+543}</option>`).join('')}
+        </select>
+        <button class="btn btn-outline btn-sm" id="btnNextM" style="flex-shrink:0;padding:4px 12px;font-size:1rem">→</button>
+      </div>`;
+      // Monthly breakdown (only on the overview, not in a category drill-down)
+      if (!selCat) {
+        const mNames = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+        const perMonth = mNames.map((nm, i) => {
+          const key = `${selYear}-${String(i+1).padStart(2,'0')}`;
+          const mt = periodTxns.filter(t => t.date.startsWith(key));
+          const s = EH.calcSum(mt);
+          return { nm, key, exp: s.totalExpense, inc: s.totalIncome, cnt: mt.length };
+        });
+        const maxExp = Math.max(...perMonth.map(m=>m.exp), 1);
+        monthlyBreakdownHTML = `<div style="font-size:.7rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin:4px 0 8px">📅 แยกตามเดือน</div>
+          ${perMonth.map(m => `<div class="tl-item" ${m.cnt>0?`data-mmonth="${m.key}" style="cursor:pointer;margin-bottom:5px"`:'style="opacity:.5;margin-bottom:5px"'}>
+            <div style="width:34px;font-size:.76rem;font-weight:700;flex-shrink:0">${m.nm}</div>
+            <div style="flex:1;min-width:0">
+              ${m.exp>0?`<div style="height:6px;background:var(--border);border-radius:3px;overflow:hidden"><div style="height:100%;width:${Math.round(m.exp/maxExp*100)}%;background:var(--expense);border-radius:3px"></div></div>`:'<div style="font-size:.7rem;color:var(--text-secondary)">—</div>'}
+            </div>
+            <div style="text-align:right;flex-shrink:0;min-width:78px">
+              ${m.exp>0?`<div style="font-size:.78rem;font-weight:700;color:var(--expense)">${U.fmtCompact(m.exp,cfg.currency)}</div>`:''}
+              ${m.inc>0?`<div style="font-size:.7rem;color:var(--income)">+${U.fmtCompact(m.inc,cfg.currency)}</div>`:''}
+            </div>
+            ${m.cnt>0?'<span style="color:var(--text-secondary);font-size:.85rem;flex-shrink:0">›</span>':'<span style="width:10px;flex-shrink:0"></span>'}
+          </div>`).join('')}
+          <div style="font-size:.7rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin:14px 0 8px">📊 แยกตามหมวดหมู่ (ทั้งปี)</div>`;
+      }
+    } else {
+      const months = [...new Set(allTxns.map(t => t.date.slice(0,7)))].sort().reverse();
+      const selMonth = hp.get('month') || U.thisMonth();
+      if (!months.includes(selMonth)) months.unshift(selMonth);
+      const monthLabel = m => {
+        const [y, mo] = m.split('-');
+        try { return new Date(parseInt(y), parseInt(mo)-1, 1).toLocaleDateString('th-TH', {year:'numeric', month:'long'}); } catch(e) { return m; }
+      };
+      periodTitle = 'สรุปรายเดือน';
+      periodTxns = allTxns.filter(t => t.date.startsWith(selMonth));
+      navHTML = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
+        <button class="btn btn-outline btn-sm" id="btnPrevM" style="flex-shrink:0;padding:4px 12px;font-size:1rem">←</button>
+        <select id="monthSelInput" style="flex:1;font-weight:700;text-align:center;font-size:.88rem;padding:5px 8px">
+          ${months.map(m=>`<option value="${m}"${m===selMonth?' selected':''}>${monthLabel(m)}</option>`).join('')}
+        </select>
+        <button class="btn btn-outline btn-sm" id="btnNextM" style="flex-shrink:0;padding:4px 12px;font-size:1rem">→</button>
+      </div>`;
+    }
 
-    const monthSel = `<div style="display:flex;align-items:center;gap:8px;margin-bottom:12px">
-      <button class="btn btn-outline btn-sm" id="btnPrevM" style="flex-shrink:0;padding:4px 12px;font-size:1rem">←</button>
-      <select id="monthSelInput" style="flex:1;font-weight:700;text-align:center;font-size:.88rem;padding:5px 8px">
-        ${months.map(m=>`<option value="${m}"${m===selMonth?' selected':''}>${monthLabel(m)}</option>`).join('')}
-      </select>
-      <button class="btn btn-outline btn-sm" id="btnNextM" style="flex-shrink:0;padding:4px 12px;font-size:1rem">→</button>
+    const modeToggle = `<div style="display:flex;gap:5px;margin-bottom:10px">
+      <button class="btn btn-sm ${mode==='month'?'btn-primary':'btn-outline'}" data-pmode="month" style="flex:1">รายเดือน</button>
+      <button class="btn btn-sm ${mode==='year'?'btn-primary':'btn-outline'}" data-pmode="year" style="flex:1">รายปี</button>
     </div>`;
 
-    const monthTxns = allTxns.filter(t => t.date.startsWith(selMonth));
+    const monthTxns = periodTxns;
     const sum = EH.calcSum(monthTxns);
 
     const statsHTML = `<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">
@@ -913,9 +1039,9 @@ const Views = {
         .map(([id,v])=>({id,v,cat:cats.find(c=>c.id===id)||{icon:'❓',name:id,color:'#6366f1'}}))
         .sort((a,b)=>b.v.exp-a.v.exp);
       if (rows.length === 0) {
-        content = '<div class="empty-state"><div class="empty-icon">📭</div>ไม่มีรายการในเดือนนี้</div>';
+        content = monthlyBreakdownHTML + `<div class="empty-state"><div class="empty-icon">📭</div>ไม่มีรายการใน${mode==='year'?'ปีนี้':'เดือนนี้'}</div>`;
       } else {
-        content = `<div style="font-size:.7rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">📊 แยกตามหมวดหมู่</div>
+        content = monthlyBreakdownHTML + `${mode==='year'?'':'<div style="font-size:.7rem;font-weight:700;color:var(--text-secondary);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">📊 แยกตามหมวดหมู่</div>'}
         ${rows.map(({id,v,cat})=>{
           const pct = totalExp>0&&v.exp>0 ? Math.round(v.exp/totalExp*100) : 0;
           return `<div class="tl-item" data-mcat="${id}" style="cursor:pointer;margin-bottom:6px">
@@ -937,10 +1063,10 @@ const Views = {
 
     return `<div class="card">
       <div class="card-header" style="flex-wrap:nowrap">
-        <span class="card-title" style="white-space:nowrap">📆 สรุปรายเดือน</span>
+        <span class="card-title" style="white-space:nowrap">📆 ${periodTitle}</span>
         ${hdrBtns}
       </div>
-      ${monthSel}${statsHTML}${content}
+      ${modeToggle}${navHTML}${statsHTML}${content}
     </div>`;
   },
   renderTrash() {
