@@ -104,7 +104,7 @@ const AccountsView = {
     const transfers = ST.getAll('account_transfers').sort((a,b)=>new Date(b.date)-new Date(a.date)).slice(0,20);
     const transfersContent = `<div class="card"><div class="card-header"><span class="card-title">↔️ ประวัติการโอน</span></div>
       ${transfers.length === 0 ? '<div style="color:var(--text-secondary);font-size:.8rem;padding:8px 0">ยังไม่มีประวัติการโอน</div>' :
-        `<div class="table-wrap"><table><thead><tr><th>วันที่</th><th>จาก</th><th>ถึง</th><th>จำนวน</th><th>หมายเหตุ</th></tr></thead><tbody>${transfers.map(t => {
+        `<div class="table-wrap"><table class="transfer-table"><thead><tr><th>วันที่</th><th>จาก</th><th>ถึง</th><th>จำนวน</th><th>หมายเหตุ</th></tr></thead><tbody>${transfers.map(t => {
           const from = wallets.find(w=>w.id===t.fromId)||cards.find(c=>c.id===t.fromId)||{name:'?',icon:'❓'};
           const to   = wallets.find(w=>w.id===t.toId)  ||cards.find(c=>c.id===t.toId)  ||{name:'?',icon:'❓'};
           return `<tr><td style="font-size:.76rem">${U.fmtDate(t.date)}</td><td>${from.icon} ${from.name}</td><td>${to.icon} ${to.name}</td><td style="font-weight:700;color:var(--accent)">${U.fmtCurrency(t.amount,cfg.currency)}</td><td style="font-size:.76rem;color:var(--text-secondary)">${t.note||'-'}</td></tr>`;

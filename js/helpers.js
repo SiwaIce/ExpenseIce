@@ -466,31 +466,47 @@ function initSwipe(container, onDelete) {
   const items = container.querySelectorAll('.swipe-wrap');
   items.forEach(wrap => {
     const content = wrap.querySelector('.swipe-content'); if (!content) return;
-    let startX = 0, dx = 0, swiping = false;
-    const onStart = e => { startX = (e.touches ? e.touches[0].clientX : e.clientX); swiping = true; dx = 0; };
     const bg = wrap.querySelector('.swipe-del-bg');
+    let startX = 0, startY = 0, dx = 0, swiping = false, dirLocked = false;
+    const reset = () => {
+      content.style.transition = 'transform .2s';
+      content.style.transform = 'translateX(0)';
+      if (bg) bg.style.opacity = '0';
+    };
+    const onStart = e => {
+      startX = e.touches ? e.touches[0].clientX : e.clientX;
+      startY = e.touches ? e.touches[0].clientY : e.clientY;
+      swiping = true; dirLocked = false; dx = 0;
+    };
     const onMove = e => {
       if (!swiping) return;
-      const x = (e.touches ? e.touches[0].clientX : e.clientX);
-      dx = Math.min(0, Math.max(-70, x - startX));
+      const x = e.touches ? e.touches[0].clientX : e.clientX;
+      const y = e.touches ? e.touches[0].clientY : e.clientY;
+      const ddx = x - startX, ddy = y - startY;
+      // Direction lock: if vertical movement wins first, cancel swipe
+      if (!dirLocked) {
+        if (Math.abs(ddy) > Math.abs(ddx) && Math.abs(ddy) > 6) { swiping = false; reset(); return; }
+        if (Math.abs(ddx) > 6) dirLocked = true;
+        else return;
+      }
+      dx = Math.min(0, Math.max(-90, ddx));
       content.style.transition = 'none';
       content.style.transform = `translateX(${dx}px)`;
-      if (bg) bg.style.opacity = String(Math.min(1, Math.abs(dx) / 45));
+      if (bg) bg.style.opacity = String(Math.min(1, Math.abs(dx) / 70));
     };
     const onEnd = () => {
+      if (!swiping) return;
       swiping = false;
-      if (dx < -45) {
+      if (dx < -70) {
         content.style.transition = 'transform .2s';
-        content.style.transform = 'translateX(-65px)';
+        content.style.transform = 'translateX(-80px)';
         if (bg) bg.style.opacity = '1';
         const id = wrap.dataset.id;
         setTimeout(() => {
           deleteTransaction(id, () => App.rv(App.cv), () => App.rv(App.cv));
         }, 300);
       } else {
-        content.style.transition = 'transform .2s';
-        content.style.transform = 'translateX(0)';
-        if (bg) bg.style.opacity = '0';
+        reset();
       }
     };
     wrap.addEventListener('touchstart', onStart, { passive: true });
