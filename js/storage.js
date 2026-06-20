@@ -83,6 +83,16 @@ const U = {
     if (isNaN(n)) return (s[cur] || cur) + '0.00';
     return (s[cur] || cur) + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
   },
+  fmtCompact(a, cur = 'THB') {
+    const s = { THB: '฿', USD: '$', EUR: '€', JPY: '¥', GBP: '£' };
+    const n = Number(a);
+    if (isNaN(n)) return (s[cur] || cur) + '0';
+    const sign = n < 0 ? '-' : '';
+    const abs = Math.abs(n);
+    if (abs >= 1000000) return sign + (s[cur] || cur) + (abs / 1000000).toFixed(abs >= 10000000 ? 0 : 1).replace(/\.0$/, '') + 'M';
+    if (abs >= 100000) return sign + (s[cur] || cur) + (abs / 1000).toFixed(0) + 'k';
+    return this.fmtCurrency(n, cur);
+  },
   fmtDate(iso) {
     if (!iso) return '-';
     return new Date(iso).toLocaleDateString('th-TH', { year:'numeric', month:'short', day:'numeric' });

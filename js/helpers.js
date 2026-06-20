@@ -476,7 +476,7 @@ function initSwipe(container, onDelete) {
     const onStart = e => {
       startX = e.touches ? e.touches[0].clientX : e.clientX;
       startY = e.touches ? e.touches[0].clientY : e.clientY;
-      swiping = true; dirLocked = false; dx = 0;
+      swiping = true; dirLocked = false; dx = 0; content._suppressClick = false;
     };
     const onMove = e => {
       if (!swiping) return;
@@ -486,7 +486,7 @@ function initSwipe(container, onDelete) {
       // Direction lock: if vertical movement wins first, cancel swipe
       if (!dirLocked) {
         if (Math.abs(ddy) > Math.abs(ddx) && Math.abs(ddy) > 6) { swiping = false; reset(); return; }
-        if (Math.abs(ddx) > 6) dirLocked = true;
+        if (Math.abs(ddx) > 6) { dirLocked = true; content._suppressClick = true; }
         else return;
       }
       dx = Math.min(0, Math.max(-90, ddx));

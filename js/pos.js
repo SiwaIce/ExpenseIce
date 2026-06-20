@@ -307,8 +307,7 @@ const POS = {
               <span style="font-size:.77rem;font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'};flex-shrink:0">${U.fmtCurrency(t.amount, cfg.currency)}</span>
               ${t.receiptUrl ? `<img src="${t.receiptUrl}" class="receipt-thumb" title="ดูใบเสร็จ" onclick="event.stopPropagation();window.open('${t.receiptUrl}','_blank')">` : ''}
               <button class="btn-ghost" style="padding:2px 3px;font-size:.68rem;color:var(--accent);flex-shrink:0" data-dup="${t.id}" title="ซ้ำรายการ">🔁</button>
-              <button class="btn-ghost" style="padding:2px 3px;font-size:.68rem;flex-shrink:0" data-et="${t.id}">✏️</button>
-              <button class="btn-ghost" style="padding:2px 3px;font-size:.68rem;color:var(--danger);flex-shrink:0" data-dt="${t.id}">🗑️</button>
+              <button class="btn-ghost" style="padding:2px 3px;font-size:.68rem;flex-shrink:0" data-et="${t.id}" title="แก้ไข">✏️</button>
             </div>
           </div>`;
         }).join('')}
@@ -430,6 +429,19 @@ const POS = {
       if (ok) deleteTransaction(btn.dataset.dt, () => App.rv('add'), () => App.rv('add'));
     }));
     const tl = document.getElementById('todayList'); if (tl) initSwipe(tl);
+    // Tap row to edit (skip taps on buttons or real swipes)
+    document.querySelectorAll('#todayList .swipe-content').forEach(row => row.addEventListener('click', e => {
+      if (e.target.closest('button,a,img')) return;
+      if (row._suppressClick) { row._suppressClick = false; return; }
+      const id = row.closest('.swipe-wrap')?.dataset.id;
+      const txn = id ? ST.getById('transactions', id) : null;
+      if (txn) this.openModal(null, null, txn);
+    }));
+    if (window.__flashTxnId) {
+      const fr = document.querySelector(`#todayList .swipe-wrap[data-id="${window.__flashTxnId}"] .swipe-content`);
+      if (fr) { fr.classList.add('row-flash'); fr.scrollIntoView({ block: 'nearest' }); }
+      window.__flashTxnId = null;
+    }
     document.getElementById('receiptInput')?.addEventListener('change', async (e) => {
       const file = e.target.files[0]; if (!file) return;
       const status = document.getElementById('receiptStatus');
@@ -480,7 +492,7 @@ const POS = {
     let numVal = String(defAmt || '');
     const isMobile = window.innerWidth <= 640;
     const o = document.createElement('div'); o.className = isMobile ? 'bs-overlay' : 'modal-overlay';
-    const _buildModalActions = () => `<div class="modal-actions" style="flex:0 0 auto;padding:12px 16px 14px;margin-top:0;border-top:1px solid var(--border)"><button class="btn btn-outline" id="mCan">ยกเลิก</button><button class="btn ${t0==='expense'?'btn-expense':'btn-income'}" id="mSave">💾 บันทึก</button></div>`;
+    const _buildModalActions = () => `<div class="modal-actions" style="flex:0 0 auto;padding:12px 16px 14px;margin-top:0;border-top:1px solid var(--border)">${isEdit ? `<button class="btn btn-outline" id="mRecur" title="ตั้งเป็นรายการประจำ" style="margin-right:auto">🔄 ตั้งประจำ</button>` : ''}<button class="btn btn-outline" id="mCan">ยกเลิก</button><button class="btn ${t0==='expense'?'btn-expense':'btn-income'}" id="mSave">💾 บันทึก</button></div>`;
     const modalTitle = isEdit ? '✏️ แก้ไขรายการ' : item ? `${item.icon} ${item.name}` : prefill?.subCatName ? `${prefill.subCatIcon||'📋'} ${prefill.subCatName}` : '➕ เพิ่มรายการ';
     const buildModalHTML = () => isMobile
       ? `<div class="bs-sheet" style="display:flex;flex-direction:column;max-height:93vh;overflow:hidden"><div class="bs-handle" id="bsHandle"></div><h3 style="font-size:1rem;font-weight:600;margin:0 0 10px;flex:0 0 auto">${modalTitle}</h3><div style="flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:2px 0">${_buildModalBody()}</div>${_buildModalActions()}</div>`
@@ -705,6 +717,12 @@ const POS = {
     o.querySelector('#mCan').onclick = () => o.remove();
     o.onclick = e => { if (e.target === o) o.remove(); };
     o.querySelector('#bsHandle')?.addEventListener('click', () => o.remove());
+    o.querySelector('#mRecur')?.addEventListener('click', () => {
+      if (!isEdit || typeof RV === 'undefined') return;
+      o.remove();
+      App.rv('recurring');
+      setTimeout(() => RV.openModal({ name: editTxn.itemName || '', type: editTxn.type, amount: editTxn.amount, categoryId: editTxn.categoryId, dayOfMonth: new Date(editTxn.date).getDate() }), 200);
+    });
     o.querySelector('#mSave').onclick = () => {
       const type = o.querySelector('#mT').value;
       const amount = parseFloat(numVal);
@@ -731,6 +749,7 @@ const POS = {
         const lentEdit = type === 'expense' && !!(o.querySelector('#mLent')?.checked);
         const lentToEdit = lentEdit ? (o.querySelector('#mLentTo')?.value || '') : '';
         ST.update('transactions', editTxn.id, { type, amount, categoryId, itemName, date, note, accountId, reimbursable: reimbEdit, reimburseStatus: reimbEdit ? (editTxn.reimburseStatus || 'pending') : '', lent: lentEdit, lentStatus: lentEdit ? (editTxn.lentStatus || 'pending') : '', lentTo: lentToEdit });
+        window.__flashTxnId = editTxn.id;
       } else {
         const isInstCC = type === 'expense' && accountId ? !!ST.getById('credit_cards', accountId) : false;
         const instEnabled = isInstCC && !!(o.querySelector('#mInstToggle')?.checked);
@@ -741,6 +760,7 @@ const POS = {
         const lent = type === 'expense' && !!(o.querySelector('#mLent')?.checked);
         const lentTo = lent ? (o.querySelector('#mLentTo')?.value || '') : '';
         const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, date, time: new Date().toTimeString().slice(0,5), note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '', lent, lentStatus: lent ? 'pending' : '', lentTo });
+        window.__flashTxnId = newTxn.id;
         // Upload pending receipt image to Firebase Storage
         const pendingFile = POS._pendingReceiptFile;
         POS._pendingReceiptFile = null;
@@ -777,7 +797,7 @@ const POS = {
       }
       U.toast(isEdit ? 'อัปเดตแล้ว ✅' : 'บันทึกแล้ว ✅', 'success');
       o.remove();
-      App.rv('add');
+      App.rv(App.cv === 'transactions' ? 'transactions' : 'add');
     };
   }
 };

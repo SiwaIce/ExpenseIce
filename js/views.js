@@ -115,7 +115,7 @@ const Views = {
             <div class="tl-right">
               ${t.receiptUrl ? `<img src="${t.receiptUrl}" class="receipt-thumb" title="ดูใบเสร็จ" onclick="event.stopPropagation();window.open('${t.receiptUrl}','_blank')">` : ''}
               <span class="tl-amount" style="color:${t.type==='income'?'var(--income)':'var(--expense)'}">${t.type==='income'?'+':''}${U.fmtCurrency(t.amount, cfg.currency)}</span>
-              <div class="tl-act"><button class="btn-ghost" data-te="${t.id}" title="แก้ไข">✏️</button><button class="btn-ghost" data-td="${t.id}" title="ลบ">🗑️</button><button class="btn-ghost" data-tr="${t.id}" title="ตั้งเป็นรายการประจำ">🔄</button></div>
+              <div class="tl-act"><button class="btn-ghost" data-te="${t.id}" title="แก้ไข">✏️</button></div>
             </div>
           </div></div>`;
         }).join('')}
@@ -130,9 +130,9 @@ const Views = {
       f.search ? _fchip(`🔍 ${f.search}`) : ''
     ].filter(Boolean).join('');
 
-    return `<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);gap:6px"><div class="stat-card income"><div class="stat-label">รายรับ</div><div class="stat-value" style="font-size:clamp(.75rem,3.5vw,1.1rem)">${U.fmtCurrency(sum.totalIncome, cfg.currency)}</div></div><div class="stat-card expense"><div class="stat-label">รายจ่าย</div><div class="stat-value" style="font-size:clamp(.75rem,3.5vw,1.1rem)">${U.fmtCurrency(sum.totalExpense, cfg.currency)}</div></div><div class="stat-card balance"><div class="stat-label">คงเหลือ</div><div class="stat-value" style="font-size:clamp(.75rem,3.5vw,1.1rem)">${U.fmtCurrency(sum.balance, cfg.currency)}</div></div></div>
+    return `<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);gap:6px"><div class="stat-card income"><div class="stat-label">รายรับ</div><div class="stat-value" style="font-size:clamp(.75rem,3.5vw,1.1rem)" title="${U.fmtCurrency(sum.totalIncome, cfg.currency)}">${U.fmtCompact(sum.totalIncome, cfg.currency)}</div></div><div class="stat-card expense"><div class="stat-label">รายจ่าย</div><div class="stat-value" style="font-size:clamp(.75rem,3.5vw,1.1rem)" title="${U.fmtCurrency(sum.totalExpense, cfg.currency)}">${U.fmtCompact(sum.totalExpense, cfg.currency)}</div></div><div class="stat-card balance"><div class="stat-label">คงเหลือ</div><div class="stat-value" style="font-size:clamp(.75rem,3.5vw,1.1rem)" title="${U.fmtCurrency(sum.balance, cfg.currency)}">${U.fmtCompact(sum.balance, cfg.currency)}</div></div></div>
     <div class="card"><div class="card-header" style="flex-wrap:nowrap"><span class="card-title" style="white-space:nowrap">📋 รายการ (${txns.length})</span>
-      <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center;overflow-x:auto;flex-shrink:1;min-width:0"><button class="btn ${view==='timeline'?'btn-primary':'btn-outline'} btn-sm" data-vt="timeline" title="ไทม์ไลน์">📅</button><button class="btn ${view==='table'?'btn-primary':'btn-outline'} btn-sm" data-vt="table" title="ตาราง">📊</button><button class="btn btn-outline btn-sm" data-vt="month" title="สรุปรายเดือน">📆</button><button class="btn btn-primary btn-sm" id="btnAddT" title="เพิ่มรายการ">➕</button><button class="btn btn-outline btn-sm" id="btnStmtScan" title="นำเข้า Statement">📄</button><button class="btn btn-outline btn-sm" id="btnSlipScan" title="สแกนสลิป">📲</button><button class="btn btn-outline btn-sm" id="btnExpCSV" title="Export CSV">📥</button><button class="btn btn-outline btn-sm" id="btnImpCSV" title="Import CSV">📤</button><input type="file" id="csvFI" accept=".csv" style="display:none"></div>
+      <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center;flex-shrink:0"><button class="btn ${view==='timeline'?'btn-primary':'btn-outline'} btn-sm" data-vt="timeline" title="ไทม์ไลน์">📅</button><button class="btn ${view==='table'?'btn-primary':'btn-outline'} btn-sm" data-vt="table" title="ตาราง">📊</button><button class="btn ${view==='month'?'btn-primary':'btn-outline'} btn-sm" data-vt="month" title="สรุปรายเดือน">📆</button><button class="btn btn-primary btn-sm" id="btnAddT" title="เพิ่มรายการ">➕</button><div class="toolbar-menu"><button class="btn btn-outline btn-sm" id="btnTbMenu" title="เพิ่มเติม">⋯</button><div class="toolbar-menu-pop" id="tbMenuPop" style="display:none"><button id="btnStmtScan">📄 นำเข้า Statement</button><button id="btnSlipScan">📲 สแกนสลิป</button><button id="btnExpCSV">📥 Export CSV</button><button id="btnImpCSV">📤 Import CSV</button></div></div><input type="file" id="csvFI" accept=".csv" style="display:none"></div>
     </div>
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
       <div style="flex:1;display:flex;gap:3px;flex-wrap:wrap;align-items:center;min-width:0;overflow:hidden">${filterChipsHTML}<span style="font-size:.71rem;color:var(--text-secondary);white-space:nowrap">${f.dateFrom.slice(5).replace('-','/')} – ${f.dateTo.slice(5).replace('-','/')}</span></div>
@@ -156,11 +156,27 @@ const Views = {
       <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;cursor:pointer;flex:0 0 auto;white-space:nowrap"><input type="checkbox" id="fHasReceipt" ${f.hasReceipt?'checked':''}> มีใบเสร็จเท่านั้น</label>
     </div>
     </div>
-    ${view==='timeline' ? `<div id="tlContainer">${txns.length===0?'<div class="empty-state"><div class="empty-icon">📭</div>ยังไม่มีรายการ</div>':timelineHTML}</div>` : `<div class="table-wrap"><table class="txn-table"><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายการ</th><th>จำนวน</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>${txns.length===0?`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-secondary)">ยังไม่มีรายการ</td></tr>`:txns.map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?',color:'#ccc'};return`<tr><td style="font-size:.78rem">${U.fmtDate(t.date)}${t.time?`<div style="font-size:.68rem;color:var(--text-secondary)">🕐${t.time}</div>`:''}</td><td><span class="badge badge-${t.type}">${t.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${cat.color}"></span>${cat.icon} ${cat.name}</td><td style="font-size:.8rem">${t.itemName||'-'}</td><td style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.78rem;color:var(--text-secondary)">${(t.note && t.note !== 'undefined') ? t.note : '-'}</td><td style="display:flex;gap:4px;padding:6px 10px"><button class="btn-ghost btnE" data-id="${t.id}" title="แก้ไข">✏️</button><button class="btn-ghost btnD" data-id="${t.id}" title="ลบ">🗑️</button></td></tr>`}).join('')}</tbody></table></div>`}
+    ${view==='timeline' ? `<div id="tlContainer">${txns.length===0?`<div class="empty-state"><div class="empty-icon">📭</div>${totalActiveFilters>0?'ไม่พบรายการตามตัวกรอง':'ยังไม่มีรายการ'}<div><button class="btn btn-primary empty-cta" id="btnEmptyAdd">➕ บันทึกรายการแรก</button></div></div>`:timelineHTML}</div>` : `<div class="table-wrap"><table class="txn-table"><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายการ</th><th>จำนวน</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>${txns.length===0?`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-secondary)">ยังไม่มีรายการ</td></tr>`:txns.map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?',color:'#ccc'};return`<tr><td style="font-size:.78rem">${U.fmtDate(t.date)}${t.time?`<div style="font-size:.68rem;color:var(--text-secondary)">🕐${t.time}</div>`:''}</td><td><span class="badge badge-${t.type}">${t.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${cat.color}"></span>${cat.icon} ${cat.name}</td><td style="font-size:.8rem">${t.itemName||'-'}</td><td style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.78rem;color:var(--text-secondary)">${(t.note && t.note !== 'undefined') ? t.note : '-'}</td><td style="display:flex;gap:4px;padding:6px 10px"><button class="btn-ghost btnE" data-id="${t.id}" title="แก้ไข">✏️</button><button class="btn-ghost btnD" data-id="${t.id}" title="ลบ">🗑️</button></td></tr>`}).join('')}</tbody></table></div>`}
     </div>`;
   },
   attachTxnEvents() {
     document.getElementById('btnAddT')?.addEventListener('click', () => POS.openModal(null, null, null));
+    document.getElementById('btnEmptyAdd')?.addEventListener('click', () => POS.openModal(null, null, null));
+    // Overflow "⋯" menu toggle
+    const tbMenu = document.getElementById('btnTbMenu');
+    const tbPop = document.getElementById('tbMenuPop');
+    if (tbMenu && tbPop) {
+      tbMenu.addEventListener('click', e => {
+        e.stopPropagation();
+        const open = tbPop.style.display === 'none';
+        tbPop.style.display = open ? 'flex' : 'none';
+        tbMenu.className = `btn btn-sm ${open ? 'btn-primary' : 'btn-outline'}`;
+      });
+      tbPop.addEventListener('click', () => { tbPop.style.display = 'none'; tbMenu.className = 'btn btn-outline btn-sm'; });
+      document.addEventListener('click', function onDoc(ev) {
+        if (!tbPop.contains(ev.target) && ev.target !== tbMenu) { tbPop.style.display = 'none'; if (tbMenu) tbMenu.className = 'btn btn-outline btn-sm'; }
+      });
+    }
     document.getElementById('btnStmtScan')?.addEventListener('click', () => this.openStatementScanner());
     document.getElementById('btnSlipScan')?.addEventListener('click', () => this.openSlipScanner());
     document.getElementById('btnExpCSV')?.addEventListener('click', () => {
@@ -224,6 +240,19 @@ const Views = {
     }));
     document.querySelectorAll('.btnE').forEach(btn => btn.addEventListener('click', () => editFn(btn.dataset.id)));
     document.querySelectorAll('.btnD').forEach(btn => btn.addEventListener('click', () => delFn(btn.dataset.id)));
+    // Tap row to edit (ignore taps on buttons/links/receipt, and taps that were really a swipe)
+    document.querySelectorAll('#tlContainer .swipe-content').forEach(row => row.addEventListener('click', e => {
+      if (e.target.closest('button,a,img,.tl-act')) return;
+      if (row._suppressClick) { row._suppressClick = false; return; }
+      const id = row.closest('.swipe-wrap')?.dataset.id;
+      if (id) editFn(id);
+    }));
+    // Flash the just-saved row
+    if (window.__flashTxnId) {
+      const fr = document.querySelector(`#tlContainer .swipe-wrap[data-id="${window.__flashTxnId}"] .swipe-content`);
+      if (fr) { fr.classList.add('row-flash'); fr.scrollIntoView({ block: 'center', behavior: 'smooth' }); }
+      window.__flashTxnId = null;
+    }
     // Month view handlers
     const _hashM = () => new URLSearchParams(window.location.hash.replace('#',''));
     const _goM = nhp => { window.location.hash = nhp.toString(); App.rv('transactions'); };
@@ -810,20 +839,23 @@ const Views = {
     const sum = EH.calcSum(monthTxns);
 
     const statsHTML = `<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:14px">
-      <div class="stat-card income"><div class="stat-label">รายรับ</div><div class="stat-value" style="font-size:clamp(.7rem,3.8vw,.9rem)">${U.fmtCurrency(sum.totalIncome,cfg.currency)}</div></div>
-      <div class="stat-card expense"><div class="stat-label">รายจ่าย</div><div class="stat-value" style="font-size:clamp(.7rem,3.8vw,.9rem)">${U.fmtCurrency(sum.totalExpense,cfg.currency)}</div></div>
-      <div class="stat-card balance"><div class="stat-label">คงเหลือ</div><div class="stat-value" style="font-size:clamp(.7rem,3.8vw,.9rem);color:${sum.balance>=0?'var(--income)':'var(--expense)'}">${U.fmtCurrency(sum.balance,cfg.currency)}</div></div>
+      <div class="stat-card income"><div class="stat-label">รายรับ</div><div class="stat-value" style="font-size:clamp(.7rem,3.8vw,.9rem)" title="${U.fmtCurrency(sum.totalIncome,cfg.currency)}">${U.fmtCompact(sum.totalIncome,cfg.currency)}</div></div>
+      <div class="stat-card expense"><div class="stat-label">รายจ่าย</div><div class="stat-value" style="font-size:clamp(.7rem,3.8vw,.9rem)" title="${U.fmtCurrency(sum.totalExpense,cfg.currency)}">${U.fmtCompact(sum.totalExpense,cfg.currency)}</div></div>
+      <div class="stat-card balance"><div class="stat-label">คงเหลือ</div><div class="stat-value" style="font-size:clamp(.7rem,3.8vw,.9rem);color:${sum.balance>=0?'var(--income)':'var(--expense)'}" title="${U.fmtCurrency(sum.balance,cfg.currency)}">${U.fmtCompact(sum.balance,cfg.currency)}</div></div>
     </div>`;
 
-    const hdrBtns = `<div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center;overflow-x:auto">
+    const hdrBtns = `<div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center;flex-shrink:0">
       <button class="btn btn-outline btn-sm" data-vt="timeline" title="ไทม์ไลน์">📅</button>
       <button class="btn btn-outline btn-sm" data-vt="table" title="ตาราง">📊</button>
       <button class="btn btn-primary btn-sm" data-vt="month" title="สรุปรายเดือน">📆</button>
       <button class="btn btn-primary btn-sm" id="btnAddT" title="เพิ่มรายการ">➕</button>
-      <button class="btn btn-outline btn-sm" id="btnStmtScan" title="นำเข้า Statement">📄</button>
-      <button class="btn btn-outline btn-sm" id="btnSlipScan" title="สแกนสลิป">📲</button>
-      <button class="btn btn-outline btn-sm" id="btnExpCSV" title="Export CSV">📥</button>
-      <button class="btn btn-outline btn-sm" id="btnImpCSV" title="Import CSV">📤</button>
+      <div class="toolbar-menu"><button class="btn btn-outline btn-sm" id="btnTbMenu" title="เพิ่มเติม">⋯</button>
+        <div class="toolbar-menu-pop" id="tbMenuPop" style="display:none">
+          <button id="btnStmtScan">📄 นำเข้า Statement</button>
+          <button id="btnSlipScan">📲 สแกนสลิป</button>
+          <button id="btnExpCSV">📥 Export CSV</button>
+          <button id="btnImpCSV">📤 Import CSV</button>
+        </div></div>
       <input type="file" id="csvFI" accept=".csv" style="display:none">
     </div>`;
 

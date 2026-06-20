@@ -752,6 +752,19 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
   .acc-tab-bar{flex-wrap:wrap!important;overflow-x:visible!important}
   .acc-tab{flex:1 1 auto!important;text-align:center!important;min-width:0!important;padding:6px 6px!important;font-size:.74rem!important}
 }
+/* ── UX polish (rows, flash, fab clearance, icons, empty CTA) ── */
+@keyframes rowFlash{0%{background:var(--accent-light);box-shadow:0 0 0 2px var(--accent)}100%{background:transparent;box-shadow:none}}
+.row-flash{animation:rowFlash 1.4s ease-out}
+.txn-item>span:first-child{display:inline-flex;align-items:center;justify-content:center;width:22px;flex-shrink:0;line-height:1}
+.tl-ico>span{display:flex;align-items:center;justify-content:center;line-height:1}
+.tl-act .btn-ghost{display:inline-flex;align-items:center;justify-content:center}
+#tlContainer,#todayList{padding-bottom:6px}
+.tl-day-group:last-child{margin-bottom:74px}
+.empty-cta{margin-top:14px;display:inline-flex;align-items:center;gap:6px}
+.toolbar-menu{position:relative;flex-shrink:0}
+.toolbar-menu-pop{position:absolute;right:0;top:calc(100% + 4px);background:var(--bg-card);border:1px solid var(--border);border-radius:12px;box-shadow:0 8px 24px rgba(0,0,0,.16);padding:5px;z-index:60;display:flex;flex-direction:column;gap:2px;min-width:178px}
+.toolbar-menu-pop button{display:flex;align-items:center;gap:9px;width:100%;justify-content:flex-start;background:transparent;border:none;padding:9px 11px;border-radius:8px;font-size:.82rem;color:var(--text);cursor:pointer;white-space:nowrap}
+.toolbar-menu-pop button:hover{background:var(--bg-input)}
 </style>
 </head>
 <body>

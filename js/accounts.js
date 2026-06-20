@@ -21,9 +21,9 @@ const AccountsView = {
     const pendingAllCount = pendingR.length + pendingLent.length;
 
     const summaryHTML = `<div class="stats-grid" style="grid-template-columns:repeat(2,1fr);gap:8px;margin-bottom:12px">
-      <div class="stat-card income"><div class="stat-label">เงิน+บัญชีรวม</div><div class="stat-value">${U.fmtCurrency(totalWallet, cfg.currency)}</div></div>
-      <div class="stat-card expense"><div class="stat-label">หนี้บัตรเครดิต</div><div class="stat-value">${U.fmtCurrency(totalDebt, cfg.currency)}</div></div>
-      <div class="stat-card balance"><div class="stat-label">ทรัพย์สินสุทธิ</div><div class="stat-value">${U.fmtCurrency(totalWallet - totalDebt, cfg.currency)}</div></div>
+      <div class="stat-card income"><div class="stat-label">เงิน+บัญชีรวม</div><div class="stat-value" title="${U.fmtCurrency(totalWallet, cfg.currency)}">${U.fmtCompact(totalWallet, cfg.currency)}</div></div>
+      <div class="stat-card expense"><div class="stat-label">หนี้บัตรเครดิต</div><div class="stat-value" title="${U.fmtCurrency(totalDebt, cfg.currency)}">${U.fmtCompact(totalDebt, cfg.currency)}</div></div>
+      <div class="stat-card balance"><div class="stat-label">ทรัพย์สินสุทธิ</div><div class="stat-value" title="${U.fmtCurrency(totalWallet - totalDebt, cfg.currency)}">${U.fmtCompact(totalWallet - totalDebt, cfg.currency)}</div></div>
       <div class="stat-card" style="border-left:3px solid var(--warning);cursor:pointer" data-acctab="reimburse">
         <div class="stat-label">🤝 ค้างรับทั้งหมด</div>
         <div class="stat-value" style="color:var(--warning)">${U.fmtCurrency(pendingAllTotal, cfg.currency)}</div>
