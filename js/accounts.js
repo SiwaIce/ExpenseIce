@@ -57,7 +57,7 @@ const AccountsView = {
           const inc = txns.filter(t => t.accountId===w.id && t.type==='income').reduce((s,t)=>s+Number(t.amount),0);
           const exp = txns.filter(t => t.accountId===w.id && t.type==='expense').reduce((s,t)=>s+Number(t.amount),0);
           const wtl = {cash:'เงินสด',bank:'ธนาคาร',digital:'กระเป๋าเงิน',saving:'ออมทรัพย์'}[w.wtype]||w.wtype;
-          return `<div class="acc-card"><div class="acc-type-bar" style="background:${w.color}"></div><span class="acc-icon">${w.icon}</span><div class="acc-name">${w.name}</div><div class="acc-balance ${w.balance>=0?'pos':'neg'}">${U.fmtCurrency(w.balance,cfg.currency)}</div><div class="acc-subtext">${wtl}${inc>0||exp>0?` • รับ ${U.fmtCurrency(inc,cfg.currency)} จ่าย ${U.fmtCurrency(exp,cfg.currency)}`:'ยังไม่มีรายการ'}</div><div style="display:flex;gap:3px;margin-top:8px;justify-content:flex-end"><button class="btn btn-outline btn-sm" data-watr="${w.id}">↔️ โอน</button><button class="btn-ghost btn-sm" data-waed="${w.id}">✏️</button><button class="btn-ghost btn-sm" style="color:var(--danger)" data-wadl="${w.id}">🗑️</button></div></div>`;
+          return `<div class="acc-card"><div class="acc-type-bar" style="background:${w.color}"></div><button class="acc-fav-btn ${w.fav?'on':''}" data-wafav="${w.id}" title="ปุ่มลัดบันทึกด่วน">${w.fav?'⭐':'☆'}</button><span class="acc-icon">${w.icon}</span><div class="acc-name">${w.name}</div><div class="acc-balance ${w.balance>=0?'pos':'neg'}">${U.fmtCurrency(w.balance,cfg.currency)}</div><div class="acc-subtext">${wtl}${inc>0||exp>0?` • รับ ${U.fmtCurrency(inc,cfg.currency)} จ่าย ${U.fmtCurrency(exp,cfg.currency)}`:'ยังไม่มีรายการ'}</div><div style="display:flex;gap:3px;margin-top:8px;justify-content:flex-end"><button class="btn btn-outline btn-sm" data-watr="${w.id}">↔️ โอน</button><button class="btn-ghost btn-sm" data-waed="${w.id}">✏️</button><button class="btn-ghost btn-sm" style="color:var(--danger)" data-wadl="${w.id}">🗑️</button></div></div>`;
         }).join('')}</div>`}
     </div>`;
 
@@ -83,6 +83,7 @@ const AccountsView = {
           const monthSpend = txns.filter(t=>t.accountId===cc.id&&t.date.startsWith(U.thisMonth())).reduce((s,t)=>s+Number(t.amount),0);
           const dueDays = cc.dueDay ? (() => { const now=new Date(),due=new Date(now.getFullYear(),now.getMonth(),cc.dueDay); if(due<now)due.setMonth(due.getMonth()+1); return Math.ceil((due-now)/86400000); })() : null;
           return `<div class="cc-card ${cc.network||'other'}">
+            <button class="acc-fav-btn cc" data-ccfav="${cc.id}" title="ปุ่มลัดบันทึกด่วน">${cc.fav?'⭐':'☆'}</button>
             <div class="cc-chip"></div>
             <div class="cc-number">•••• •••• •••• ${cc.lastFour||'0000'}</div>
             <div class="cc-name-row"><span class="cc-bank">${cc.name}</span><span class="cc-network">${(cc.network||'').replace('cashcard','CASH').toUpperCase()}</span></div>
@@ -163,6 +164,12 @@ const AccountsView = {
       if (ok) { ST.softDelete('wallet_accounts', btn.dataset.wadl); U.toast('ลบแล้ว 🗑️', 'success'); App.rv('accounts'); }
     }));
     document.querySelectorAll('[data-watr]').forEach(btn => btn.addEventListener('click', () => this.openTransferModal(btn.dataset.watr)));
+    document.querySelectorAll('[data-wafav]').forEach(btn => btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const w = ST.getById('wallet_accounts', btn.dataset.wafav); if (!w) return;
+      ST.update('wallet_accounts', w.id, { fav: !w.fav });
+      App.rv('accounts');
+    }));
     // Card actions
     document.querySelectorAll('[data-cced]').forEach(btn => btn.addEventListener('click', () => {
       const cc = ST.getById('credit_cards', btn.dataset.cced); if (cc) this.openCCModal(cc);
@@ -178,6 +185,12 @@ const AccountsView = {
     }));
     document.querySelectorAll('[data-ccpay]').forEach(btn => btn.addEventListener('click', () => this.openCCPayModal(btn.dataset.ccpay)));
     document.querySelectorAll('[data-ccplan]').forEach(btn => btn.addEventListener('click', () => this.openInstallmentPlansModal(btn.dataset.ccplan)));
+    document.querySelectorAll('[data-ccfav]').forEach(btn => btn.addEventListener('click', e => {
+      e.stopPropagation();
+      const cc = ST.getById('credit_cards', btn.dataset.ccfav); if (!cc) return;
+      ST.update('credit_cards', cc.id, { fav: !cc.fav });
+      App.rv('accounts');
+    }));
     // Reimburse — mark received
     document.querySelectorAll('[data-reimb]').forEach(btn => btn.addEventListener('click', async () => {
       const txn = ST.getById('transactions', btn.dataset.reimb); if (!txn) return;

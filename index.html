@@ -245,6 +245,10 @@ button,a,label,input,select,textarea,.nchip,.preset-btn,.dshort,.type-btn,.chat-
 .fc-fill{height:100%;border-radius:4px;transition:width .4s}
 .acc-grid{display:grid;grid-template-columns:repeat(auto-fill,minmax(200px,1fr));gap:10px;margin-bottom:14px}
 .acc-card{background:var(--bg-card);border:1.5px solid var(--border);border-radius:13px;padding:14px 15px;cursor:pointer;transition:all .15s;box-shadow:var(--shadow);position:relative;overflow:hidden}
+.acc-fav-btn{position:absolute;top:8px;right:8px;background:none;border:none;font-size:1.15rem;cursor:pointer;line-height:1;padding:3px;z-index:1;opacity:.6;transition:opacity .12s,transform .12s}
+.acc-fav-btn.on{opacity:1}
+.acc-fav-btn:active{transform:scale(1.2)}
+.acc-fav-btn.cc{color:#fff}
 .acc-card:hover{transform:translateY(-2px);box-shadow:var(--shadow-md);border-color:var(--accent)}
 .acc-card.selected{border-color:var(--accent);background:var(--accent-light)}
 .acc-type-bar{position:absolute;top:0;left:0;right:0;height:3px}
@@ -1046,7 +1050,7 @@ window.addEventListener('DOMContentLoaded', () => {
       <select id="miniCat" style="width:100%;margin-bottom:10px;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:.85rem">${cats.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}</select>
       <div id="miniSub" class="modal-subcats" style="margin-bottom:10px"></div>
       <div id="miniDisp" style="font-size:1.9rem;font-weight:800;text-align:center;color:var(--accent);margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:10px;min-height:54px;letter-spacing:.02em">฿ 0</div>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">${['7','8','9','4','5','6','1','2','3','del','0','.'].map(n => `<button class="mini-np-btn" data-mn="${n}">${n === 'del' ? '⌫' : n}</button>`).join('')}</div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">${['1','2','3','4','5','6','7','8','9','del','0','.'].map(n => `<button class="mini-np-btn" data-mn="${n}">${n === 'del' ? '⌫' : n}</button>`).join('')}</div>
       <button id="miniSave" style="width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;transition:.15s">💾 บันทึก</button>`;
 
       document.body.appendChild(bg);
