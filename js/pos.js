@@ -331,7 +331,6 @@ const POS = {
               <button class="type-btn ${this.type==='income'?'ai':''}" data-type="income">รายรับ</button>
             </div>
           </div>
-          ${this._accBarHTML()}
           ${posContent}
           <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px">
             <label class="btn btn-outline btn-sm" style="cursor:pointer;font-size:.76rem" title="สแกนใบเสร็จด้วย AI">📷 สแกนใบเสร็จ<input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none"></label>
@@ -412,22 +411,31 @@ const POS = {
         e.stopPropagation();
         const iid = btn.dataset.qaFn; const name = btn.dataset.qaN; const amt = Number(btn.dataset.qaA) || 0; const cat = btn.dataset.qaC || '';
         const item = iid ? ST.getById('items', iid) : null;
-        const _now = new Date().toTimeString().slice(0,5);
-        // Prefer the account this item was last paid from, else the active quick account
-        const acc = (item && this._itemAcc(item.id)) || this._activeAcc();
-        if (item) {
-          const tx = ST.add('transactions', { type: this.type, amount: item.defaultAmount, categoryId: item.categoryId, itemId: item.id, itemName: item.name, date: U.today(), time: _now, note: '', accountId: acc });
-          window.__flashTxnId = tx.id;
-          this._applyAcctDelta(acc, this.type, item.defaultAmount, false);
-          if (acc) this._rememberItemAcc(item.id, acc);
-          this.flash(`${item.icon} ${item.name} ${U.fmtCurrency(item.defaultAmount)}`);
-        } else if (name) {
-          const tx = ST.add('transactions', { type: this.type, amount: amt, categoryId: cat, itemName: name, date: U.today(), time: _now, note: '', accountId: acc });
-          window.__flashTxnId = tx.id;
-          this._applyAcctDelta(acc, this.type, amt, false);
-          this.flash(`${name} ${U.fmtCurrency(amt)}`);
+        const label = item ? `${item.icon} ${item.name} ${U.fmtCurrency(item.defaultAmount)}` : `${name} ${U.fmtCurrency(amt)}`;
+        const save = (acc) => {
+          const _now = new Date().toTimeString().slice(0,5);
+          if (item) {
+            const tx = ST.add('transactions', { type: this.type, amount: item.defaultAmount, categoryId: item.categoryId, itemId: item.id, itemName: item.name, date: U.today(), time: _now, note: '', accountId: acc });
+            window.__flashTxnId = tx.id;
+            this._applyAcctDelta(acc, this.type, item.defaultAmount, false);
+            if (acc) this._rememberItemAcc(item.id, acc);
+            this.flash(`${item.icon} ${item.name} ${U.fmtCurrency(item.defaultAmount)}`);
+          } else if (name) {
+            const tx = ST.add('transactions', { type: this.type, amount: amt, categoryId: cat, itemName: name, date: U.today(), time: _now, note: '', accountId: acc });
+            window.__flashTxnId = tx.id;
+            this._applyAcctDelta(acc, this.type, amt, false);
+            this.flash(`${name} ${U.fmtCurrency(amt)}`);
+          }
+          App.rv('add');
+        };
+        // Quick-add: let the user pick which account to pay from (fast popup of the
+        // accounts configured in settings). Only for expenses with ≥1 quick account.
+        const suggested = (item && this._itemAcc(item.id)) || this._activeAcc();
+        if (this.type === 'expense' && this._quickAccs().length > 0) {
+          this._quickAccPicker(label, suggested, save);
+        } else {
+          save(suggested);
         }
-        App.rv('add');
       });
     });
     document.querySelectorAll('[data-dup]').forEach(btn => btn.addEventListener('click', e => {
@@ -526,6 +534,34 @@ const POS = {
     if (w) { const delta = (type === 'income' ? amount : -amount) * sign; ST.update('wallet_accounts', accountId, { balance: (w.balance || 0) + delta }); }
     else if (cc && type === 'expense') { ST.update('credit_cards', accountId, { used: Math.max(0, (cc.used || 0) + amount * sign) }); }
   },
+  // Fast account picker shown when quick-adding (#) — choose which account to pay from,
+  // using the accounts configured in settings. `suggested` is pre-highlighted.
+  _quickAccPicker(label, suggested, onPick) {
+    const accs = this._quickAccs();
+    if (accs.length === 0) { onPick(this._activeAcc()); return; }
+    const cfg = U.getConfig();
+    const balOf = id => {
+      const w = ST.getById('wallet_accounts', id); if (w) return U.fmtCurrency(w.balance || 0, cfg.currency);
+      const cc = ST.getById('credit_cards', id); if (cc) return 'เครดิตเหลือ ' + U.fmtCurrency(Math.max(0, (cc.limit || 0) - (cc.used || 0)), cfg.currency);
+      return '';
+    };
+    const o = document.createElement('div'); o.className = 'qap-overlay';
+    o.innerHTML = `<div class="qap-sheet">
+      <div class="qap-head">💸 ${label}<div class="qap-sub">ตัดจากบัญชีไหน?</div></div>
+      ${accs.map(a => `<button class="qap-acc ${suggested === a.id ? 'sug' : ''}" data-acc="${a.id}"><span class="qap-acc-name">${a.icon} ${a.name}</span><span class="qap-bal">${balOf(a.id)}</span></button>`).join('')}
+      <button class="qap-acc qap-none ${!suggested ? 'sug' : ''}" data-acc="">ไม่ระบุบัญชี</button>
+      <button class="qap-cancel" id="qapCancel">ยกเลิก</button>
+    </div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    const close = () => o.remove();
+    o.addEventListener('click', e => { if (e.target === o) close(); });
+    o.querySelector('#qapCancel').onclick = close;
+    o.querySelectorAll('.qap-acc').forEach(b => b.addEventListener('click', () => {
+      this._setActiveAcc(b.dataset.acc); // remember choice as the new active default
+      close();
+      onPick(b.dataset.acc);
+    }));
+  },
   _accBarHTML() {
     const accs = this._quickAccs();
     if (accs.length === 0) return '';
@@ -543,10 +579,12 @@ const POS = {
     if (!categoryId) return '';
     const groups = ST.getAll('item_groups').filter(g => g.categoryId === categoryId);
     if (groups.length === 0) return '';
+    const cat = ST.getById('categories', categoryId) || {};
+    const color = cat.color || '#6366f1';
     const txns = ST.getAll('transactions');
     const cnt = {}; groups.forEach(g => { cnt[g.id] = txns.filter(t => t.itemName === g.name).length; });
     const sorted = groups.slice().sort((a, b) => (cnt[b.id] || 0) - (cnt[a.id] || 0));
-    return sorted.map(g => `<button type="button" class="subcat-chip ${activeName === g.name ? 'active' : ''}" data-sc-name="${g.name.replace(/"/g, '&quot;')}" data-sc-icon="${g.icon || '📋'}">${g.icon || '📋'} ${g.name}</button>`).join('');
+    return sorted.map(g => `<button type="button" class="subcat-chip ${activeName === g.name ? 'active' : ''}" data-sc-name="${g.name.replace(/"/g, '&quot;')}" data-sc-icon="${g.icon || '📋'}" style="--sc-color:${color}"><span class="sc-ico">${g.icon || '📋'}</span><span class="sc-name">${g.name}</span></button>`).join('');
   },
   openModal(item, catId, editTxn, prefill = null) {
     const cats = ST.getAll('categories'); const cfg = U.getConfig();
@@ -585,7 +623,7 @@ const POS = {
       <div class="form-group" id="mOutgoingGrp" style="${t0 !== 'expense' ? 'display:none' : ''}"><div style="display:flex;flex-direction:column;gap:6px"><label class="inst-toggle-row"><input type="checkbox" id="mReimburse" ${isEdit && editTxn && editTxn.reimbursable ? 'checked' : ''}><span>🔄 รอเบิกคืน <span style="font-size:.72rem;color:var(--text-secondary)">(จ่ายแทน เบิกทีหลัง)</span></span></label><label class="inst-toggle-row"><input type="checkbox" id="mLent" ${isEdit && editTxn && editTxn.lent ? 'checked' : ''}><span>🤝 ให้ยืม <span style="font-size:.72rem;color:var(--text-secondary)">(รอรับเงินคืน)</span></span></label><div id="mLentToGrp" style="${isEdit && editTxn && editTxn.lent ? '' : 'display:none'}"><input type="text" id="mLentTo" placeholder="ชื่อคนที่ยืม..." value="${isEdit && editTxn && editTxn.lentTo ? editTxn.lentTo : ''}" style="margin-top:5px"></div></div></div>
       <div class="form-group"><label>จำนวนเงิน</label><div style="display:flex;gap:6px;align-items:center"><div class="amt-display focused" id="npDisp" style="flex:1">${U.fmtCurrency(Number(numVal)||0, cfg.currency)}</div><button class="btn-ghost" id="voiceBtn" title="พูดจำนวนเงิน" style="font-size:1.05rem;padding:6px 9px;border:1px solid var(--border);flex-shrink:0">🎤</button><button class="btn-ghost" id="splitBtn" title="แบ่งบิล" style="font-size:.75rem;padding:6px 8px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap">÷ แบ่ง</button></div><div id="splitRow" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;padding:8px;background:var(--bg-input);border-radius:8px"><span style="font-size:.78rem">แบ่ง</span><input type="number" id="splitN" value="2" min="2" max="20" style="width:55px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:.85rem;background:var(--bg-card);color:var(--text)"><span style="font-size:.78rem">คน คนละ</span><span id="splitResult" style="font-weight:700;color:var(--accent);font-size:.88rem">-</span><button class="btn btn-sm btn-outline" id="splitApply" style="font-size:.74rem;padding:3px 10px">ใช้</button></div><div class="presets" id="mPresets">${presets.map(a => `<button class="preset-btn" data-pv="${a}">${U.fmtCurrency(a, cfg.currency)}</button>`).join('')}</div><div class="numpad">${['7','8','9','4','5','6','1','2','3'].map(n => `<button class="np" data-n="${n}">${n}</button>`).join('')}<button class="np np-del" data-n="del">⌫</button><button class="np" data-n="0">0</button><button class="np" data-n=".">.</button></div></div>
       <div class="form-group"><label>หมวดหมู่</label><select id="mC">${cats.map(c => `<option value="${c.id}" ${defCat===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select></div>
-      <div class="form-group" id="mSubcatGrp" style="${this._modalSubcatsHTML(defCat, prefill?.subCatName || defName) ? '' : 'display:none'}"><label style="font-size:.74rem;color:var(--text-secondary)">หมวดย่อย</label><div class="modal-subcats" id="mSubcats">${this._modalSubcatsHTML(defCat, prefill?.subCatName || defName)}</div></div>
+      <div class="form-group" id="mSubcatGrp" style="${this._modalSubcatsHTML(defCat, prefill?.subCatName || defName) ? '' : 'display:none'}"><label style="font-size:.74rem;color:var(--text-secondary)">🏷 หมวดย่อย <span style="font-weight:400">· แตะเพื่อเลือก</span></label><div class="modal-subcats" id="mSubcats">${this._modalSubcatsHTML(defCat, prefill?.subCatName || defName)}</div></div>
       ${catQuickItems.length > 0 ? `<div class="form-group"><label style="font-size:.74rem;color:var(--text-secondary)">รายการที่บันทึกไว้</label><div class="nchips" id="qiChips">${catQuickItems.map(it => `<button type="button" class="nchip qi-chip" data-qi-name="${it.name}" data-qi-amt="${it.defaultAmount||0}">${it.icon} ${it.name}</button>`).join('')}</div></div>` : ''}
       <div class="form-group"><label>ชื่อรายการ</label><input type="text" id="mN" value="${defName}" placeholder="เช่น ข้าวผัด, น้ำมัน..."></div>
       <div class="form-group" id="mAccGrp"><label id="mAccLbl">บัญชี</label><div class="acc-select-grid" id="mAccSelect"><span style="font-size:.74rem;color:var(--text-secondary)">กำลังโหลด...</span></div><input type="hidden" id="mAccId" value="${defAcc}"></div>

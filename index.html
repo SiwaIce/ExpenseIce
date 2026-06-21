@@ -779,10 +779,39 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 .qacc-chip.qacc-none{color:var(--text-secondary)}
 .qacc-chip.qacc-none.active{background:var(--text-secondary);border-color:var(--text-secondary);color:#fff}
 /* Subcategory chips (inside record modal) */
-.modal-subcats{display:flex;align-items:center;gap:6px;flex-wrap:wrap}
-.subcat-chip{font-size:.78rem;font-weight:600;padding:6px 12px;border-radius:18px;border:1.5px solid var(--border);background:var(--bg-card);color:var(--text);cursor:pointer;white-space:nowrap;transition:all .12s}
-.subcat-chip:hover,.subcat-chip:active{border-color:var(--accent);background:var(--accent-light);color:var(--accent)}
-.subcat-chip.active{border-color:var(--accent);background:var(--accent);color:#fff}
+.modal-subcats{display:flex;align-items:center;gap:7px;flex-wrap:wrap}
+.subcat-chip{display:inline-flex;align-items:center;gap:6px;font-size:.82rem;font-weight:600;padding:8px 13px;border-radius:20px;border:1.5px solid var(--border);background:var(--bg-card);color:var(--text);cursor:pointer;white-space:nowrap;transition:transform .1s,background .12s,border-color .12s,color .12s;-webkit-tap-highlight-color:transparent}
+.subcat-chip .sc-ico{font-size:1.05rem;line-height:1}
+.subcat-chip:active{transform:scale(.94)}
+.subcat-chip:hover{border-color:var(--sc-color,var(--accent))}
+.subcat-chip.active{border-color:var(--sc-color,var(--accent));background:var(--sc-color,var(--accent));color:#fff;box-shadow:0 2px 8px color-mix(in srgb,var(--sc-color,var(--accent)) 35%,transparent)}
+/* Filter "has receipt" checkbox row */
+.flt-check{display:flex;align-items:center;gap:9px;flex:1 1 100%;min-width:0;padding:9px 11px;border:1px solid var(--border);border-radius:10px;background:var(--bg-card);cursor:pointer;font-size:.84rem;font-weight:500}
+.flt-check input{flex:0 0 auto;width:18px;height:18px;margin:0}
+.flt-check span{flex:1;min-width:0}
+/* Account pill in transaction rows (tap → filter by that account) */
+.tl-acc{display:inline-flex;align-items:center;max-width:100%;margin-top:3px;padding:2px 9px;border-radius:12px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-secondary);font-size:.66rem;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-tap-highlight-color:transparent}
+.tl-acc:active{transform:scale(.95)}
+.tl-acc:hover{border-color:var(--accent);color:var(--accent)}
+/* Quick-account settings rows */
+.qacc-set-row{display:flex;align-items:center;justify-content:space-between;gap:12px;padding:12px 14px;border:1.5px solid var(--border);border-radius:12px;cursor:pointer;transition:border-color .12s,background .12s}
+.qacc-set-row.on{border-color:var(--accent);background:var(--accent-light)}
+.qacc-set-info{display:flex;align-items:center;gap:10px;font-size:.92rem;font-weight:600;min-width:0;overflow:hidden;text-overflow:ellipsis;white-space:nowrap}
+.qacc-set-info .qs-ico{font-size:1.25rem;flex-shrink:0}
+.qacc-set-row input{flex:0 0 auto;width:20px;height:20px;margin:0;accent-color:var(--accent)}
+/* Quick-add account picker */
+.qap-overlay{position:fixed;inset:0;background:rgba(0,0,0,.45);z-index:400;display:flex;align-items:flex-end;justify-content:center;animation:fadeIn .15s ease}
+.qap-sheet{background:var(--bg-card);width:100%;max-width:460px;border-radius:18px 18px 0 0;padding:16px 16px calc(18px + env(safe-area-inset-bottom,0px));box-shadow:0 -6px 24px rgba(0,0,0,.2);animation:qapUp .22s ease}
+@keyframes qapUp{from{transform:translateY(100%)}to{transform:translateY(0)}}
+.qap-head{font-size:.95rem;font-weight:700;margin-bottom:12px;text-align:center}
+.qap-sub{font-size:.74rem;color:var(--text-secondary);font-weight:400;margin-top:2px}
+.qap-acc{display:flex;align-items:center;justify-content:space-between;gap:10px;width:100%;padding:14px 15px;margin-bottom:8px;border:1.5px solid var(--border);border-radius:13px;background:var(--bg-input);color:var(--text);font-size:.92rem;font-weight:600;cursor:pointer;transition:all .12s}
+.qap-acc:active{transform:scale(.98)}
+.qap-acc.sug{border-color:var(--accent);background:var(--accent-light)}
+.qap-bal{font-size:.74rem;color:var(--text-secondary);font-weight:500;white-space:nowrap}
+.qap-none{justify-content:center;color:var(--text-secondary)}
+.qap-cancel{width:100%;padding:12px;margin-top:4px;border:none;background:transparent;color:var(--text-secondary);font-size:.88rem;font-weight:600;cursor:pointer}
+@media(min-width:560px){.qap-overlay{align-items:center}.qap-sheet{border-radius:18px}}
 </style>
 </head>
 <body>
@@ -1002,7 +1031,9 @@ window.addEventListener('DOMContentLoaded', () => {
       </div>
       <div id="miniDisp" style="font-size:1.9rem;font-weight:800;text-align:center;color:var(--accent);margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:10px;min-height:54px;letter-spacing:.02em">฿ 0</div>
       <select id="miniCat" style="width:100%;margin-bottom:10px;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:.85rem">${cats.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}</select>
-      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:8px">${['7','8','9','4','5','6','1','2','3','del','0','.'].map(n => `<button class="mini-np-btn" data-mn="${n}">${n === 'del' ? '⌫' : n}</button>`).join('')}</div>
+      <div id="miniSub" class="modal-subcats" style="margin-bottom:10px"></div>
+      <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">${['7','8','9','4','5','6','1','2','3','del','0','.'].map(n => `<button class="mini-np-btn" data-mn="${n}">${n === 'del' ? '⌫' : n}</button>`).join('')}</div>
+      <div id="miniAccRow" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
       <button id="miniSave" style="width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;transition:.15s">💾 บันทึก</button>`;
 
       document.body.appendChild(bg);
@@ -1018,6 +1049,42 @@ window.addEventListener('DOMContentLoaded', () => {
         else if (n !== '.' && mVal.length < 10) mVal += n;
         fmtDisp();
       }));
+
+      // Subcategory chips — appear after the main category is chosen (#)
+      let mSub = '';
+      const subBox = el.querySelector('#miniSub');
+      const renderSub = () => {
+        const html = (typeof POS !== 'undefined' && POS._modalSubcatsHTML) ? POS._modalSubcatsHTML(el.querySelector('#miniCat').value, mSub) : '';
+        subBox.innerHTML = html;
+        subBox.style.display = html ? 'flex' : 'none';
+      };
+      renderSub();
+      el.querySelector('#miniCat').addEventListener('change', () => { mSub = ''; renderSub(); });
+      subBox.addEventListener('click', e => {
+        const chip = e.target.closest('.subcat-chip'); if (!chip) return;
+        mSub = (mSub === chip.dataset.scName) ? '' : chip.dataset.scName; // toggle
+        renderSub();
+      });
+
+      // Account chips — pick which account to pay from (uses quick accounts from settings)
+      let mAcc = (typeof POS !== 'undefined' && POS._activeAcc) ? POS._activeAcc() : '';
+      const accRow = el.querySelector('#miniAccRow');
+      const renderAcc = () => {
+        const accs = (typeof POS !== 'undefined' && POS._quickAccs) ? POS._quickAccs() : [];
+        if (!accs.length) { accRow.style.display = 'none'; return; }
+        accRow.style.display = 'flex';
+        accRow.innerHTML = '<span class="qacc-lbl">ตัดจาก</span>' +
+          accs.map(a => `<button type="button" class="qacc-chip ${mAcc === a.id ? 'active' : ''}" data-acc="${a.id}">${a.icon} ${a.name}</button>`).join('') +
+          `<button type="button" class="qacc-chip qacc-none ${!mAcc ? 'active' : ''}" data-acc="">ไม่ระบุ</button>`;
+      };
+      renderAcc();
+      accRow.addEventListener('click', e => {
+        const b = e.target.closest('[data-acc]'); if (!b) return;
+        mAcc = b.dataset.acc;
+        if (typeof POS !== 'undefined' && POS._setActiveAcc) POS._setActiveAcc(mAcc);
+        renderAcc();
+      });
+
       el.querySelector('#miniClose').onclick = () => closeMiniNumpad();
       el.querySelector('#miniSave').onclick = () => {
         const amount = parseFloat(mVal);
@@ -1025,8 +1092,11 @@ window.addEventListener('DOMContentLoaded', () => {
         const catId = el.querySelector('#miniCat').value;
         const cat = cats.find(c => c.id === catId) || {};
         if (typeof ST !== 'undefined') {
-          ST.add('transactions', { type: 'expense', amount, categoryId: catId, itemName: cat.name || '', date: typeof U !== 'undefined' ? U.today() : new Date().toISOString().slice(0, 10), note: '' });
-          if (typeof U !== 'undefined') U.toast(`✅ ${cat.icon || ''} ${cat.name || ''} ${amount.toLocaleString('th-TH')} บันทึกแล้ว`, 'success');
+          const now = new Date().toTimeString().slice(0, 5);
+          const tx = ST.add('transactions', { type: 'expense', amount, categoryId: catId, itemName: mSub || cat.name || '', date: typeof U !== 'undefined' ? U.today() : new Date().toISOString().slice(0, 10), time: now, note: '', accountId: mAcc });
+          if (typeof POS !== 'undefined' && POS._applyAcctDelta) POS._applyAcctDelta(mAcc, 'expense', amount, false);
+          window.__flashTxnId = tx.id;
+          if (typeof U !== 'undefined') U.toast(`✅ ${cat.icon || ''} ${mSub || cat.name || ''} ${amount.toLocaleString('th-TH')} บันทึกแล้ว`, 'success');
           if (typeof App !== 'undefined') App.rv('add');
         }
         closeMiniNumpad();

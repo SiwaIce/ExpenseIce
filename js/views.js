@@ -83,6 +83,7 @@ const Views = {
     const wallets = ST.getAll('wallet_accounts');
     const creditCards = ST.getAll('credit_cards');
     const allAccounts = [...wallets.map(w => ({ id: w.id, label: `${w.icon} ${w.name}` })), ...creditCards.map(c => ({ id: c.id, label: `💳 ${c.name}` }))];
+    const accMap = {}; allAccounts.forEach(a => { accMap[a.id] = a.label; });
     const advOpen = localStorage.getItem('exp_advFilter') === '1';
     const f = {
       type: hp.get('type') || 'all',
@@ -111,7 +112,7 @@ const Views = {
           const cat = cats.find(c => c.id === t.categoryId) || { icon: '❓', name: '?', color: '#ccc' };
           return `<div class="swipe-wrap" data-id="${t.id}"><div class="swipe-del-bg">🗑️</div><div class="swipe-content tl-item">
             <div class="tl-ico" style="background:${cat.color}22"><span style="font-size:1.1rem">${cat.icon}</span></div>
-            <div class="tl-info"><div class="tl-name">${t.itemName || cat.name}</div><div class="tl-cat">${cat.name}${t.time ? ' · 🕐'+t.time : ''}${(t.note && t.note !== 'undefined') ? ' · ' + t.note : ''}</div></div>
+            <div class="tl-info"><div class="tl-name">${t.itemName || cat.name}</div><div class="tl-cat">${cat.name}${t.time ? ' · 🕐'+t.time : ''}${(t.note && t.note !== 'undefined') ? ' · ' + t.note : ''}</div>${t.accountId && accMap[t.accountId] ? `<button type="button" class="tl-acc" data-accfilter="${t.accountId}" title="ดูทั้งหมดของบัญชีนี้">${accMap[t.accountId]}</button>` : ''}</div>
             <div class="tl-right">
               ${t.receiptUrl ? `<img src="${t.receiptUrl}" class="receipt-thumb" title="ดูใบเสร็จ" onclick="event.stopPropagation();window.open('${t.receiptUrl}','_blank')">` : ''}
               <span class="tl-amount" style="color:${t.type==='income'?'var(--income)':'var(--expense)'}">${t.type==='income'?'+':''}${U.fmtCurrency(t.amount, cfg.currency)}</span>
@@ -127,6 +128,7 @@ const Views = {
     const filterChipsHTML = [
       f.type !== 'all' ? _fchip(f.type === 'income' ? '💚 รายรับ' : '🔴 รายจ่าย') : '',
       activeCat ? _fchip(`${activeCat.icon} ${activeCat.name}`) : '',
+      f.accountId && accMap[f.accountId] ? _fchip(accMap[f.accountId]) : '',
       f.search ? _fchip(`🔍 ${f.search}`) : ''
     ].filter(Boolean).join('');
 
@@ -153,7 +155,7 @@ const Views = {
       <select id="fAcc" style="flex:1;min-width:130px"><option value="">ทุกบัญชี</option>${allAccounts.map(a=>`<option value="${a.id}" ${f.accountId===a.id?'selected':''}>${a.label}</option>`).join('')}</select>
       <input type="number" id="fAmtMin" placeholder="จำนวนต่ำสุด" value="${f.amountMin}" min="0" style="flex:1;min-width:110px">
       <input type="number" id="fAmtMax" placeholder="จำนวนสูงสุด" value="${f.amountMax}" min="0" style="flex:1;min-width:110px">
-      <label style="display:flex;align-items:center;gap:6px;font-size:.82rem;cursor:pointer;flex:1 1 100%;min-width:0"><input type="checkbox" id="fHasReceipt" style="flex:0 0 auto" ${f.hasReceipt?'checked':''}> <span>มีใบเสร็จเท่านั้น</span></label>
+      <label class="flt-check"><input type="checkbox" id="fHasReceipt" ${f.hasReceipt?'checked':''}> <span>🧾 เฉพาะรายการที่มีใบเสร็จ</span></label>
     </div>
     </div>
     ${view==='timeline' ? `<div id="tlContainer">${txns.length===0?`<div class="empty-state"><div class="empty-icon">📭</div>${totalActiveFilters>0?'ไม่พบรายการตามตัวกรอง':'ยังไม่มีรายการ'}<div><button class="btn btn-primary empty-cta" id="btnEmptyAdd">➕ บันทึกรายการแรก</button></div></div>`:timelineHTML}</div>` : `<div class="table-wrap"><table class="txn-table"><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายการ</th><th>จำนวน</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>${txns.length===0?`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-secondary)">ยังไม่มีรายการ</td></tr>`:txns.map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?',color:'#ccc'};return`<tr><td style="font-size:.78rem">${U.fmtDate(t.date)}${t.time?`<div style="font-size:.68rem;color:var(--text-secondary)">🕐${t.time}</div>`:''}</td><td><span class="badge badge-${t.type}">${t.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${cat.color}"></span>${cat.icon} ${cat.name}</td><td style="font-size:.8rem">${t.itemName||'-'}</td><td style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.78rem;color:var(--text-secondary)">${(t.note && t.note !== 'undefined') ? t.note : '-'}</td><td style="display:flex;gap:4px;padding:6px 10px"><button class="btn-ghost btnE" data-id="${t.id}" title="แก้ไข">✏️</button><button class="btn-ghost btnD" data-id="${t.id}" title="ลบ">🗑️</button></td></tr>`}).join('')}</tbody></table></div>`}
@@ -259,6 +261,15 @@ const Views = {
       if (row._suppressClick) { row._suppressClick = false; return; }
       const id = row.closest('.swipe-wrap')?.dataset.id;
       if (id) editFn(id);
+    }));
+    // Tap an account pill → filter the list to that account
+    document.querySelectorAll('[data-accfilter]').forEach(el => el.addEventListener('click', e => {
+      e.stopPropagation();
+      const p = new URLSearchParams(window.location.hash.replace('#', ''));
+      p.set('acc', el.dataset.accfilter);
+      const s = p.toString();
+      if (window.location.hash.replace(/^#/, '') === s) App.rv('transactions');
+      else window.location.hash = s;
     }));
     // Flash the just-saved row
     if (window.__flashTxnId) {
@@ -634,10 +645,10 @@ const Views = {
       const accs = [...ST.getAll('wallet_accounts').map(w => ({ id: w.id, icon: w.icon || '🏦', name: w.name })), ...ST.getAll('credit_cards').map(c => ({ id: c.id, icon: '💳', name: c.name }))];
       if (accs.length === 0) return '';
       const sel = cfg.quickAccounts || [];
-      return `<div class="card"><div class="card-header"><span class="card-title">⚡ บัญชีลัด (บันทึกด่วน)</span></div>
-        <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:10px">เลือกได้สูงสุด 3 บัญชี/บัตร เพื่อเป็นปุ่มลัดในหน้าบันทึก — เวลากดบันทึกด่วนจะตัดเงินจากบัญชีที่เลือกไว้</p>
-        <div style="display:flex;flex-direction:column;gap:7px">
-          ${accs.map(a => `<label style="display:flex;align-items:center;gap:9px;font-size:.86rem;cursor:pointer;padding:7px 10px;border:1px solid var(--border);border-radius:9px"><input type="checkbox" class="qaccChk" data-id="${a.id}" ${sel.includes(a.id) ? 'checked' : ''}> ${a.icon} ${a.name}</label>`).join('')}
+      return `<div class="card"><div class="card-header"><span class="card-title">⚡ บัญชีลัด (บันทึกด่วน)</span><span style="font-size:.74rem;color:var(--text-secondary)">เลือกได้ถึง 3</span></div>
+        <p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">เลือกบัญชี/บัตรที่ใช้บ่อย เพื่อให้ขึ้นเป็นปุ่มลัดตอนบันทึกด่วน</p>
+        <div style="display:flex;flex-direction:column;gap:8px">
+          ${accs.map(a => `<label class="qacc-set-row ${sel.includes(a.id) ? 'on' : ''}"><span class="qacc-set-info"><span class="qs-ico">${a.icon}</span>${a.name}</span><input type="checkbox" class="qaccChk" data-id="${a.id}" ${sel.includes(a.id) ? 'checked' : ''}></label>`).join('')}
         </div></div>`;
     })();
     return `<div class="card"><div class="card-header"><span class="card-title">⚙️ การตั้งค่า</span></div><div class="form-group"><label>ชื่อผู้ใช้</label><input type="text" id="sUN" value="${cfg.userName||'ผู้ใช้'}"></div>
@@ -650,6 +661,7 @@ const Views = {
     document.querySelectorAll('.qaccChk').forEach(chk => chk.addEventListener('change', () => {
       let sel = [...document.querySelectorAll('.qaccChk')].filter(c => c.checked).map(c => c.dataset.id);
       if (sel.length > 3) { chk.checked = false; U.toast('เลือกได้สูงสุด 3 บัญชี', 'error'); sel = sel.filter(id => id !== chk.dataset.id); }
+      document.querySelectorAll('.qaccChk').forEach(c => c.closest('.qacc-set-row')?.classList.toggle('on', c.checked));
       U.updateConfig({ quickAccounts: sel });
       U.toast('บันทึกบัญชีลัดแล้ว ✅', 'success');
     }));
