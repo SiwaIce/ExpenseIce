@@ -61,11 +61,11 @@ const EH = {
       const g = ST.getById('item_groups', k.slice(2));
       if (!g) return null;
       const cat = g.categoryId ? (ST.getById('categories', g.categoryId) || {}) : {};
-      return { name: g.name, icon: g.icon || cat.icon || '📋', defaultAmount: lastTxn.amount || 0, categoryId: g.categoryId || lastTxn.categoryId || '' };
+      return { name: g.name, icon: g.icon || cat.icon || '📋', defaultAmount: lastTxn.amount || 0, categoryId: g.categoryId || lastTxn.categoryId || '', accountId: lastTxn.accountId || '' };
     }
     if (k.startsWith('n:')) {
       const cat = lastTxn.categoryId ? (ST.getById('categories', lastTxn.categoryId) || {}) : {};
-      return { name: k.slice(2), icon: cat.icon || '📝', defaultAmount: lastTxn.amount || 0, categoryId: lastTxn.categoryId || '' };
+      return { name: k.slice(2), icon: cat.icon || '📝', defaultAmount: lastTxn.amount || 0, categoryId: lastTxn.categoryId || '', accountId: lastTxn.accountId || '' };
     }
     return ST.getById('items', k);
   },

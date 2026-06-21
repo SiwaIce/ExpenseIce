@@ -2,7 +2,7 @@
 <html lang="th" data-theme="light">
 <head>
 <meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
 <title>💰 Expense Tracker</title>
 <link rel="preconnect" href="https://fonts.googleapis.com">
 <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -150,6 +150,7 @@ body.privacy-mode .tw-amt:hover{filter:none}
 .item-icon{font-size:1.5rem;display:block;margin-bottom:4px;line-height:1}
 .item-name{font-size:.72rem;font-weight:600;color:var(--text);display:block;line-height:1.3}
 .item-amount-sm{font-size:.62rem;color:var(--text-secondary);display:block;margin-top:1px}
+.item-acc-tag{font-size:.58rem;color:var(--accent);display:block;margin-top:2px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;max-width:100%}
 .qa-btn{position:absolute;bottom:0;right:0;width:28px;height:28px;background:var(--accent);color:#fff;border:none;cursor:pointer;font-size:1rem;font-weight:700;display:flex;align-items:center;justify-content:center;border-radius:12px 0 12px 0;transition:all .14s;touch-action:manipulation}
 .item-card:hover .qa-btn{background:var(--accent-hover)}
 .qa-btn:hover{transform:scale(1.15)!important}
@@ -1049,7 +1050,7 @@ window.addEventListener('DOMContentLoaded', () => {
       <div id="miniAccRow" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
       <select id="miniCat" style="width:100%;margin-bottom:10px;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:.85rem">${cats.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}</select>
       <div id="miniSub" class="modal-subcats" style="margin-bottom:10px"></div>
-      <div id="miniDisp" style="font-size:1.9rem;font-weight:800;text-align:center;color:var(--accent);margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:10px;min-height:54px;letter-spacing:.02em">฿ 0</div>
+      <input type="text" inputmode="decimal" autocomplete="off" id="miniDisp" style="display:block;width:100%;box-sizing:border-box;border:none;font-size:1.9rem;font-weight:800;text-align:center;color:var(--accent);margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:10px;min-height:54px;letter-spacing:.02em" value="฿ 0">
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">${['1','2','3','4','5','6','7','8','9','del','0','.'].map(n => `<button class="mini-np-btn" data-mn="${n}">${n === 'del' ? '⌫' : n}</button>`).join('')}</div>
       <button id="miniSave" style="width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;transition:.15s">💾 บันทึก</button>`;
 
@@ -1058,7 +1059,7 @@ window.addEventListener('DOMContentLoaded', () => {
       requestAnimationFrame(() => el.classList.add('show'));
 
       const disp = el.querySelector('#miniDisp');
-      const fmtDisp = () => { disp.textContent = (cur === 'THB' ? '฿ ' : cur + ' ') + (parseFloat(mVal) || 0).toLocaleString('th-TH'); };
+      const fmtDisp = () => { disp.value = (cur === 'THB' ? '฿ ' : cur + ' ') + (parseFloat(mVal) || 0).toLocaleString('th-TH'); };
       el.querySelectorAll('.mini-np-btn').forEach(btn => btn.addEventListener('click', () => {
         const n = btn.dataset.mn;
         if (n === 'del') mVal = mVal.slice(0, -1);
@@ -1066,6 +1067,17 @@ window.addEventListener('DOMContentLoaded', () => {
         else if (n !== '.' && mVal.length < 10) mVal += n;
         fmtDisp();
       }));
+      // Let the user type the amount directly from the mobile keyboard too, as an
+      // alternative to the custom numpad below.
+      disp.addEventListener('focus', () => { disp.value = mVal; disp.select(); });
+      disp.addEventListener('input', () => {
+        let v = disp.value.replace(/[^0-9.]/g, '');
+        const firstDot = v.indexOf('.');
+        if (firstDot !== -1) v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+        disp.value = v;
+        mVal = v;
+      });
+      disp.addEventListener('blur', fmtDisp);
 
       // Subcategory chips — appear after the main category is chosen (#)
       // Tracks groupId (link to item_groups), not the name — keeps subcategory stats

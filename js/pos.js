@@ -180,24 +180,26 @@ const POS = {
       `<div style="margin-bottom:14px">
         <div class="pos-section-label">📌 ปักหมุด</div>
         <div class="pos-grid">
-          ${pinnedObjs.map(it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" style="border:2px solid var(--accent)" data-fav-id="${it.id}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
+          ${pinnedObjs.map(it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" style="border:2px solid var(--accent)" data-fav-id="${it.id}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}" data-fav-acc="${it.accountId||''}">
             <button class="pin-btn pinned" data-pin="${it.id}">📌</button>
             <span class="item-icon">${it.icon}</span>
             <span class="item-name">${it.name}</span>
             ${it.defaultAmount > 0 ? `<span class="item-amount-sm">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
-            <button class="qa-btn" data-qa-fn="${it.id}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button>
+            ${it.accountId ? `<span class="item-acc-tag">${this._accShortLabel(it.accountId)}</span>` : ''}
+            <button class="qa-btn" data-qa-fn="${it.id}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}" data-qa-acc="${it.accountId||''}">+</button>
           </div>`).join('')}
         </div>
       </div>` : '';
 
-    const _favCard = it => `<div class="item-card fav ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
+    const _favCard = it => `<div class="item-card fav ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}" data-fav-acc="${it.accountId||''}">
             <span class="fav-star">⭐</span>
             <span class="use-cnt">${it.useCount}x</span>
             ${it.id && !this._isPinned(it.id) ? `<button class="pin-btn" data-pin="${it.id}" title="ปักหมุด">📌</button>` : ''}
             <span class="item-icon">${it.icon}</span>
             <span class="item-name">${it.name}</span>
             ${it.defaultAmount > 0 ? `<span class="item-amount-sm">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
-            <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button>
+            ${it.accountId ? `<span class="item-acc-tag">${this._accShortLabel(it.accountId)}</span>` : ''}
+            <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}" data-qa-acc="${it.accountId||''}">+</button>
           </div>`;
     const favExtra = favItems.slice(3);
     const favHTML = favItems.length > 0 ?
@@ -224,10 +226,11 @@ const POS = {
         timeFavs = favItems.filter(it => timeHints.cats.includes(it.categoryId)).slice(0, 4);
       }
     }
-    const _sugCard = it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}">
+    const _sugCard = it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}" data-fav-acc="${it.accountId||''}">
         <span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span>
         ${it.defaultAmount > 0 ? `<span class="item-amount-sm">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
-        <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}">+</button>
+        ${it.accountId ? `<span class="item-acc-tag">${this._accShortLabel(it.accountId)}</span>` : ''}
+        <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}" data-qa-acc="${it.accountId||''}">+</button>
       </div>`;
     const sugExtra = timeFavs.slice(3);
     const timeSuggestHTML = timeFavs.length > 0 ? `<div style="margin-bottom:14px">
@@ -404,12 +407,16 @@ const POS = {
       const iid = card.dataset.favId;
       const item = iid ? ST.getById('items', iid) : null;
       const catId = (item ? item.categoryId : null) || card.dataset.favCat || null;
-      this.openModal(item, catId, null);
+      // History-based fav/suggestion cards (no formal item id) carry their own name/amount/
+      // account via dataset — pass them as prefill so the modal follows that item's own
+      // history instead of leaving everything blank or guessing a global default.
+      const prefill = item ? null : { name: card.dataset.favName || '', amount: Number(card.dataset.favAmt) || 0, accountId: card.dataset.favAcc || '' };
+      this.openModal(item, catId, null, prefill);
     }));
     document.querySelectorAll('[data-qa-fn],[data-qa-n]').forEach(btn => {
       btn.addEventListener('click', e => {
         e.stopPropagation();
-        const iid = btn.dataset.qaFn; const name = btn.dataset.qaN; const amt = Number(btn.dataset.qaA) || 0; const cat = btn.dataset.qaC || '';
+        const iid = btn.dataset.qaFn; const name = btn.dataset.qaN; const amt = Number(btn.dataset.qaA) || 0; const cat = btn.dataset.qaC || ''; const qaAcc = btn.dataset.qaAcc || '';
         const item = iid ? ST.getById('items', iid) : null;
         const label = item ? `${item.icon} ${item.name} ${U.fmtCurrency(item.defaultAmount)}` : `${name} ${U.fmtCurrency(amt)}`;
         const save = (acc) => {
@@ -428,9 +435,10 @@ const POS = {
           }
           App.rv('add');
         };
-        // Quick-add: let the user pick which account to pay from (fast popup of the
-        // accounts configured in settings). Only for expenses with ≥1 quick account.
-        const suggested = (item && item.accountId) || (item && this._itemAcc(item.id)) || this._activeAcc();
+        // Quick-add: prefer this item's own history (qaAcc), then its remembered/explicit
+        // account, falling back to the globally last-active account only here — this is the
+        // one instant-replay path that still needs *some* default with no modal to fall back on.
+        const suggested = qaAcc || (item && item.accountId) || (item && this._itemAcc(item.id)) || this._activeAcc();
         if (this.type === 'expense' && this._quickAccs().length > 0) {
           this._quickAccPicker(label, suggested, save);
         } else {
@@ -502,6 +510,14 @@ const POS = {
     document.body.appendChild(el); setTimeout(() => el.remove(), 2100);
   },
   // ── Quick account (บัญชีลัด) helpers ──
+  // Short "icon name" label for an account/card id, used on fav/suggestion cards
+  // so the user can see which account a history-based item would pay from.
+  _accShortLabel(accId) {
+    if (!accId) return '';
+    const w = ST.getById('wallet_accounts', accId); if (w) return `${w.icon||'🏦'} ${w.name}`;
+    const cc = ST.getById('credit_cards', accId); if (cc) return `💳 ${cc.name}`;
+    return '';
+  },
   _allAccs() {
     const wallets = ST.getAll('wallet_accounts').map(w => ({ id: w.id, icon: w.icon || '🏦', name: w.name, fav: !!w.fav }));
     const cards = ST.getAll('credit_cards').map(c => ({ id: c.id, icon: '💳', name: c.name, fav: !!c.fav }));
@@ -656,7 +672,10 @@ const POS = {
     let catLocked = !!catId || isEdit;
     // Default account: when editing keep its own; otherwise prefer the item's remembered
     // account (#8), then the active quick account (#10).
-    const defAcc = isEdit ? (editTxn.accountId || '') : ((item && item.accountId) || this._itemAcc(item && item.id) || this._activeAcc() || '');
+    // No global "last active account" fallback here on purpose — a brand-new/custom entry
+    // should start with no account selected at all (the save-time picker, #26, asks for it).
+    // Only an item's own explicit default or its own recorded history pre-fills this.
+    const defAcc = isEdit ? (editTxn.accountId || '') : (prefill?.accountId || (item && item.accountId) || this._itemAcc(item && item.id) || '');
     const defAmt = prefill?.amount || (item ? item.defaultAmount : (isEdit ? editTxn.amount : ''));
     // Subcategory name is shown as a placeholder hint, never written into the name field —
     // doing so used to make a subcategory indistinguishable from an unrelated item/favorite
@@ -686,7 +705,7 @@ const POS = {
     const _buildModalBody = () => `
       <div class="form-group"><label>ประเภท</label><div class="type-toggle"><button class="type-btn ${t0==='expense'?'ae':''}" data-mt="expense">รายจ่าย</button><button class="type-btn ${t0==='income'?'ai':''}" data-mt="income">รายรับ</button></div><input type="hidden" id="mT" value="${t0}"></div>
       <div class="form-group" id="mAccGrp"><label id="mAccLbl">บัญชี</label><div class="acc-select-grid" id="mAccSelect"><span style="font-size:.74rem;color:var(--text-secondary)">กำลังโหลด...</span></div><input type="hidden" id="mAccId" value="${defAcc}"></div>
-      <div class="form-group"><label>จำนวนเงิน</label><div style="display:flex;gap:6px;align-items:center"><div class="amt-display focused" id="npDisp" style="flex:1">${U.fmtCurrency(Number(numVal)||0, cfg.currency)}</div><button class="btn-ghost" id="voiceBtn" title="พูดจำนวนเงิน" style="font-size:1.05rem;padding:6px 9px;border:1px solid var(--border);flex-shrink:0">🎤</button><button class="btn-ghost" id="splitBtn" title="แบ่งบิล" style="font-size:.75rem;padding:6px 8px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap">÷ แบ่ง</button></div><div id="splitRow" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;padding:8px;background:var(--bg-input);border-radius:8px"><span style="font-size:.78rem">แบ่ง</span><input type="number" id="splitN" value="2" min="2" max="20" style="width:55px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:.85rem;background:var(--bg-card);color:var(--text)"><span style="font-size:.78rem">คน คนละ</span><span id="splitResult" style="font-weight:700;color:var(--accent);font-size:.88rem">-</span><button class="btn btn-sm btn-outline" id="splitApply" style="font-size:.74rem;padding:3px 10px">ใช้</button></div><div class="presets" id="mPresets">${presets.map(a => `<button class="preset-btn" data-pv="${a}">${U.fmtCurrency(a, cfg.currency)}</button>`).join('')}</div><div class="numpad">${['1','2','3','4','5','6','7','8','9'].map(n => `<button class="np" data-n="${n}">${n}</button>`).join('')}<button class="np np-del" data-n="del">⌫</button><button class="np" data-n="0">0</button><button class="np" data-n=".">.</button></div></div>
+      <div class="form-group"><label>จำนวนเงิน</label><div style="display:flex;gap:6px;align-items:center"><input type="text" inputmode="decimal" autocomplete="off" class="amt-display focused" id="npDisp" style="flex:1;border:none" value="${U.fmtCurrency(Number(numVal)||0, cfg.currency)}"><button class="btn-ghost" id="voiceBtn" title="พูดจำนวนเงิน" style="font-size:1.05rem;padding:6px 9px;border:1px solid var(--border);flex-shrink:0">🎤</button><button class="btn-ghost" id="splitBtn" title="แบ่งบิล" style="font-size:.75rem;padding:6px 8px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap">÷ แบ่ง</button></div><div id="splitRow" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;padding:8px;background:var(--bg-input);border-radius:8px"><span style="font-size:.78rem">แบ่ง</span><input type="number" id="splitN" value="2" min="2" max="20" style="width:55px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:.85rem;background:var(--bg-card);color:var(--text)"><span style="font-size:.78rem">คน คนละ</span><span id="splitResult" style="font-weight:700;color:var(--accent);font-size:.88rem">-</span><button class="btn btn-sm btn-outline" id="splitApply" style="font-size:.74rem;padding:3px 10px">ใช้</button></div><div class="presets" id="mPresets">${presets.map(a => `<button class="preset-btn" data-pv="${a}">${U.fmtCurrency(a, cfg.currency)}</button>`).join('')}</div><div class="numpad">${['1','2','3','4','5','6','7','8','9'].map(n => `<button class="np" data-n="${n}">${n}</button>`).join('')}<button class="np np-del" data-n="del">⌫</button><button class="np" data-n="0">0</button><button class="np" data-n=".">.</button></div></div>
       <div class="form-group"><label>หมวดหมู่</label><select id="mC">${cats.map(c => `<option value="${c.id}" ${defCat===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select></div>
       <div class="form-group" id="mSubcatGrp" style="${this._modalSubcatsHTML(defCat, defGroupId) ? '' : 'display:none'}"><label style="font-size:.74rem;color:var(--text-secondary)">🏷 หมวดย่อย <span style="font-weight:400">· แตะเพื่อเลือก</span></label><div class="modal-subcats" id="mSubcats">${this._modalSubcatsHTML(defCat, defGroupId)}</div></div>
       ${catQuickItems.length > 0 ? `<div class="form-group"><label style="font-size:.74rem;color:var(--text-secondary)">รายการที่บันทึกไว้</label><div class="nchips" id="qiChips">${catQuickItems.map(it => `<button type="button" class="nchip qi-chip" data-qi-name="${it.name}" data-qi-amt="${it.defaultAmount||0}">${it.icon} ${it.name}</button>`).join('')}</div></div>` : ''}
@@ -700,8 +719,22 @@ const POS = {
     o.innerHTML = buildModalHTML();
     document.getElementById('modalRoot').appendChild(o);
     const refreshDisp = () => {
-      const el = o.querySelector('#npDisp'); if (el) el.textContent = U.fmtCurrency(Number(numVal) || 0, cfg.currency);
+      const el = o.querySelector('#npDisp'); if (el) el.value = U.fmtCurrency(Number(numVal) || 0, cfg.currency);
     };
+    // Let the user type the amount directly from the mobile keyboard, as an alternative
+    // to the custom numpad below — both write to the same numVal.
+    const npDispEl = o.querySelector('#npDisp');
+    npDispEl?.addEventListener('focus', () => { npDispEl.value = numVal; npDispEl.select(); });
+    npDispEl?.addEventListener('input', () => {
+      let v = npDispEl.value.replace(/[^0-9.]/g, '');
+      const firstDot = v.indexOf('.');
+      if (firstDot !== -1) v = v.slice(0, firstDot + 1) + v.slice(firstDot + 1).replace(/\./g, '');
+      npDispEl.value = v;
+      numVal = v;
+      o.querySelectorAll('.preset-btn').forEach(b => b.classList.remove('sel'));
+      if (o.querySelector('#mInstToggle')?.checked) setTimeout(() => { const f = o.querySelector('#mInstMonths'); if (f) f.dispatchEvent(new Event('change')); }, 0);
+    });
+    npDispEl?.addEventListener('blur', refreshDisp);
     o.querySelectorAll('[data-mt]').forEach(btn => btn.addEventListener('click', () => {
       const t = btn.dataset.mt; o.querySelector('#mT').value = t;
       o.querySelectorAll('[data-mt]').forEach(b => {
