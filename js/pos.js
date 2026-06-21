@@ -107,7 +107,7 @@ const POS = {
     });
     document.querySelectorAll('[data-group]').forEach(card => {
       card.addEventListener('click', () => {
-        this.openModal(null, this.selCat, null, { subCatName: card.dataset.groupName, subCatIcon: card.dataset.groupIcon });
+        this.openModal(null, this.selCat, null, { groupId: card.dataset.group, subCatName: card.dataset.groupName, subCatIcon: card.dataset.groupIcon });
       });
     });
     document.getElementById('btnAddGroup')?.addEventListener('click', () => {
@@ -309,7 +309,7 @@ const POS = {
             <div class="swipe-content txn-item">
               <span style="font-size:.92rem">${cat.icon}</span>
               <div style="flex:1;min-width:0">
-                <div style="font-size:.74rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.itemName || cat.name || 'รายการ'}</div>
+                <div style="font-size:.74rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${EH.txnLabel(t)}</div>
                 <div style="font-size:.62rem;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${t.time ? '🕐 '+t.time : ''}${(t.note && t.note !== 'undefined') ? (t.time ? ' · ' : '') + t.note : ''}</div>
               </div>
               <span style="font-size:.77rem;font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'};flex-shrink:0">${U.fmtCurrency(t.amount, cfg.currency)}</span>
@@ -562,6 +562,64 @@ const POS = {
       onPick(b.dataset.acc);
     }));
   },
+  // Save-time account picker (#26): shown only when Save is pressed with no account chosen.
+  // Tabs by account category (wallet/cash vs credit card) + a live search box.
+  _fullAccPicker(onPick, type = 'expense') {
+    const wallets = ST.getAll('wallet_accounts');
+    const cards = type === 'expense' ? ST.getAll('credit_cards') : [];
+    const cfg = U.getConfig();
+    const isMobile = window.innerWidth <= 640;
+    const hasBoth = wallets.length > 0 && cards.length > 0;
+    const _row = (a, isCC) => {
+      const bal = isCC ? `เครดิตเหลือ ${U.fmtCurrency(Math.max(0, (a.limit || 0) - (a.used || 0)), cfg.currency)}` : U.fmtCurrency(a.balance || 0, cfg.currency);
+      return `<button type="button" class="facc-row" data-accid="${a.id}" data-name="${(a.name || '').toLowerCase()}"><span class="facc-ico">${isCC ? '💳' : (a.icon || '🏦')}</span><span class="facc-info"><span class="facc-name">${a.name}</span><span class="facc-bal">${bal}</span></span></button>`;
+    };
+    const walletsHTML = wallets.map(w => _row(w, false)).join('') || '<div class="facc-empty">ยังไม่มีบัญชี</div>';
+    const cardsHTML = cards.map(c => _row(c, true)).join('') || '<div class="facc-empty">ยังไม่มีบัตรเครดิต</div>';
+    const o = document.createElement('div'); o.className = isMobile ? 'bs-overlay' : 'modal-overlay';
+    o.style.zIndex = 6000;
+    o.innerHTML = `<div class="${isMobile ? 'bs-sheet' : 'modal'}" style="display:flex;flex-direction:column;max-height:85vh;overflow:hidden">
+      <h3 style="flex:0 0 auto;margin:0 0 10px">💳 ตัดเงินจากบัญชีไหน?</h3>
+      <input type="text" id="faccSearch" placeholder="🔍 ค้นหาบัญชี/บัตร..." style="flex:0 0 auto;margin-bottom:10px">
+      ${hasBoth ? `<div class="facc-tabs" id="faccTabs" style="flex:0 0 auto"><button type="button" class="facc-tab active" data-fcat="wallets">🏦 บัญชี/เงินสด</button><button type="button" class="facc-tab" data-fcat="cards">💳 บัตรเครดิต</button></div>` : ''}
+      <div style="flex:1;overflow-y:auto;min-height:0">
+        <div id="faccWallets" class="facc-list">${walletsHTML}</div>
+        <div id="faccCards" class="facc-list" style="${hasBoth ? 'display:none' : ''}">${cardsHTML}</div>
+      </div>
+      <div class="modal-actions" style="flex:0 0 auto"><button class="btn btn-outline" id="faccSkip">ไม่ระบุบัญชี</button><button class="btn btn-outline" id="faccCancel">ยกเลิก</button></div>
+    </div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    const close = () => o.remove();
+    o.addEventListener('click', e => { if (e.target === o) close(); });
+    o.querySelector('#faccCancel').onclick = close;
+    o.querySelector('#faccSkip').onclick = () => { close(); onPick(''); };
+    o.querySelectorAll('[data-accid]').forEach(btn => btn.addEventListener('click', () => { close(); onPick(btn.dataset.accid); }));
+    const tabs = o.querySelectorAll('.facc-tab');
+    const wp = o.querySelector('#faccWallets'); const cp = o.querySelector('#faccCards');
+    tabs.forEach(tab => tab.addEventListener('click', () => {
+      tabs.forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      const isCards = tab.dataset.fcat === 'cards';
+      wp.style.display = isCards ? 'none' : '';
+      cp.style.display = isCards ? '' : 'none';
+    }));
+    const search = o.querySelector('#faccSearch');
+    search.addEventListener('input', () => {
+      const q = search.value.trim().toLowerCase();
+      const filtering = !!q;
+      o.querySelectorAll('.facc-row').forEach(row => { row.style.display = !filtering || row.dataset.name.includes(q) ? '' : 'none'; });
+      const tabsEl = o.querySelector('#faccTabs');
+      if (filtering) {
+        if (tabsEl) tabsEl.style.display = 'none';
+        wp.style.display = ''; cp.style.display = '';
+      } else if (tabsEl) {
+        tabsEl.style.display = '';
+        const isCards = o.querySelector('.facc-tab.active')?.dataset.fcat === 'cards';
+        wp.style.display = isCards ? 'none' : ''; cp.style.display = isCards ? '' : 'none';
+      }
+    });
+    setTimeout(() => search.focus(), 80);
+  },
   _accBarHTML() {
     const accs = this._quickAccs();
     if (accs.length === 0) return '';
@@ -575,16 +633,17 @@ const POS = {
   // Frequently-used subcategory chips (#5) — pick groups under categories of the current type,
   // Subcategory chips shown inside the record modal, for the chosen main category (#3).
   // Ranked by how often a transaction was named after them. activeName highlights one.
-  _modalSubcatsHTML(categoryId, activeName) {
+  _modalSubcatsHTML(categoryId, activeId) {
     if (!categoryId) return '';
     const groups = ST.getAll('item_groups').filter(g => g.categoryId === categoryId);
     if (groups.length === 0) return '';
     const cat = ST.getById('categories', categoryId) || {};
     const color = cat.color || '#6366f1';
     const txns = ST.getAll('transactions');
-    const cnt = {}; groups.forEach(g => { cnt[g.id] = txns.filter(t => t.itemName === g.name).length; });
+    // Count by groupId (current schema) plus legacy txns that stored the subcat name into itemName.
+    const cnt = {}; groups.forEach(g => { cnt[g.id] = txns.filter(t => t.groupId === g.id || (!t.groupId && t.itemName === g.name)).length; });
     const sorted = groups.slice().sort((a, b) => (cnt[b.id] || 0) - (cnt[a.id] || 0));
-    return sorted.map(g => `<button type="button" class="subcat-chip ${activeName === g.name ? 'active' : ''}" data-sc-name="${g.name.replace(/"/g, '&quot;')}" data-sc-icon="${g.icon || '📋'}" style="--sc-color:${color}"><span class="sc-ico">${g.icon || '📋'}</span><span class="sc-name">${g.name}</span></button>`).join('');
+    return sorted.map(g => `<button type="button" class="subcat-chip ${activeId === g.id ? 'active' : ''}" data-sc-id="${g.id}" data-sc-name="${g.name.replace(/"/g, '&quot;')}" data-sc-icon="${g.icon || '📋'}" style="--sc-color:${color}"><span class="sc-ico">${g.icon || '📋'}</span><span class="sc-name">${g.name}</span></button>`).join('');
   },
   openModal(item, catId, editTxn, prefill = null) {
     const cats = ST.getAll('categories'); const cfg = U.getConfig();
@@ -598,7 +657,12 @@ const POS = {
     // account (#8), then the active quick account (#10).
     const defAcc = isEdit ? (editTxn.accountId || '') : (this._itemAcc(item && item.id) || this._activeAcc() || '');
     const defAmt = prefill?.amount || (item ? item.defaultAmount : (isEdit ? editTxn.amount : ''));
-    const defName = prefill?.name || prefill?.subCatName || (item ? item.name : (isEdit ? editTxn.itemName : ''));
+    // Subcategory name is shown as a placeholder hint, never written into the name field —
+    // doing so used to make a subcategory indistinguishable from an unrelated item/favorite
+    // sharing the same text. The actual link is defGroupId below.
+    const defName = prefill?.name || (item ? item.name : (isEdit ? editTxn.itemName : ''));
+    const defGroupId = prefill?.groupId || (isEdit ? (editTxn.groupId || '') : '');
+    const defPlaceholder = prefill?.subCatName || 'เช่น ข้าวผัด, น้ำมัน...';
     const catQuickItems = !isEdit && defCat ? ST.getAll('items').filter(i => i.categoryId === defCat).slice(0, 10) : [];
     const t0 = isEdit ? editTxn.type : this.type;
     const presets = EH.getRecentAmounts(t0);
@@ -623,9 +687,9 @@ const POS = {
       <div class="form-group" id="mOutgoingGrp" style="${t0 !== 'expense' ? 'display:none' : ''}"><div style="display:flex;flex-direction:column;gap:6px"><label class="inst-toggle-row"><input type="checkbox" id="mReimburse" ${isEdit && editTxn && editTxn.reimbursable ? 'checked' : ''}><span>🔄 รอเบิกคืน <span style="font-size:.72rem;color:var(--text-secondary)">(จ่ายแทน เบิกทีหลัง)</span></span></label><label class="inst-toggle-row"><input type="checkbox" id="mLent" ${isEdit && editTxn && editTxn.lent ? 'checked' : ''}><span>🤝 ให้ยืม <span style="font-size:.72rem;color:var(--text-secondary)">(รอรับเงินคืน)</span></span></label><div id="mLentToGrp" style="${isEdit && editTxn && editTxn.lent ? '' : 'display:none'}"><input type="text" id="mLentTo" placeholder="ชื่อคนที่ยืม..." value="${isEdit && editTxn && editTxn.lentTo ? editTxn.lentTo : ''}" style="margin-top:5px"></div></div></div>
       <div class="form-group"><label>จำนวนเงิน</label><div style="display:flex;gap:6px;align-items:center"><div class="amt-display focused" id="npDisp" style="flex:1">${U.fmtCurrency(Number(numVal)||0, cfg.currency)}</div><button class="btn-ghost" id="voiceBtn" title="พูดจำนวนเงิน" style="font-size:1.05rem;padding:6px 9px;border:1px solid var(--border);flex-shrink:0">🎤</button><button class="btn-ghost" id="splitBtn" title="แบ่งบิล" style="font-size:.75rem;padding:6px 8px;border:1px solid var(--border);flex-shrink:0;white-space:nowrap">÷ แบ่ง</button></div><div id="splitRow" style="display:none;flex-wrap:wrap;gap:6px;align-items:center;margin-top:6px;padding:8px;background:var(--bg-input);border-radius:8px"><span style="font-size:.78rem">แบ่ง</span><input type="number" id="splitN" value="2" min="2" max="20" style="width:55px;border:1px solid var(--border);border-radius:6px;padding:4px 6px;font-size:.85rem;background:var(--bg-card);color:var(--text)"><span style="font-size:.78rem">คน คนละ</span><span id="splitResult" style="font-weight:700;color:var(--accent);font-size:.88rem">-</span><button class="btn btn-sm btn-outline" id="splitApply" style="font-size:.74rem;padding:3px 10px">ใช้</button></div><div class="presets" id="mPresets">${presets.map(a => `<button class="preset-btn" data-pv="${a}">${U.fmtCurrency(a, cfg.currency)}</button>`).join('')}</div><div class="numpad">${['7','8','9','4','5','6','1','2','3'].map(n => `<button class="np" data-n="${n}">${n}</button>`).join('')}<button class="np np-del" data-n="del">⌫</button><button class="np" data-n="0">0</button><button class="np" data-n=".">.</button></div></div>
       <div class="form-group"><label>หมวดหมู่</label><select id="mC">${cats.map(c => `<option value="${c.id}" ${defCat===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select></div>
-      <div class="form-group" id="mSubcatGrp" style="${this._modalSubcatsHTML(defCat, prefill?.subCatName || defName) ? '' : 'display:none'}"><label style="font-size:.74rem;color:var(--text-secondary)">🏷 หมวดย่อย <span style="font-weight:400">· แตะเพื่อเลือก</span></label><div class="modal-subcats" id="mSubcats">${this._modalSubcatsHTML(defCat, prefill?.subCatName || defName)}</div></div>
+      <div class="form-group" id="mSubcatGrp" style="${this._modalSubcatsHTML(defCat, defGroupId) ? '' : 'display:none'}"><label style="font-size:.74rem;color:var(--text-secondary)">🏷 หมวดย่อย <span style="font-weight:400">· แตะเพื่อเลือก</span></label><div class="modal-subcats" id="mSubcats">${this._modalSubcatsHTML(defCat, defGroupId)}</div></div>
       ${catQuickItems.length > 0 ? `<div class="form-group"><label style="font-size:.74rem;color:var(--text-secondary)">รายการที่บันทึกไว้</label><div class="nchips" id="qiChips">${catQuickItems.map(it => `<button type="button" class="nchip qi-chip" data-qi-name="${it.name}" data-qi-amt="${it.defaultAmount||0}">${it.icon} ${it.name}</button>`).join('')}</div></div>` : ''}
-      <div class="form-group"><label>ชื่อรายการ</label><input type="text" id="mN" value="${defName}" placeholder="เช่น ข้าวผัด, น้ำมัน..."></div>
+      <div class="form-group"><label>ชื่อรายการ</label><input type="text" id="mN" value="${defName}" placeholder="${defPlaceholder}"><input type="hidden" id="mGroupId" value="${defGroupId}"></div>
       <div class="form-group" id="mAccGrp"><label id="mAccLbl">บัญชี</label><div class="acc-select-grid" id="mAccSelect"><span style="font-size:.74rem;color:var(--text-secondary)">กำลังโหลด...</span></div><input type="hidden" id="mAccId" value="${defAcc}"></div>
       <div class="form-group" id="instToggleGrp" style="display:none"><label class="inst-toggle-row"><input type="checkbox" id="mInstToggle"><span>💳 ผ่อนชำระผ่านบัตรเครดิต</span></label></div>
       <div id="instFields" style="display:none"><div class="form-row"><div class="form-group"><label>จำนวนงวด</label><select id="mInstMonths"><option value="3">3 งวด</option><option value="6">6 งวด</option><option value="10" selected>10 งวด</option><option value="12">12 งวด</option><option value="24">24 งวด</option></select></div><div class="form-group"><label>ดอกเบี้ย %/ปี</label><input type="number" id="mInstRate" value="0" min="0" max="100" step="0.1" placeholder="0"></div></div><div class="form-group"><label>วันเริ่มผ่อน</label><input type="date" id="mInstStart" value="${isEdit?editTxn.date||U.today():U.today()}"></div><div id="instCalcBox" class="inst-summary" style="display:none"></div></div>
@@ -827,23 +891,31 @@ const POS = {
       }
     });
     // Subcategory chips inside the modal (#3): refresh when the category changes,
-    // tap to set the item name to that subcategory.
+    // tap to link the subcategory via #mGroupId (shown only as a placeholder hint —
+    // never written into the name field, so it can't collide with item/favorite names).
     const _refreshSubcats = () => {
       const grp = o.querySelector('#mSubcatGrp'); const box = o.querySelector('#mSubcats');
       if (!grp || !box) return;
-      const active = (o.querySelector('#mN')?.value || '').trim();
+      const active = o.querySelector('#mGroupId')?.value || '';
       const html = this._modalSubcatsHTML(o.querySelector('#mC')?.value, active);
       box.innerHTML = html;
       grp.style.display = html ? '' : 'none';
     };
     o.querySelector('#mSubcats')?.addEventListener('click', e => {
       const chip = e.target.closest('.subcat-chip'); if (!chip) return;
-      const nameEl = o.querySelector('#mN'); if (nameEl) { nameEl.value = chip.dataset.scName; catLocked = true; }
-      o.querySelectorAll('#mSubcats .subcat-chip').forEach(c => c.classList.toggle('active', c === chip));
+      const groupIdEl = o.querySelector('#mGroupId');
+      const nameEl = o.querySelector('#mN');
+      const wasActive = groupIdEl && groupIdEl.value === chip.dataset.scId;
+      if (groupIdEl) groupIdEl.value = wasActive ? '' : chip.dataset.scId;
+      if (nameEl) nameEl.placeholder = wasActive ? 'เช่น ข้าวผัด, น้ำมัน...' : chip.dataset.scName;
+      catLocked = true;
+      o.querySelectorAll('#mSubcats .subcat-chip').forEach(c => c.classList.toggle('active', !wasActive && c === chip));
     });
     // Category pre-fill amount from history
     o.querySelector('#mC')?.addEventListener('change', () => {
       catLocked = true; // user chose a category — stop auto-categorize from overriding
+      const groupIdEl = o.querySelector('#mGroupId'); if (groupIdEl) groupIdEl.value = '';
+      const nameEl = o.querySelector('#mN'); if (nameEl) nameEl.placeholder = 'เช่น ข้าวผัด, น้ำมัน...';
       _refreshSubcats();
       if (parseFloat(numVal) > 0) return;
       const catId = o.querySelector('#mC').value;
@@ -868,11 +940,27 @@ const POS = {
       const amount = parseFloat(numVal);
       const categoryId = o.querySelector('#mC').value;
       const itemName = o.querySelector('#mN').value.trim();
+      const groupId = o.querySelector('#mGroupId')?.value || '';
       const date = o.querySelector('#mD').value;
       const note = (o.querySelector('#mNote')?.value || '').trim().replace(/^undefined$/i, '');
-      const accountId = o.querySelector('#mAccId')?.value || '';
+      const rawAccountId = o.querySelector('#mAccId')?.value || '';
       if (!amount || amount <= 0) { U.toast('กรุณากรอกจำนวนเงิน', 'error'); return; }
       if (!date) { U.toast('กรุณาเลือกวันที่', 'error'); return; }
+      // No account chosen yet — ask which account/card to deduct from (or receive into) before saving (#26).
+      if (!rawAccountId) {
+        this._fullAccPicker(picked => { o.querySelector('#mAccId').value = picked; doSave(picked); }, type);
+        return;
+      }
+      doSave(rawAccountId);
+    };
+    const doSave = (accountId) => {
+      const type = o.querySelector('#mT').value;
+      const amount = parseFloat(numVal);
+      const categoryId = o.querySelector('#mC').value;
+      const itemName = o.querySelector('#mN').value.trim();
+      const groupId = o.querySelector('#mGroupId')?.value || '';
+      const date = o.querySelector('#mD').value;
+      const note = (o.querySelector('#mNote')?.value || '').trim().replace(/^undefined$/i, '');
       if (isEdit) {
         if (editTxn.accountId) {
           const oldAcc = ST.getById('wallet_accounts', editTxn.accountId);
@@ -888,7 +976,7 @@ const POS = {
         const reimbEdit = type === 'expense' && !!(o.querySelector('#mReimburse')?.checked);
         const lentEdit = type === 'expense' && !!(o.querySelector('#mLent')?.checked);
         const lentToEdit = lentEdit ? (o.querySelector('#mLentTo')?.value || '') : '';
-        ST.update('transactions', editTxn.id, { type, amount, categoryId, itemName, date, note, accountId, reimbursable: reimbEdit, reimburseStatus: reimbEdit ? (editTxn.reimburseStatus || 'pending') : '', lent: lentEdit, lentStatus: lentEdit ? (editTxn.lentStatus || 'pending') : '', lentTo: lentToEdit });
+        ST.update('transactions', editTxn.id, { type, amount, categoryId, itemName, groupId, date, note, accountId, reimbursable: reimbEdit, reimburseStatus: reimbEdit ? (editTxn.reimburseStatus || 'pending') : '', lent: lentEdit, lentStatus: lentEdit ? (editTxn.lentStatus || 'pending') : '', lentTo: lentToEdit });
         window.__flashTxnId = editTxn.id;
       } else {
         const isInstCC = type === 'expense' && accountId ? !!ST.getById('credit_cards', accountId) : false;
@@ -899,7 +987,7 @@ const POS = {
         const reimbursable = type === 'expense' && !!(o.querySelector('#mReimburse')?.checked);
         const lent = type === 'expense' && !!(o.querySelector('#mLent')?.checked);
         const lentTo = lent ? (o.querySelector('#mLentTo')?.value || '') : '';
-        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, date, time: new Date().toTimeString().slice(0,5), note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '', lent, lentStatus: lent ? 'pending' : '', lentTo });
+        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, groupId, date, time: new Date().toTimeString().slice(0,5), note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '', lent, lentStatus: lent ? 'pending' : '', lentTo });
         window.__flashTxnId = newTxn.id;
         // Upload pending receipt image to Firebase Storage
         const pendingFile = POS._pendingReceiptFile;

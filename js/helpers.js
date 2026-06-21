@@ -47,12 +47,34 @@ const EH = {
     });
     return Object.values(map);
   },
+  // Group key for frequency stats: real saved item > subcategory (groupId) > free-typed name.
+  // Keeping these distinct stops a subcategory's name from being indistinguishable from an
+  // unrelated favorite/item that happens to share the same text.
+  _freqKey(t) {
+    if (t.itemId) return t.itemId;
+    if (t.groupId) return 'g:' + t.groupId;
+    if (t.itemName) return 'n:' + t.itemName;
+    return '';
+  },
+  _freqKeyToItem(k, lastTxn) {
+    if (k.startsWith('g:')) {
+      const g = ST.getById('item_groups', k.slice(2));
+      if (!g) return null;
+      const cat = g.categoryId ? (ST.getById('categories', g.categoryId) || {}) : {};
+      return { name: g.name, icon: g.icon || cat.icon || '📋', defaultAmount: lastTxn.amount || 0, categoryId: g.categoryId || lastTxn.categoryId || '' };
+    }
+    if (k.startsWith('n:')) {
+      const cat = lastTxn.categoryId ? (ST.getById('categories', lastTxn.categoryId) || {}) : {};
+      return { name: k.slice(2), icon: cat.icon || '📝', defaultAmount: lastTxn.amount || 0, categoryId: lastTxn.categoryId || '' };
+    }
+    return ST.getById('items', k);
+  },
   getFavItems(type) {
     const txns = ST.getAll('transactions').filter(t => t.type === type);
     const freq = {};
     txns.forEach(t => {
-      const k = t.itemId || ('n:' + t.itemName);
-      if (k && k !== 'n:') {
+      const k = this._freqKey(t);
+      if (k) {
         if (!freq[k]) freq[k] = { count: 0, last: t };
         freq[k].count++;
         freq[k].last = t;
@@ -62,16 +84,16 @@ const EH = {
       .sort((a, b) => b[1].count - a[1].count)
       .slice(0, 8)
       .map(([k, v]) => {
-        let item;
-        if (k.startsWith('n:')) {
-          const lastTxn = v.last;
-          const cat = lastTxn.categoryId ? (ST.getById('categories', lastTxn.categoryId) || {}) : {};
-          item = { name: k.slice(2), icon: cat.icon || '📝', defaultAmount: lastTxn.amount || 0, categoryId: lastTxn.categoryId || '' };
-        } else {
-          item = ST.getById('items', k);
-        }
+        const item = this._freqKeyToItem(k, v.last);
         return item ? { ...item, useCount: v.count } : null;
       }).filter(Boolean);
+  },
+  // Resolve the display label for a transaction: typed name > subcategory > category.
+  txnLabel(t) {
+    if (t.itemName) return t.itemName;
+    if (t.groupId) { const g = ST.getById('item_groups', t.groupId); if (g) return g.name; }
+    const cat = ST.getById('categories', t.categoryId);
+    return cat ? cat.name : 'รายการ';
   },
   // Suggest items based on what the user actually records in the CURRENT part of the day,
   // using each transaction's saved time (HH:MM). Returns null when there isn't enough
@@ -93,19 +115,15 @@ const EH = {
     txns.forEach(t => {
       const h = parseInt((t.time || '').split(':')[0]);
       if (isNaN(h) || !this._inBucket(h, cur)) return;
-      const k = t.itemId || ('n:' + t.itemName);
-      if (!k || k === 'n:') return;
+      const k = this._freqKey(t);
+      if (!k) return;
       if (!freq[k]) freq[k] = { count: 0, last: t };
       freq[k].count++; freq[k].last = t;
     });
     const ranked = Object.entries(freq).sort((a, b) => b[1].count - a[1].count);
     if (ranked.length === 0) return null;
     const items = ranked.slice(0, 6).map(([k, v]) => {
-      let item;
-      if (k.startsWith('n:')) {
-        const cat = v.last.categoryId ? (ST.getById('categories', v.last.categoryId) || {}) : {};
-        item = { name: k.slice(2), icon: cat.icon || '📝', defaultAmount: v.last.amount || 0, categoryId: v.last.categoryId || '' };
-      } else item = ST.getById('items', k);
+      const item = this._freqKeyToItem(k, v.last);
       return item ? { ...item, useCount: v.count } : null;
     }).filter(Boolean);
     return items.length ? { label: cur.label, items } : null;

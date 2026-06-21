@@ -812,6 +812,19 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 .qap-none{justify-content:center;color:var(--text-secondary)}
 .qap-cancel{width:100%;padding:12px;margin-top:4px;border:none;background:transparent;color:var(--text-secondary);font-size:.88rem;font-weight:600;cursor:pointer}
 @media(min-width:560px){.qap-overlay{align-items:center}.qap-sheet{border-radius:18px}}
+/* Save-time account picker (#26): tabs + search */
+.facc-tabs{display:flex;gap:0;margin-bottom:8px;border-bottom:1px solid var(--border)}
+.facc-tab{flex:1;padding:8px 0;font-size:.82rem;font-weight:600;background:none;border:none;cursor:pointer;border-bottom:2px solid transparent;color:var(--text-secondary)}
+.facc-tab.active{border-bottom-color:var(--accent);color:var(--accent)}
+.facc-list{display:flex;flex-direction:column;gap:7px}
+.facc-row{display:flex;align-items:center;gap:11px;width:100%;padding:11px 13px;border:1.5px solid var(--border);border-radius:12px;background:var(--bg-input);color:var(--text);cursor:pointer;transition:border-color .12s,background .12s;text-align:left}
+.facc-row:active{transform:scale(.98)}
+.facc-row:hover{border-color:var(--accent)}
+.facc-ico{font-size:1.2rem;flex-shrink:0}
+.facc-info{display:flex;flex-direction:column;min-width:0;flex:1}
+.facc-name{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.facc-bal{font-size:.72rem;color:var(--text-secondary)}
+.facc-empty{padding:14px;text-align:center;font-size:.8rem;color:var(--text-secondary)}
 </style>
 </head>
 <body>
@@ -1029,11 +1042,11 @@ window.addEventListener('DOMContentLoaded', () => {
         <span style="font-weight:700;font-size:.95rem">⚡ บันทึกด่วน</span>
         <button id="miniClose" style="background:none;border:none;font-size:1.2rem;cursor:pointer;color:var(--text-secondary);padding:4px 6px">✕</button>
       </div>
-      <div id="miniDisp" style="font-size:1.9rem;font-weight:800;text-align:center;color:var(--accent);margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:10px;min-height:54px;letter-spacing:.02em">฿ 0</div>
+      <div id="miniAccRow" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
       <select id="miniCat" style="width:100%;margin-bottom:10px;padding:9px 10px;border-radius:8px;border:1px solid var(--border);background:var(--bg-input);color:var(--text);font-size:.85rem">${cats.map(c => `<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}</select>
       <div id="miniSub" class="modal-subcats" style="margin-bottom:10px"></div>
+      <div id="miniDisp" style="font-size:1.9rem;font-weight:800;text-align:center;color:var(--accent);margin-bottom:8px;padding:10px;background:var(--bg-input);border-radius:10px;min-height:54px;letter-spacing:.02em">฿ 0</div>
       <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:6px;margin-bottom:10px">${['7','8','9','4','5','6','1','2','3','del','0','.'].map(n => `<button class="mini-np-btn" data-mn="${n}">${n === 'del' ? '⌫' : n}</button>`).join('')}</div>
-      <div id="miniAccRow" style="display:flex;align-items:center;gap:6px;flex-wrap:wrap;margin-bottom:10px"></div>
       <button id="miniSave" style="width:100%;padding:14px;background:var(--accent);color:#fff;border:none;border-radius:12px;font-size:1rem;font-weight:700;cursor:pointer;transition:.15s">💾 บันทึก</button>`;
 
       document.body.appendChild(bg);
@@ -1051,18 +1064,20 @@ window.addEventListener('DOMContentLoaded', () => {
       }));
 
       // Subcategory chips — appear after the main category is chosen (#)
-      let mSub = '';
+      // Tracks groupId (link to item_groups), not the name — keeps subcategory stats
+      // separate from item/favorite names that might share the same text.
+      let mGroupId = '';
       const subBox = el.querySelector('#miniSub');
       const renderSub = () => {
-        const html = (typeof POS !== 'undefined' && POS._modalSubcatsHTML) ? POS._modalSubcatsHTML(el.querySelector('#miniCat').value, mSub) : '';
+        const html = (typeof POS !== 'undefined' && POS._modalSubcatsHTML) ? POS._modalSubcatsHTML(el.querySelector('#miniCat').value, mGroupId) : '';
         subBox.innerHTML = html;
         subBox.style.display = html ? 'flex' : 'none';
       };
       renderSub();
-      el.querySelector('#miniCat').addEventListener('change', () => { mSub = ''; renderSub(); });
+      el.querySelector('#miniCat').addEventListener('change', () => { mGroupId = ''; renderSub(); });
       subBox.addEventListener('click', e => {
         const chip = e.target.closest('.subcat-chip'); if (!chip) return;
-        mSub = (mSub === chip.dataset.scName) ? '' : chip.dataset.scName; // toggle
+        mGroupId = (mGroupId === chip.dataset.scId) ? '' : chip.dataset.scId; // toggle
         renderSub();
       });
 
@@ -1093,10 +1108,11 @@ window.addEventListener('DOMContentLoaded', () => {
         const cat = cats.find(c => c.id === catId) || {};
         if (typeof ST !== 'undefined') {
           const now = new Date().toTimeString().slice(0, 5);
-          const tx = ST.add('transactions', { type: 'expense', amount, categoryId: catId, itemName: mSub || cat.name || '', date: typeof U !== 'undefined' ? U.today() : new Date().toISOString().slice(0, 10), time: now, note: '', accountId: mAcc });
+          const grp = mGroupId ? ST.getById('item_groups', mGroupId) : null;
+          const tx = ST.add('transactions', { type: 'expense', amount, categoryId: catId, itemName: '', groupId: mGroupId, date: typeof U !== 'undefined' ? U.today() : new Date().toISOString().slice(0, 10), time: now, note: '', accountId: mAcc });
           if (typeof POS !== 'undefined' && POS._applyAcctDelta) POS._applyAcctDelta(mAcc, 'expense', amount, false);
           window.__flashTxnId = tx.id;
-          if (typeof U !== 'undefined') U.toast(`✅ ${cat.icon || ''} ${mSub || cat.name || ''} ${amount.toLocaleString('th-TH')} บันทึกแล้ว`, 'success');
+          if (typeof U !== 'undefined') U.toast(`✅ ${(grp ? grp.icon : cat.icon) || ''} ${(grp ? grp.name : cat.name) || ''} ${amount.toLocaleString('th-TH')} บันทึกแล้ว`, 'success');
           if (typeof App !== 'undefined') App.rv('add');
         }
         closeMiniNumpad();
