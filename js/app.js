@@ -156,6 +156,7 @@ const App = {
   },
   nav(view) {
     if (this.cv === view) {
+      window.scrollTo({ top: 0, behavior: 'smooth' });
       document.getElementById('appContent')?.scrollTo({ top: 0, behavior: 'smooth' });
       return;
     }

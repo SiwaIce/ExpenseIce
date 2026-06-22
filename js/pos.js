@@ -724,7 +724,10 @@ const POS = {
     // Let the user type the amount directly from the mobile keyboard, as an alternative
     // to the custom numpad below — both write to the same numVal.
     const npDispEl = o.querySelector('#npDisp');
-    npDispEl?.addEventListener('focus', () => { npDispEl.value = numVal; npDispEl.select(); });
+    npDispEl?.addEventListener('focus', () => {
+      npDispEl.value = numVal; npDispEl.select();
+      setTimeout(() => npDispEl.scrollIntoView({ block: 'center', behavior: 'smooth' }), 150);
+    });
     npDispEl?.addEventListener('input', () => {
       let v = npDispEl.value.replace(/[^0-9.]/g, '');
       const firstDot = v.indexOf('.');

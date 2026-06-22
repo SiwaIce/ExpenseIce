@@ -259,9 +259,13 @@ const Charts = {
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--bg-card').trim() || '#fff';
     ctx.beginPath(); ctx.arc(cx, cy, ir, 0, Math.PI * 2); ctx.fill();
     ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#000';
-    ctx.font = 'bold 13px sans-serif'; ctx.textAlign = 'center';
-    ctx.fillText(U.fmtCurrency(total), cx, cy - 1);
-    ctx.font = '10px sans-serif'; ctx.fillText('รายจ่ายรวม', cx, cy + 12);
+    ctx.textAlign = 'center';
+    const small = size < 150;
+    const amtFont = Math.max(9, Math.round(size * .105));
+    const amtText = small ? U.fmtCompact(total) : U.fmtCurrency(total);
+    ctx.font = `bold ${amtFont}px sans-serif`;
+    ctx.fillText(amtText, cx, cy + (small ? amtFont * .35 : -1));
+    if (!small) { ctx.font = '10px sans-serif'; ctx.fillText('รายจ่ายรวม', cx, cy + 12); }
   },
   drawLine(id, data) {
     const c = document.getElementById(id); if (!c) return;
