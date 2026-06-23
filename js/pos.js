@@ -180,27 +180,25 @@ const POS = {
       `<div style="margin-bottom:14px">
         <div class="pos-section-label">📌 ปักหมุด</div>
         <div class="pos-grid">
-          ${pinnedObjs.map(it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" style="border:2px solid var(--accent)" data-fav-id="${it.id}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}" data-fav-acc="${it.accountId||''}">
+          ${pinnedObjs.map(it => { const cc = this._catColor(it.categoryId); return `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" style="background:linear-gradient(160deg,${cc}1a 0%,var(--bg-card) 70%);border-color:${cc}55" data-fav-id="${it.id}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}" data-fav-acc="${it.accountId||''}">
             <button class="pin-btn pinned" data-pin="${it.id}">📌</button>
-            <span class="item-icon">${it.icon}</span>
+            ${this._avatarHTML(it)}
             <span class="item-name">${it.name}</span>
-            ${it.defaultAmount > 0 ? `<span class="item-amount-sm">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
+            ${it.defaultAmount > 0 ? `<span class="item-amount-sm" style="color:${cc};font-weight:700">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
             ${it.accountId ? `<span class="item-acc-tag">${this._accShortLabel(it.accountId)}</span>` : ''}
-            <button class="qa-btn" data-qa-fn="${it.id}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}" data-qa-acc="${it.accountId||''}">+</button>
-          </div>`).join('')}
+            <button class="qa-btn" style="background:${cc}" data-qa-fn="${it.id}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}" data-qa-acc="${it.accountId||''}">+</button>
+          </div>`; }).join('')}
         </div>
       </div>` : '';
 
-    const _favCard = it => `<div class="item-card fav ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}" data-fav-acc="${it.accountId||''}">
-            <span class="fav-star">⭐</span>
-            <span class="use-cnt">${it.useCount}x</span>
+    const _favCard = it => { const cc = this._catColor(it.categoryId); return `<div class="item-card fav ${this.type==='income'?'iinc':'iexp'}" style="background:linear-gradient(160deg,${cc}1a 0%,var(--bg-card) 70%);border-color:${cc}55" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}" data-fav-acc="${it.accountId||''}">
             ${it.id && !this._isPinned(it.id) ? `<button class="pin-btn" data-pin="${it.id}" title="ปักหมุด">📌</button>` : ''}
-            <span class="item-icon">${it.icon}</span>
+            ${this._avatarHTML(it, it.useCount)}
             <span class="item-name">${it.name}</span>
-            ${it.defaultAmount > 0 ? `<span class="item-amount-sm">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
+            ${it.defaultAmount > 0 ? `<span class="item-amount-sm" style="color:${cc};font-weight:700">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
             ${it.accountId ? `<span class="item-acc-tag">${this._accShortLabel(it.accountId)}</span>` : ''}
-            <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}" data-qa-acc="${it.accountId||''}">+</button>
-          </div>`;
+            <button class="qa-btn" style="background:${cc}" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}" data-qa-acc="${it.accountId||''}">+</button>
+          </div>`; };
     const favExtra = favItems.slice(3);
     const favHTML = favItems.length > 0 ?
       `<div style="margin-bottom:14px">
@@ -226,12 +224,13 @@ const POS = {
         timeFavs = favItems.filter(it => timeHints.cats.includes(it.categoryId)).slice(0, 4);
       }
     }
-    const _sugCard = it => `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}" data-fav-acc="${it.accountId||''}">
-        <span class="item-icon">${it.icon}</span><span class="item-name">${it.name}</span>
-        ${it.defaultAmount > 0 ? `<span class="item-amount-sm">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
+    const _sugCard = it => { const cc = this._catColor(it.categoryId); return `<div class="item-card ${this.type==='income'?'iinc':'iexp'}" style="background:linear-gradient(160deg,${cc}1a 0%,var(--bg-card) 70%);border-color:${cc}55" data-fav-id="${it.id||''}" data-fav-name="${it.name}" data-fav-amt="${it.defaultAmount}" data-fav-cat="${it.categoryId||''}" data-fav-acc="${it.accountId||''}">
+        ${this._avatarHTML(it)}
+        <span class="item-name">${it.name}</span>
+        ${it.defaultAmount > 0 ? `<span class="item-amount-sm" style="color:${cc};font-weight:700">${U.fmtCurrency(it.defaultAmount, cfg.currency)}</span>` : ''}
         ${it.accountId ? `<span class="item-acc-tag">${this._accShortLabel(it.accountId)}</span>` : ''}
-        <button class="qa-btn" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}" data-qa-acc="${it.accountId||''}">+</button>
-      </div>`;
+        <button class="qa-btn" style="background:${cc}" data-qa-fn="${it.id||''}" data-qa-n="${it.name}" data-qa-a="${it.defaultAmount}" data-qa-c="${it.categoryId||''}" data-qa-acc="${it.accountId||''}">+</button>
+      </div>`; };
     const sugExtra = timeFavs.slice(3);
     const timeSuggestHTML = timeFavs.length > 0 ? `<div style="margin-bottom:14px">
       <div class="pos-section-label">${timeLabel} แนะนำ</div>
@@ -517,6 +516,16 @@ const POS = {
     const w = ST.getById('wallet_accounts', accId); if (w) return `${w.icon||'🏦'} ${w.name}`;
     const cc = ST.getById('credit_cards', accId); if (cc) return `💳 ${cc.name}`;
     return '';
+  },
+  _catColor(catId) {
+    const cat = catId ? ST.getById('categories', catId) : null;
+    return (cat && cat.color) || '#9ca3af';
+  },
+  // Icon avatar for item cards — plain category-tinted ring normally, or an
+  // amber "story ring" with a use-count badge when it's a frequently-used favorite.
+  _avatarHTML(it, useCount) {
+    const ring = useCount ? 'conic-gradient(#f59e0b 0% 100%)' : this._catColor(it.categoryId) + '33';
+    return `<div class="item-avatar" style="background:${ring}"><span class="item-avatar-inner">${it.icon}</span>${useCount ? `<span class="item-usecnt">${useCount}x</span>` : ''}</div>`;
   },
   _allAccs() {
     const wallets = ST.getAll('wallet_accounts').map(w => ({ id: w.id, icon: w.icon || '🏦', name: w.name, fav: !!w.fav }));

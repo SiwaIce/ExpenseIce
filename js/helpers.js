@@ -67,7 +67,8 @@ const EH = {
       const cat = lastTxn.categoryId ? (ST.getById('categories', lastTxn.categoryId) || {}) : {};
       return { name: k.slice(2), icon: cat.icon || '📝', defaultAmount: lastTxn.amount || 0, categoryId: lastTxn.categoryId || '', accountId: lastTxn.accountId || '' };
     }
-    return ST.getById('items', k);
+    const item = ST.getById('items', k);
+    return item ? { ...item, accountId: lastTxn.accountId || item.accountId || '' } : null;
   },
   getFavItems(type) {
     const txns = ST.getAll('transactions').filter(t => t.type === type);
