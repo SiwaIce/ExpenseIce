@@ -39,11 +39,10 @@ const POS = {
     const displayCats = cats.filter(c => c.type === this.type);
     const selCatObj = this.selCat ? displayCats.find(c => c.id === this.selCat) : null;
     const selGroups = this.selCat ? ST.getAll('item_groups').filter(g => g.categoryId === this.selCat) : [];
-    const selGroupsHTML = selGroups.map(g => `<div class="cat-card" data-group="${g.id}" data-group-name="${g.name}" data-group-icon="${g.icon||'📋'}">
-      <div class="cat-color-strip" style="background:${selCatObj?.color||'var(--accent)'}"></div>
-      <span class="cat-icon">${g.icon||'📋'}</span>
+    const selGroupsHTML = selGroups.map(g => { const cc = selCatObj?.color || '#6366f1'; return `<div class="cat-card" data-group="${g.id}" data-group-name="${g.name}" data-group-icon="${g.icon||'📋'}" style="background:linear-gradient(160deg,${cc}1a 0%,var(--bg-card) 70%);border-color:${cc}55">
+      <div class="cat-avatar" style="background:${cc}33"><span class="cat-avatar-inner">${g.icon||'📋'}</span></div>
       <span class="cat-name">${g.name}</span>
-    </div>`).join('');
+    </div>`; }).join('');
     return this.selCat
       ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <button class="btn btn-outline btn-sm" id="btnBackCat" style="padding:5px 10px;font-size:.78rem">← กลับ</button>
@@ -52,9 +51,8 @@ const POS = {
         <div class="pos-section-label">📋 หมวดรอง</div>
         <div class="pos-grid">
           ${selGroupsHTML}
-          <div class="cat-card cat-card-custom" data-cat="custom" data-custom-cat="${this.selCat}">
-            <div class="cat-color-strip" style="background:var(--accent)"></div>
-            <span class="cat-icon">✏️</span>
+          <div class="cat-card cat-card-custom" data-cat="custom" data-custom-cat="${this.selCat}" style="background:linear-gradient(160deg,var(--accent-light) 0%,var(--bg-card) 70%)">
+            <div class="cat-avatar" style="background:var(--accent-light)"><span class="cat-avatar-inner">✏️</span></div>
             <span class="cat-name">กำหนดเอง</span>
           </div>
         </div>
@@ -69,16 +67,14 @@ const POS = {
         <div class="pos-grid">
           ${displayCats.map(cat => {
             const bs = EH.getBudget(cat.id);
-            return `<div class="cat-card" data-cat="${cat.id}">
-              <div class="cat-color-strip" style="background:${cat.color}"></div>
-              <span class="cat-icon">${cat.icon}</span>
+            return `<div class="cat-card" data-cat="${cat.id}" style="background:linear-gradient(160deg,${cat.color}1a 0%,var(--bg-card) 70%);border-color:${cat.color}55">
+              <div class="cat-avatar" style="background:${cat.color}33"><span class="cat-avatar-inner">${cat.icon}</span></div>
               <span class="cat-name">${cat.name}</span>
               ${bs ? `<div class="bbar-wrap" style="margin-top:6px"><div class="bbar-fill ${bs.cls}" style="width:${bs.pct}%"></div></div>` : ''}
             </div>`;
           }).join('')}
-          <div class="cat-card cat-card-custom" data-cat="custom">
-            <div class="cat-color-strip" style="background:var(--accent)"></div>
-            <span class="cat-icon">✏️</span>
+          <div class="cat-card cat-card-custom" data-cat="custom" style="background:linear-gradient(160deg,var(--accent-light) 0%,var(--bg-card) 70%)">
+            <div class="cat-avatar" style="background:var(--accent-light)"><span class="cat-avatar-inner">✏️</span></div>
             <span class="cat-name">กำหนดเอง</span>
           </div>
         </div>`;
@@ -256,11 +252,10 @@ const POS = {
 
     const selCatObj = this.selCat ? displayCats.find(c => c.id === this.selCat) : null;
     const selGroups = this.selCat ? ST.getAll('item_groups').filter(g => g.categoryId === this.selCat) : [];
-    const selGroupsHTML = selGroups.map(g => `<div class="cat-card" data-group="${g.id}" data-group-name="${g.name}" data-group-icon="${g.icon||'📋'}">
-      <div class="cat-color-strip" style="background:${selCatObj?.color||'var(--accent)'}"></div>
-      <span class="cat-icon">${g.icon||'📋'}</span>
+    const selGroupsHTML = selGroups.map(g => { const cc = selCatObj?.color || '#6366f1'; return `<div class="cat-card" data-group="${g.id}" data-group-name="${g.name}" data-group-icon="${g.icon||'📋'}" style="background:linear-gradient(160deg,${cc}1a 0%,var(--bg-card) 70%);border-color:${cc}55">
+      <div class="cat-avatar" style="background:${cc}33"><span class="cat-avatar-inner">${g.icon||'📋'}</span></div>
       <span class="cat-name">${g.name}</span>
-    </div>`).join('');
+    </div>`; }).join('');
     const catSection = this.selCat
       ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <button class="btn btn-outline btn-sm" id="btnBackCat" style="padding:5px 10px;font-size:.78rem">← กลับ</button>
@@ -269,9 +264,8 @@ const POS = {
         <div class="pos-section-label">📋 หมวดรอง</div>
         <div class="pos-grid">
           ${selGroupsHTML}
-          <div class="cat-card cat-card-custom" data-cat="custom" data-custom-cat="${this.selCat}">
-            <div class="cat-color-strip" style="background:var(--accent)"></div>
-            <span class="cat-icon">✏️</span>
+          <div class="cat-card cat-card-custom" data-cat="custom" data-custom-cat="${this.selCat}" style="background:linear-gradient(160deg,var(--accent-light) 0%,var(--bg-card) 70%)">
+            <div class="cat-avatar" style="background:var(--accent-light)"><span class="cat-avatar-inner">✏️</span></div>
             <span class="cat-name">กำหนดเอง</span>
           </div>
         </div>
@@ -286,16 +280,14 @@ const POS = {
         <div class="pos-grid">
           ${displayCats.map(cat => {
             const bs = EH.getBudget(cat.id);
-            return `<div class="cat-card" data-cat="${cat.id}">
-              <div class="cat-color-strip" style="background:${cat.color}"></div>
-              <span class="cat-icon">${cat.icon}</span>
+            return `<div class="cat-card" data-cat="${cat.id}" style="background:linear-gradient(160deg,${cat.color}1a 0%,var(--bg-card) 70%);border-color:${cat.color}55">
+              <div class="cat-avatar" style="background:${cat.color}33"><span class="cat-avatar-inner">${cat.icon}</span></div>
               <span class="cat-name">${cat.name}</span>
               ${bs ? `<div class="bbar-wrap" style="margin-top:6px"><div class="bbar-fill ${bs.cls}" style="width:${bs.pct}%"></div></div>` : ''}
             </div>`;
           }).join('')}
-          <div class="cat-card cat-card-custom" data-cat="custom">
-            <div class="cat-color-strip" style="background:var(--accent)"></div>
-            <span class="cat-icon">✏️</span>
+          <div class="cat-card cat-card-custom" data-cat="custom" style="background:linear-gradient(160deg,var(--accent-light) 0%,var(--bg-card) 70%)">
+            <div class="cat-avatar" style="background:var(--accent-light)"><span class="cat-avatar-inner">✏️</span></div>
             <span class="cat-name">กำหนดเอง</span>
           </div>
         </div>`;
