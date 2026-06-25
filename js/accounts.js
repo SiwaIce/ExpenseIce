@@ -92,6 +92,7 @@ const AccountsView = {
             <div class="cc-stats" style="grid-template-columns:repeat(3,1fr)"><span>ใช้ไป<br><strong>${U.fmtCurrency(used,cfg.currency)}</strong></span><span>วงเงิน<br><strong>${U.fmtCurrency(limit,cfg.currency)}</strong></span><span style="color:${avail<0?'#ff6b6b':'#86efac'}">เหลือ<br><strong>${U.fmtCurrency(avail,cfg.currency)}</strong></span></div>
             <div style="display:flex;gap:5px;margin-top:9px;flex-wrap:wrap">
               <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3)" data-ccpay="${cc.id}">💰 จ่ายหนี้</button>
+              <button class="btn btn-sm" style="background:rgba(255,255,255,.2);color:#fff;border:1px solid rgba(255,255,255,.3)" data-cccb="${cc.id}">🔁 รับเงินคืน</button>
               ${activeInsts.length>0?`<button class="btn btn-sm" style="background:rgba(255,200,0,.25);color:#fff;border:1px solid rgba(255,200,0,.4)" data-ccplan="${cc.id}">📋 ${activeInsts.length} แผน</button>`:''}
               <span style="flex:1"></span>
               <button class="btn-ghost btn-sm" style="color:rgba(255,255,255,.7)" data-cced="${cc.id}">✏️</button>
@@ -184,6 +185,7 @@ const AccountsView = {
       if (ok) { activeInsts.forEach(i => ST.softDelete('installments', i.id)); ST.softDelete('credit_cards', ccId); U.toast('ลบแล้ว 🗑️', 'success'); App.rv('accounts'); }
     }));
     document.querySelectorAll('[data-ccpay]').forEach(btn => btn.addEventListener('click', () => this.openCCPayModal(btn.dataset.ccpay)));
+    document.querySelectorAll('[data-cccb]').forEach(btn => btn.addEventListener('click', () => this.openCCCashbackModal(btn.dataset.cccb)));
     document.querySelectorAll('[data-ccplan]').forEach(btn => btn.addEventListener('click', () => this.openInstallmentPlansModal(btn.dataset.ccplan)));
     document.querySelectorAll('[data-ccfav]').forEach(btn => btn.addEventListener('click', e => {
       e.stopPropagation();
@@ -451,6 +453,37 @@ const AccountsView = {
       ST.add('account_transfers', { fromId, toId: ccId, amount, note: `จ่ายหนี้บัตร ${cc.name}`, date });
       ST.add('transactions', { type: 'expense', amount, categoryId: 'cat_bills', itemName: `จ่ายหนี้บัตร ${cc.name}`, date, note: 'ชำระบัตรเครดิต', accountId: fromId });
       U.toast(`จ่ายหนี้ ${U.fmtCurrency(amount, U.getConfig().currency)} สำเร็จ credit เหลือ ${U.fmtCurrency((cc.limit || 0) - newUsed, U.getConfig().currency)}`, 'success');
+      o.remove(); App.rv('accounts');
+    };
+  },
+
+  // Cash back credited straight back onto the card — reduces the card's `used`
+  // debt directly (no wallet involved), and logs an income transaction tagged
+  // to the card itself so it shows up in reports under "เงินคืน/Cashback".
+  openCCCashbackModal(ccId) {
+    const cc = ST.getById('credit_cards', ccId); if (!cc) return;
+    const cfg = U.getConfig();
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:380px"><h3>🔁 รับเงินคืนบัตร ${cc.icon || '💳'} ${cc.name}</h3>
+      <div style="background:var(--success-light);border-radius:9px;padding:10px 12px;margin-bottom:12px"><div style="font-size:.78rem;color:var(--text-secondary)">ยอดหนี้ปัจจุบัน</div><div style="font-size:1.4rem;font-weight:800;color:var(--expense)">${U.fmtCurrency(cc.used || 0, cfg.currency)}</div></div>
+      <div class="form-group"><label>จำนวนเงินคืน (Cash Back)</label><input type="number" id="cbAmt" step="0.01" min="0" placeholder="0.00" autofocus></div>
+      <div class="form-group"><label>หมายเหตุ</label><input type="text" id="cbNote" placeholder="เช่น Cashback 5% ร้านอาหาร"></div>
+      <div class="form-group"><label>วันที่</label><input type="date" id="cbDate" value="${U.today()}"></div>
+      <div class="modal-actions"><button class="btn btn-outline" id="cbCan">ยกเลิก</button><button class="btn btn-success" id="cbOk">✅ รับเงินคืน</button></div>
+    </div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    setTimeout(() => o.querySelector('#cbAmt')?.focus(), 100);
+    o.querySelector('#cbCan').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+    o.querySelector('#cbOk').onclick = () => {
+      const amount = parseFloat(o.querySelector('#cbAmt').value) || 0;
+      const date = o.querySelector('#cbDate').value;
+      const note = o.querySelector('#cbNote').value.trim();
+      if (!amount || amount <= 0) { U.toast('กรุณากรอกจำนวนเงิน', 'error'); return; }
+      const newUsed = Math.max(0, (cc.used || 0) - amount);
+      ST.update('credit_cards', ccId, { used: newUsed });
+      ST.add('transactions', { type: 'income', amount, categoryId: 'cat_cashback', itemName: `เงินคืนบัตร ${cc.name}`, date, note: note || 'Cash Back เข้าบัตรเครดิต', accountId: ccId });
+      U.toast(`รับเงินคืน ${U.fmtCurrency(amount, cfg.currency)} สำเร็จ ยอดหนี้เหลือ ${U.fmtCurrency(newUsed, cfg.currency)}`, 'success');
       o.remove(); App.rv('accounts');
     };
   }

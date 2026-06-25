@@ -3,6 +3,13 @@ const EVView = {
   _selProviderId: null,
   _customRate: 0,
   _amt: '',
+  _startTime: '',
+  _endTime: '',
+  _startPct: 20,
+  _endPct: 80,
+  _kwhConfirmed: '',
+  _rangeConfirmed: '',
+  _showExtra: false,
 
   render() {
     const cfg = U.getConfig();
@@ -17,11 +24,7 @@ const EVView = {
     const chipsHTML = providers.map(p => `<span class="ev-chip ${p.id===this._selProviderId?'sel':''}" data-evp="${p.id}">${p.icon} ${p.name} · ${p.rate}/kWh</span>`).join('')
       + `<span class="ev-chip ${isCustom?'sel':''}" data-evp="custom">✏️ กำหนดเอง</span>`;
 
-    const month = U.thisMonth();
-    const evTxns = ST.getAll('transactions').filter(t => t.categoryId === 'cat_ev' && t.date.startsWith(month));
-    const totalKwh = evTxns.reduce((s, t) => s + (Number(t.evKwh) || 0), 0);
-    const totalCost = evTxns.reduce((s, t) => s + Number(t.amount), 0);
-    const avgRate = totalKwh > 0 ? totalCost / totalKwh : 0;
+    const lo = Math.min(this._startPct, this._endPct), hi = Math.max(this._startPct, this._endPct);
 
     return `<div style="padding-bottom:20px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
@@ -39,11 +42,33 @@ const EVView = {
           <div style="font-size:.7rem;opacity:.85;margin-bottom:4px">จำนวนเงินที่จ่าย</div>
           <input type="number" id="evAmt" value="${this._amt || ''}" placeholder="0" min="0" step="0.01">
         </div>
-        <div class="ev-res-grid">
+
+        <button type="button" id="btnEvToggleExtra" style="width:100%;background:rgba(255,255,255,.14);border:none;color:#fff;border-radius:10px;padding:8px;font-size:.74rem;font-weight:600;margin-bottom:${this._showExtra ? '12px' : '0'};cursor:pointer">🔋 รายละเอียดเพิ่มเติม (ไม่บังคับ) ${this._showExtra ? '▴' : '▾'}</button>
+
+        <div id="evExtraGrp" style="${this._showExtra ? '' : 'display:none'}">
+          <div style="display:flex;gap:8px;margin-bottom:12px">
+            <div style="flex:1"><div class="ev-sub-label">⏱ เริ่มชาร์จ</div><input type="time" id="evStartTime" value="${this._startTime}"></div>
+            <div style="flex:1"><div class="ev-sub-label">⏱ สิ้นสุด</div><input type="time" id="evEndTime" value="${this._endTime}"></div>
+          </div>
+
+          <div class="ev-sub-label">🔋 % แบตเตอรี่ — ลากเพื่อระบุช่วงที่ชาร์จ</div>
+          <div class="ev-batt-preview"><div class="ev-batt-fill" id="evBattFill" style="left:${lo}%;width:${hi-lo}%"></div></div>
+          <div style="display:flex;justify-content:space-between;font-size:.66rem;opacity:.8;margin:2px 0 4px"><span>เริ่ม <b id="evStartPctLbl">${this._startPct}</b>%</span><span>จบ <b id="evEndPctLbl">${this._endPct}</b>%</span></div>
+          <input type="range" id="evStartPct" class="ev-range" min="0" max="100" value="${this._startPct}">
+          <input type="range" id="evEndPct" class="ev-range" min="0" max="100" style="margin-top:6px" value="${this._endPct}">
+          <div style="text-align:center;font-size:.7rem;opacity:.9;margin:6px 0 12px" id="evBattDelta">ได้แบตเพิ่ม <b>+${(hi-lo)}%</b>${vehicle ? ` · ประมาณ <b>${(((hi-lo)/100)*vehicle.batteryKwh).toFixed(1)} kWh</b>` : ''}</div>
+
+          <div style="display:flex;gap:8px;margin-bottom:4px">
+            <div style="flex:1"><div class="ev-sub-label">หน่วยจริงจากเครื่องชาร์จ (kWh)</div><input type="number" id="evKwhConfirmed" value="${this._kwhConfirmed}" placeholder="เช่น 23.1" min="0" step="0.1"></div>
+            <div style="flex:1"><div class="ev-sub-label">ระยะที่ได้จริง (กม.)</div><input type="number" id="evRangeConfirmed" value="${this._rangeConfirmed}" placeholder="เช่น 145" min="0" step="1"></div>
+          </div>
+        </div>
+
+        <div class="ev-res-grid" style="margin-top:12px">
           <div class="ev-res-box"><div class="ev-res-label">ได้ไฟ</div><div class="ev-res-val" id="evResKwh">${r.kwh.toFixed(1)} kWh</div></div>
-          <div class="ev-res-box"><div class="ev-res-label">วิ่งได้ประมาณ</div><div class="ev-res-val" id="evResRange">${vehicle ? r.rangeKm.toFixed(0) + ' กม.' : '–'}</div></div>
+          <div class="ev-res-box"><div class="ev-res-label">วิ่งได้ประมาณ</div><div class="ev-res-val" id="evResRange">${r.rangeKm > 0 ? r.rangeKm.toFixed(0) + ' กม.' : '–'}</div></div>
           <div class="ev-res-box"><div class="ev-res-label">% แบตที่ได้</div><div class="ev-res-val" id="evResBatt">${vehicle ? r.battPct.toFixed(1) + '%' : '–'}</div></div>
-          <div class="ev-res-box"><div class="ev-res-label">ต้นทุน/กม.</div><div class="ev-res-val" id="evResCost">${vehicle && r.rangeKm > 0 ? U.fmtCurrency(r.costPerKm, cfg.currency) : '–'}</div></div>
+          <div class="ev-res-box"><div class="ev-res-label">ต้นทุน/กม.</div><div class="ev-res-val" id="evResCost">${r.rangeKm > 0 ? U.fmtCurrency(r.costPerKm, cfg.currency) : '–'}</div></div>
         </div>
         <button class="btn" id="btnEvSave" style="width:100%;margin-top:12px;background:#fff;color:#0d9488;font-weight:700">💾 บันทึกเป็นรายจ่าย</button>
       </div>
@@ -78,16 +103,66 @@ const EVView = {
         `).join('')}
       </div>
 
+      ${this._statsHTML(cfg)}
+    </div>`;
+  },
+
+  // Monthly summary, month-over-month delta, all-time totals, and a 6-month trend —
+  // kept here (not a separate view) since it's specific to cat_ev transactions.
+  _statsHTML(cfg) {
+    const allEvTxns = ST.getAll('transactions').filter(t => t.categoryId === 'cat_ev');
+    const month = U.thisMonth();
+    const now = new Date();
+    const lastMonthD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
+    const lastMonth = `${lastMonthD.getFullYear()}-${String(lastMonthD.getMonth()+1).padStart(2,'0')}`;
+
+    const sumOf = txns => ({
+      count: txns.length,
+      kwh: txns.reduce((s, t) => s + (Number(t.evKwh) || 0), 0),
+      cost: txns.reduce((s, t) => s + Number(t.amount), 0),
+      range: txns.reduce((s, t) => s + (Number(t.evRangeKm) || 0), 0)
+    });
+    const thisM = sumOf(allEvTxns.filter(t => t.date.startsWith(month)));
+    const prevM = sumOf(allEvTxns.filter(t => t.date.startsWith(lastMonth)));
+    const all = sumOf(allEvTxns);
+    const avgRateM = thisM.kwh > 0 ? thisM.cost / thisM.kwh : 0;
+    const avgRateAll = all.kwh > 0 ? all.cost / all.kwh : 0;
+    const deltaPct = prevM.cost > 0 ? ((thisM.cost - prevM.cost) / prevM.cost) * 100 : null;
+
+    const months = [];
+    for (let i = 5; i >= 0; i--) {
+      const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
+      const m = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
+      months.push({ label: d.toLocaleDateString('th-TH', { month: 'short' }), cost: sumOf(allEvTxns.filter(t => t.date.startsWith(m))).cost });
+    }
+    const maxCost = Math.max(...months.map(m => m.cost), 1);
+
+    return `
       <div class="pos-section-label" style="margin-top:16px">📊 สรุปค่าชาร์จเดือนนี้</div>
       <div class="card">
         <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;text-align:center">
-          <div><div class="btag">ชาร์จไป</div><div style="font-weight:800;font-size:.92rem">${evTxns.length} ครั้ง</div></div>
-          <div><div class="btag">รวม kWh</div><div style="font-weight:800;font-size:.92rem;color:#0d9488">${totalKwh.toFixed(1)} kWh</div></div>
-          <div><div class="btag">รวมค่าไฟ</div><div style="font-weight:800;font-size:.92rem;color:var(--expense)">${U.fmtCurrency(totalCost, cfg.currency)}</div></div>
+          <div><div class="btag">ชาร์จไป</div><div style="font-weight:800;font-size:.92rem">${thisM.count} ครั้ง</div></div>
+          <div><div class="btag">รวม kWh</div><div style="font-weight:800;font-size:.92rem;color:#0d9488">${thisM.kwh.toFixed(1)} kWh</div></div>
+          <div><div class="btag">รวมค่าไฟ</div><div style="font-weight:800;font-size:.92rem;color:var(--expense)">${U.fmtCurrency(thisM.cost, cfg.currency)}</div></div>
         </div>
-        ${totalKwh > 0 ? `<div style="margin-top:8px;font-size:.74rem;color:var(--text-secondary);text-align:center">เฉลี่ย ${avgRate.toFixed(2)} บาท/kWh</div>` : ''}
+        <div style="margin-top:8px;font-size:.74rem;color:var(--text-secondary);text-align:center">
+          ${thisM.kwh > 0 ? `เฉลี่ย ${avgRateM.toFixed(2)} บาท/kWh` : ''}
+          ${deltaPct !== null ? ` · เทียบเดือนก่อน <b style="color:${deltaPct>0?'var(--expense)':'var(--success)'}">${deltaPct>0?'▲':'▼'} ${Math.abs(deltaPct).toFixed(0)}%</b>` : ''}
+        </div>
+        <div class="ev-trend-bars">
+          ${months.map(m => `<div class="ev-trend-col"><div class="ev-trend-bar" style="height:${maxCost>0?(m.cost/maxCost*100):0}%"></div><div class="ev-trend-lbl">${m.label}</div></div>`).join('')}
+        </div>
       </div>
-    </div>`;
+
+      <div class="pos-section-label" style="margin-top:16px">🗂 สะสมทั้งหมด (All-time)</div>
+      <div class="card">
+        <div style="display:grid;grid-template-columns:repeat(2,1fr);gap:8px;text-align:center">
+          <div><div class="btag">รวมค่าไฟทั้งหมด</div><div style="font-weight:800;font-size:.95rem;color:var(--expense)">${U.fmtCurrency(all.cost, cfg.currency)}</div></div>
+          <div><div class="btag">รวม kWh ทั้งหมด</div><div style="font-weight:800;font-size:.95rem;color:#0d9488">${all.kwh.toFixed(1)} kWh</div></div>
+          <div><div class="btag">ระยะทางสะสม</div><div style="font-weight:800;font-size:.95rem">${all.range > 0 ? all.range.toFixed(0) + ' กม.' : '–'}</div></div>
+          <div><div class="btag">เฉลี่ย/kWh ทั้งหมด</div><div style="font-weight:800;font-size:.95rem">${all.kwh > 0 ? avgRateAll.toFixed(2) + ' บาท' : '–'}</div></div>
+        </div>
+      </div>`;
   },
 
   attachEvents() {
@@ -103,6 +178,20 @@ const EVView = {
       if (customGrp) customGrp.style.display = this._selProviderId === 'custom' ? '' : 'none';
       this._updateResult();
     }));
+    document.getElementById('btnEvToggleExtra')?.addEventListener('click', () => { this._showExtra = !this._showExtra; App.rv('ev'); });
+    document.getElementById('evStartTime')?.addEventListener('input', e => { this._startTime = e.target.value; });
+    document.getElementById('evEndTime')?.addEventListener('input', e => { this._endTime = e.target.value; });
+    const startEl = document.getElementById('evStartPct'), endEl = document.getElementById('evEndPct');
+    const onPctChange = () => {
+      this._startPct = parseInt(startEl.value) || 0;
+      this._endPct = parseInt(endEl.value) || 0;
+      this._updateBattPreview();
+      this._updateResult();
+    };
+    startEl?.addEventListener('input', onPctChange);
+    endEl?.addEventListener('input', onPctChange);
+    document.getElementById('evKwhConfirmed')?.addEventListener('input', e => { this._kwhConfirmed = e.target.value; this._updateResult(); });
+    document.getElementById('evRangeConfirmed')?.addEventListener('input', e => { this._rangeConfirmed = e.target.value; this._updateResult(); });
     document.getElementById('btnEvSave')?.addEventListener('click', () => this._saveAsExpense());
     document.getElementById('btnEvVehicle')?.addEventListener('click', () => this.openVehicleModal());
     document.getElementById('btnEvAddProvider')?.addEventListener('click', () => this.openProviderModal());
@@ -115,10 +204,29 @@ const EVView = {
     }));
   },
 
+  _updateBattPreview() {
+    const lo = Math.min(this._startPct, this._endPct), hi = Math.max(this._startPct, this._endPct);
+    const fill = document.getElementById('evBattFill');
+    if (fill) { fill.style.left = lo + '%'; fill.style.width = (hi - lo) + '%'; }
+    const sl = document.getElementById('evStartPctLbl'); if (sl) sl.textContent = this._startPct;
+    const el = document.getElementById('evEndPctLbl'); if (el) el.textContent = this._endPct;
+    const cfg = U.getConfig();
+    const vehicle = cfg.evVehicle || null;
+    const delta = document.getElementById('evBattDelta');
+    if (delta) delta.innerHTML = `ได้แบตเพิ่ม <b>+${hi - lo}%</b>${vehicle ? ` · ประมาณ <b>${((hi - lo) / 100 * vehicle.batteryKwh).toFixed(1)} kWh</b>` : ''}`;
+  },
+
+  // Priority for accuracy: confirmed reading from the charger/trip computer > battery
+  // % delta against the known pack size > a plain rate-based estimate from the price paid.
   _calc(rate, vehicle) {
     const amt = Number(this._amt) || 0;
-    const kwh = rate > 0 ? amt / rate : 0;
-    const rangeKm = vehicle ? kwh * (Number(vehicle.efficiencyKmPerKwh) || 0) : 0;
+    const kwhFromRate = rate > 0 ? amt / rate : 0;
+    const pctDelta = Math.abs(this._endPct - this._startPct);
+    const kwhFromPct = vehicle && pctDelta > 0 ? (pctDelta / 100) * Number(vehicle.batteryKwh) : 0;
+    const kwhConfirmed = Number(this._kwhConfirmed) || 0;
+    const kwh = kwhConfirmed > 0 ? kwhConfirmed : (kwhFromPct > 0 ? kwhFromPct : kwhFromRate);
+    const rangeConfirmed = Number(this._rangeConfirmed) || 0;
+    const rangeKm = rangeConfirmed > 0 ? rangeConfirmed : (vehicle ? kwh * (Number(vehicle.efficiencyKmPerKwh) || 0) : 0);
     const battPct = vehicle && vehicle.batteryKwh ? Math.min(100, (kwh / Number(vehicle.batteryKwh)) * 100) : 0;
     const costPerKm = rangeKm > 0 ? amt / rangeKm : 0;
     return { rate, kwh, rangeKm, battPct, costPerKm };
@@ -134,9 +242,9 @@ const EVView = {
     const r = this._calc(rate, vehicle);
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     set('evResKwh', r.kwh.toFixed(1) + ' kWh');
-    set('evResRange', vehicle ? r.rangeKm.toFixed(0) + ' กม.' : '–');
+    set('evResRange', r.rangeKm > 0 ? r.rangeKm.toFixed(0) + ' กม.' : '–');
     set('evResBatt', vehicle ? r.battPct.toFixed(1) + '%' : '–');
-    set('evResCost', vehicle && r.rangeKm > 0 ? U.fmtCurrency(r.costPerKm, cfg.currency) : '–');
+    set('evResCost', r.rangeKm > 0 ? U.fmtCurrency(r.costPerKm, cfg.currency) : '–');
   },
 
   _saveAsExpense() {
@@ -155,7 +263,11 @@ const EVView = {
       name: `ชาร์จรถ EV (${providerName})`,
       amount: amt,
       date: U.today(),
-      extra: { evKwh: r.kwh, evProvider: providerName, evRate: rate }
+      extra: {
+        evKwh: r.kwh, evProvider: providerName, evRate: rate, evRangeKm: r.rangeKm,
+        evStartTime: this._startTime, evEndTime: this._endTime,
+        evStartPct: this._startPct, evEndPct: this._endPct
+      }
     });
   },
 
@@ -168,6 +280,7 @@ const EVView = {
       <div class="form-group"><label>ชื่อรุ่นรถ</label><input type="text" id="evVName" value="${v.name || ''}" placeholder="เช่น Tesla Model 3"></div>
       <div class="form-group"><label>ความจุแบตเตอรี่ (kWh)</label><input type="number" id="evVBatt" value="${v.batteryKwh || ''}" placeholder="60" min="0" step="0.1"></div>
       <div class="form-group"><label>อัตราสิ้นเปลือง (กม./kWh)</label><input type="number" id="evVEff" value="${v.efficiencyKmPerKwh || ''}" placeholder="6.0" min="0" step="0.1"></div>
+      <div style="font-size:.72rem;color:var(--text-secondary);margin:-4px 0 10px">แนะนำใช้ค่าเฉลี่ยจริงจากการขับสะสม แม่นยำกว่าค่าที่ค่ายรถแจ้งหรือเลขหน้าปัด ซึ่งแปรผันตามการขับแต่ละครั้ง</div>
       <div class="modal-actions"><button class="btn btn-outline" id="evVCan">ยกเลิก</button><button class="btn btn-primary" id="evVSave">💾 บันทึก</button></div>
     </div>`;
     document.getElementById('modalRoot').appendChild(o);

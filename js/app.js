@@ -6,6 +6,7 @@ const App = {
     seedWalletAccounts();
     seedEvCategory();
     seedEvProviders();
+    seedCashbackCategory();
     ST.purgeExpired(30);
     this.applyTheme();
     PinLock.check(() => this._boot());

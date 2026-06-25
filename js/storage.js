@@ -271,11 +271,20 @@ function seedEvCategory() {
   ST.add('categories', { id: 'cat_ev', name: 'ชาร์จรถ EV', icon: '⚡', color: '#10b981', type: 'expense', isDefault: true, createdAt: new Date().toISOString() });
 }
 
+function seedCashbackCategory() {
+  if (ST.getById('categories', 'cat_cashback')) return;
+  ST.add('categories', { id: 'cat_cashback', name: 'เงินคืน/Cashback', icon: '🔁', color: '#f59e0b', type: 'income', isDefault: true, createdAt: new Date().toISOString() });
+}
+
 function seedEvProviders() {
-  if (ST.getAll('ev_providers').length > 0) return;
+  const existing = ST.getAll('ev_providers').map(p => p.name);
   [
     { name: 'EA Anywhere', icon: '⚡', rate: 7.5 },
     { name: 'PEA VOLTA', icon: '🔌', rate: 6.5 },
+    { name: 'MEA EV (การไฟฟ้านครหลวง)', icon: '🔌', rate: 6.5 },
+    { name: 'PTT Station (PluZ)', icon: '🛣️', rate: 7.5 },
+    { name: 'Shell Recharge', icon: '🏪', rate: 8.5 },
+    { name: 'Charge+ (อมตะ)', icon: '⚡', rate: 7.0 },
     { name: 'ชาร์จที่บ้าน', icon: '🏠', rate: 4.5 }
-  ].forEach(p => ST.add('ev_providers', { ...p, isDefault: true, createdAt: new Date().toISOString() }));
+  ].filter(p => !existing.includes(p.name)).forEach(p => ST.add('ev_providers', { ...p, isDefault: true, createdAt: new Date().toISOString() }));
 }
