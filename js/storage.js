@@ -76,12 +76,12 @@ const ST = {
       recurring: 'rec_', budgets: 'bud_', accounts: 'acc_',
       credit_cards: 'cc_', wallet_accounts: 'wa_', account_transfers: 'at_',
       savings_goals: 'sg_', subscriptions: 'subs_', loan_plans: 'lp_',
-      item_groups: 'ig_'
+      item_groups: 'ig_', ev_providers: 'evp_'
     };
     return (p[c] || 'cfg_') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   },
   clearAll() {
-    ['transactions','categories','config','items','item_groups','recurring','budgets','accounts','credit_cards','wallet_accounts','account_transfers','installments','savings_goals','subscriptions','loan_plans']
+    ['transactions','categories','config','items','item_groups','recurring','budgets','accounts','credit_cards','wallet_accounts','account_transfers','installments','savings_goals','subscriptions','loan_plans','ev_providers']
     .forEach(c => localStorage.removeItem(this._p + c));
     this._cache = {};
   }
@@ -262,4 +262,20 @@ function seedWalletAccounts() {
     { id: 'wa_bank1', name: 'บัญชีธนาคาร', icon: '🏦', color: '#3b82f6', wtype: 'bank', balance: 0, isDefault: true },
     { id: 'wa_promptpay', name: 'พร้อมเพย์', icon: '📱', color: '#8b5cf6', wtype: 'digital', balance: 0, isDefault: true }
   ].forEach(a => ST.add('wallet_accounts', { ...a, createdAt: new Date().toISOString() }));
+}
+
+// One-time migration so existing installs (whose categories were already seeded
+// before the EV feature existed) also get the dedicated EV charging category.
+function seedEvCategory() {
+  if (ST.getById('categories', 'cat_ev')) return;
+  ST.add('categories', { id: 'cat_ev', name: 'ชาร์จรถ EV', icon: '⚡', color: '#10b981', type: 'expense', isDefault: true, createdAt: new Date().toISOString() });
+}
+
+function seedEvProviders() {
+  if (ST.getAll('ev_providers').length > 0) return;
+  [
+    { name: 'EA Anywhere', icon: '⚡', rate: 7.5 },
+    { name: 'PEA VOLTA', icon: '🔌', rate: 6.5 },
+    { name: 'ชาร์จที่บ้าน', icon: '🏠', rate: 4.5 }
+  ].forEach(p => ST.add('ev_providers', { ...p, isDefault: true, createdAt: new Date().toISOString() }));
 }

@@ -857,6 +857,23 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 .facc-name{font-size:.88rem;font-weight:600;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 .facc-bal{font-size:.72rem;color:var(--text-secondary)}
 .facc-empty{padding:14px;text-align:center;font-size:.8rem;color:var(--text-secondary)}
+/* EV charging calculator */
+.ev-calc-card{background:linear-gradient(135deg,#10b981 0%,#0d9488 100%);color:#fff;border:none}
+.ev-chip-row{display:flex;gap:6px;overflow-x:auto;padding-bottom:2px;scrollbar-width:none}
+.ev-chip-row::-webkit-scrollbar{display:none}
+.ev-chip{flex-shrink:0;background:rgba(255,255,255,.18);color:#fff;font-size:.74rem;font-weight:600;border-radius:10px;padding:6px 10px;cursor:pointer;white-space:nowrap;transition:background .15s}
+.ev-chip.sel{background:#fff;color:#0d9488}
+.ev-calc-card .form-group label{font-size:.74rem}
+.ev-calc-card input[type="number"]{background:rgba(255,255,255,.95);color:#1a1d28}
+.ev-amt-box{background:rgba(255,255,255,.14);border-radius:13px;padding:10px 12px;margin:10px 0}
+.ev-amt-box input{width:100%;border:none;background:transparent;color:#fff;font-size:1.3rem;font-weight:800;padding:0}
+.ev-res-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
+.ev-res-box{background:#fff;border-radius:12px;padding:9px 10px;color:#1a1d28}
+.ev-res-label{font-size:.6rem;color:#6b7280;font-weight:600;margin-bottom:2px}
+.ev-res-val{font-size:.92rem;font-weight:800;color:#0d9488}
+.ev-veh-ico{width:38px;height:38px;border-radius:11px;background:var(--success-light);display:flex;align-items:center;justify-content:center;font-size:1.1rem;flex-shrink:0}
+.ev-provider-row{display:flex;align-items:center;gap:10px;padding:8px 0;border-bottom:1px solid var(--border)}
+.ev-provider-row:last-child{border-bottom:none}
 </style>
 </head>
 <body>
@@ -876,6 +893,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
     <a data-view="recurring"><span class="nav-icon">🔁</span> รายการประจำ</a>
     <a data-view="subscriptions"><span class="nav-icon">📱</span> สมาชิก/Subscription</a>
     <a data-view="loans"><span class="nav-icon">🏦</span> แผนผ่อนชำระ</a>
+    <span class="nav-group">ยานพาหนะ</span>
+    <a data-view="ev"><span class="nav-icon">⚡</span> คำนวณค่าชาร์จ EV</a>
     <span class="nav-group">ทรัพย์สิน</span>
     <a data-view="savings"><span class="nav-icon">💰</span> เป้าหมายการออม</a>
     <a data-view="accounts"><span class="nav-icon">🏧</span> บัญชี & บัตร</a>
@@ -947,6 +966,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 <script src="js/savings.js"></script>
 <script src="js/subscriptions.js"></script>
 <script src="js/loans.js"></script>
+<script src="js/ev.js"></script>
 <script src="js/chatbot.js"></script>
 <script src="js/features.js"></script>
 <script src="https://www.gstatic.com/firebasejs/9.23.0/firebase-app-compat.js"></script>

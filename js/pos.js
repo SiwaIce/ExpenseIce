@@ -1025,7 +1025,7 @@ const POS = {
         const reimbursable = type === 'expense' && !!(o.querySelector('#mReimburse')?.checked);
         const lent = type === 'expense' && !!(o.querySelector('#mLent')?.checked);
         const lentTo = lent ? (o.querySelector('#mLentTo')?.value || '') : '';
-        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, groupId, date, time: new Date().toTimeString().slice(0,5), note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '', lent, lentStatus: lent ? 'pending' : '', lentTo });
+        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, groupId, date, time: new Date().toTimeString().slice(0,5), note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '', lent, lentStatus: lent ? 'pending' : '', lentTo, ...(prefill?.extra || {}) });
         window.__flashTxnId = newTxn.id;
         // Upload pending receipt image to Firebase Storage
         const pendingFile = POS._pendingReceiptFile;
@@ -1064,7 +1064,7 @@ const POS = {
       if (item && item.id && accountId) POS._rememberItemAcc(item.id, accountId);
       U.toast(isEdit ? 'อัปเดตแล้ว ✅' : 'บันทึกแล้ว ✅', 'success');
       o.remove();
-      App.rv(App.cv === 'transactions' ? 'transactions' : 'add');
+      App.rv(['transactions', 'ev'].includes(App.cv) ? App.cv : 'add');
     };
   }
 };

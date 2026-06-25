@@ -4,6 +4,8 @@ const App = {
   init() {
     seedData();
     seedWalletAccounts();
+    seedEvCategory();
+    seedEvProviders();
     ST.purgeExpired(30);
     this.applyTheme();
     PinLock.check(() => this._boot());
@@ -168,7 +170,8 @@ const App = {
       add: '➕ บันทึกรายการ', transactions: '💳 รายการทั้งหมด', dashboard: '📊 แดชบอร์ด',
       insights: '🤖 AI & แชท', reports: '📈 รายงาน', recurring: '🔁 รายการประจำ',
       budget: '🎯 งบประมาณ', accounts: '🏧 บัญชี & บัตร', networth: '🏦 Net Worth', settings: '⚙️ ตั้งค่า', trash: '🗑️ ถังขยะ',
-      savings: '🎯 เป้าหมายการออม', subscriptions: '📱 ตัวติดตามสมาชิก', loans: '🏦 แผนผ่อนชำระ'
+      savings: '🎯 เป้าหมายการออม', subscriptions: '📱 ตัวติดตามสมาชิก', loans: '🏦 แผนผ่อนชำระ',
+      ev: '⚡ คำนวณค่าชาร์จ EV'
     };
     document.getElementById('headerTitle').textContent = titles[view] || view;
     document.getElementById('sidebar').classList.remove('open');
@@ -194,6 +197,7 @@ const App = {
       case 'savings': c.innerHTML = SavingsView.render(); setTimeout(() => SavingsView.attachEvents(), 50); break;
       case 'subscriptions': c.innerHTML = SubsView.render(); setTimeout(() => SubsView.attachEvents(), 50); break;
       case 'loans': c.innerHTML = LoansView.render(); setTimeout(() => LoansView.attachEvents(), 50); break;
+      case 'ev': c.innerHTML = EVView.render(); setTimeout(() => EVView.attachEvents(), 50); break;
       default: c.innerHTML = POS.render(); setTimeout(() => POS.attachEvents(), 30);
     }
   },
