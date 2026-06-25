@@ -10,6 +10,7 @@ const EVView = {
   _pctTouched: false,
   _kwhConfirmed: '',
   _rangeConfirmed: '',
+  _odo: '',
   _showExtra: false,
 
   // Providers are item_groups under cat_ev — same storage as every other subcategory,
@@ -17,6 +18,16 @@ const EVView = {
   _providers() {
     return ST.getAll('item_groups').filter(g => g.categoryId === 'cat_ev')
       .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+  },
+
+  // Most recent past charge that has an ODO reading — used both as the reference
+  // hint shown next to the ODO field, and as the anchor for the next charge's
+  // distance-since-last-charge backfill.
+  _lastOdoTxn() {
+    const key = t => t.date + 'T' + (t.createdAt || '');
+    return ST.getAll('transactions')
+      .filter(t => t.categoryId === 'cat_ev' && Number(t.evOdo) > 0)
+      .sort((a, b) => key(b).localeCompare(key(a)))[0] || null;
   },
 
   render() {
@@ -33,10 +44,12 @@ const EVView = {
       + `<span class="ev-chip ${isCustom?'sel':''}" data-evp="custom">✏️ กำหนดเอง</span>`;
 
     const lo = Math.min(this._startPct, this._endPct), hi = Math.max(this._startPct, this._endPct);
+    const lastOdoTxn = this._lastOdoTxn();
 
     return `<div style="padding-bottom:20px">
       <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:14px">
         <h2 style="margin:0;font-size:1.1rem">⚡ คำนวณค่าชาร์จ EV</h2>
+        <button class="btn btn-outline btn-sm" id="btnEvHistory">📜 ประวัติ</button>
       </div>
 
       <div class="card ev-calc-card">
@@ -66,10 +79,14 @@ const EVView = {
           <input type="range" id="evEndPct" class="ev-range" min="0" max="100" style="margin-top:6px" value="${this._endPct}">
           <div style="text-align:center;font-size:.7rem;opacity:.9;margin:6px 0 12px" id="evBattDelta">${this._pctTouched ? `ได้แบตเพิ่ม <b>+${(hi-lo)}%</b>${vehicle ? ` · ประมาณ <b>${(((hi-lo)/100)*vehicle.batteryKwh).toFixed(1)} kWh</b>` : ''}` : 'ยังไม่ได้ลากระบุช่วง % แบต'}</div>
 
-          <div style="display:flex;gap:8px;margin-bottom:4px">
+          <div style="display:flex;gap:8px;margin-bottom:12px">
             <div style="flex:1"><div class="ev-sub-label">หน่วยจริงจากเครื่องชาร์จ (kWh)</div><input type="number" id="evKwhConfirmed" value="${this._kwhConfirmed}" placeholder="เช่น 23.1" min="0" step="0.1"></div>
             <div style="flex:1"><div class="ev-sub-label">ระยะที่ได้จริง (กม.)</div><input type="number" id="evRangeConfirmed" value="${this._rangeConfirmed}" placeholder="เช่น 145" min="0" step="1"></div>
           </div>
+
+          <div class="ev-sub-label">🛣 เลข ODO ก่อนชาร์จ (กม.)${lastOdoTxn ? ` <span style="font-weight:400;opacity:.75">— ครั้งก่อน: ${Number(lastOdoTxn.evOdo).toLocaleString()} กม.</span>` : ''}</div>
+          <input type="number" id="evOdo" value="${this._odo}" placeholder="เช่น 12345" min="0" step="1">
+          <div style="font-size:.66rem;opacity:.75;margin-top:3px">ใส่ทุกครั้งที่ชาร์จ ระบบจะคำนวณระยะทางที่ขับได้จริงจากการชาร์จครั้งก่อนให้อัตโนมัติ (ดูได้ใน 📜 ประวัติ)</div>
         </div>
 
         <div class="ev-res-grid" style="margin-top:12px">
@@ -99,16 +116,15 @@ const EVView = {
         <span>🔌 ผู้ให้บริการชาร์จ</span>
         <button class="btn btn-outline btn-sm" id="btnEvAddProvider">+ เพิ่ม</button>
       </div>
-      <div class="card">
-        ${providers.length === 0 ? '<div style="font-size:.82rem;color:var(--text-secondary);text-align:center;padding:8px 0">ยังไม่มีผู้ให้บริการ</div>' : providers.map((p, i) => `
-          <div class="ev-provider-row">
+      <div class="card" id="evProviderList">
+        ${providers.length === 0 ? '<div style="font-size:.82rem;color:var(--text-secondary);text-align:center;padding:8px 0">ยังไม่มีผู้ให้บริการ</div>' : providers.map(p => `
+          <div class="ev-provider-row" data-evgid="${p.id}">
+            <span class="ev-drag-handle" data-evdrag="${p.id}">⠿</span>
             <span style="font-size:1.1rem">${p.icon||'🔌'}</span>
             <div style="flex:1;min-width:0">
               <div style="font-size:.82rem;font-weight:600">${p.name}</div>
               <div style="font-size:.72rem;color:var(--text-secondary)">${p.rate ? p.rate + ' บาท/kWh' : 'ยังไม่ตั้งอัตรา'}</div>
             </div>
-            <button class="btn-ghost btn-sm" data-evpu="${p.id}" ${i===0?'disabled style="opacity:.3"':''}>▲</button>
-            <button class="btn-ghost btn-sm" data-evpdn="${p.id}" ${i===providers.length-1?'disabled style="opacity:.3"':''}>▼</button>
             <button class="btn-ghost btn-sm" data-evpe="${p.id}">✏️</button>
             <button class="btn-ghost btn-sm" data-evpd="${p.id}">🗑️</button>
           </div>
@@ -247,6 +263,8 @@ const EVView = {
     endEl?.addEventListener('input', onPctChange);
     document.getElementById('evKwhConfirmed')?.addEventListener('input', e => { this._kwhConfirmed = e.target.value; this._updateResult(); });
     document.getElementById('evRangeConfirmed')?.addEventListener('input', e => { this._rangeConfirmed = e.target.value; this._updateResult(); });
+    document.getElementById('evOdo')?.addEventListener('input', e => { this._odo = e.target.value; });
+    document.getElementById('btnEvHistory')?.addEventListener('click', () => this.openHistoryModal());
     document.getElementById('btnEvSave')?.addEventListener('click', () => this._saveAsExpense());
     document.getElementById('btnEvFuelCfg')?.addEventListener('click', () => this.openFuelCompareModal());
     document.getElementById('btnEvVehicle')?.addEventListener('click', () => this.openVehicleModal());
@@ -258,20 +276,49 @@ const EVView = {
       const ok = await U.confirm('ลบผู้ให้บริการนี้?');
       if (ok) { ST.delete('item_groups', btn.dataset.evpd); if (this._selProviderId === btn.dataset.evpd) this._selProviderId = null; App.rv('ev'); }
     }));
-    document.querySelectorAll('[data-evpu]').forEach(btn => btn.addEventListener('click', () => this._moveProvider(btn.dataset.evpu, -1)));
-    document.querySelectorAll('[data-evpdn]').forEach(btn => btn.addEventListener('click', () => this._moveProvider(btn.dataset.evpdn, 1)));
+    this._attachDragReorder();
   },
 
-  _moveProvider(id, dir) {
-    const providers = this._providers();
-    const i = providers.findIndex(p => p.id === id);
-    const j = i + dir;
-    if (i < 0 || j < 0 || j >= providers.length) return;
-    const a = providers[i], b = providers[j];
-    const orderA = a.order ?? i, orderB = b.order ?? j;
-    ST.update('item_groups', a.id, { order: orderB });
-    ST.update('item_groups', b.id, { order: orderA });
-    App.rv('ev');
+  // Long-press a provider row's handle, then drag up/down to reorder. The list
+  // reorders live as the dragged row crosses a sibling's midpoint; the final
+  // DOM order is committed to item_groups.order on release.
+  _attachDragReorder() {
+    const container = document.getElementById('evProviderList');
+    if (!container) return;
+    container.querySelectorAll('[data-evdrag]').forEach(handle => {
+      handle.addEventListener('pointerdown', e => {
+        const row = handle.closest('.ev-provider-row');
+        let dragging = false;
+        const longPressTimer = setTimeout(() => {
+          dragging = true;
+          row.classList.add('dragging');
+        }, 160);
+        const onMove = e2 => {
+          if (!dragging) return;
+          e2.preventDefault();
+          const rows = [...container.querySelectorAll('.ev-provider-row')];
+          const after = rows.find(r => {
+            if (r === row) return false;
+            const rect = r.getBoundingClientRect();
+            return e2.clientY < rect.top + rect.height / 2;
+          });
+          if (after) container.insertBefore(row, after);
+          else container.appendChild(row);
+        };
+        const onUp = () => {
+          clearTimeout(longPressTimer);
+          document.removeEventListener('pointermove', onMove);
+          document.removeEventListener('pointerup', onUp);
+          if (dragging) {
+            row.classList.remove('dragging');
+            const ids = [...container.querySelectorAll('.ev-provider-row')].map(r => r.dataset.evgid);
+            ids.forEach((id, i) => ST.update('item_groups', id, { order: i }));
+          }
+        };
+        document.addEventListener('pointermove', onMove);
+        document.addEventListener('pointerup', onUp);
+      });
+    });
   },
 
   _updateBattPreview() {
@@ -337,6 +384,22 @@ const EVView = {
     const rate = isCustom ? this._customRate : (sel ? Number(sel.rate) || 0 : 0);
     const r = this._calc(rate, vehicle);
     const providerName = isCustom ? 'กำหนดเอง' : (sel ? sel.name : 'ไม่ระบุ');
+
+    // ODO is read off the dashboard, so it's immune to the day-to-day swings in driving
+    // efficiency — diffing it against the previous charge's ODO gives the *actual*
+    // distance that charge achieved, which we backfill onto that earlier record now
+    // that it's finally knowable (you can't know it until the next charge happens).
+    const odo = Number(this._odo) || 0;
+    if (odo > 0) {
+      const prevTxn = this._lastOdoTxn();
+      if (prevTxn && odo > Number(prevTxn.evOdo)) {
+        const dist = odo - Number(prevTxn.evOdo);
+        ST.update('transactions', prevTxn.id, { evActualDistanceKm: dist, evActualCostPerKm: Number(prevTxn.amount) / dist });
+      } else if (prevTxn) {
+        U.toast('เลข ODO ต้องมากกว่าครั้งก่อน ข้ามการคำนวณระยะทางจริง', 'error');
+      }
+    }
+
     POS.type = 'expense';
     POS.openModal(null, 'cat_ev', null, {
       name: `ชาร์จรถ EV (${providerName})`,
@@ -346,9 +409,40 @@ const EVView = {
       extra: {
         evKwh: r.kwh, evProvider: providerName, evRate: rate, evRangeKm: r.rangeKm,
         evStartTime: this._startTime, evEndTime: this._endTime,
-        ...(this._pctTouched ? { evStartPct: this._startPct, evEndPct: this._endPct } : {})
+        ...(this._pctTouched ? { evStartPct: this._startPct, evEndPct: this._endPct } : {}),
+        ...(odo > 0 ? { evOdo: odo } : {})
       }
     });
+  },
+
+  openHistoryModal() {
+    const cfg = U.getConfig();
+    const key = t => t.date + 'T' + (t.createdAt || '');
+    const txns = ST.getAll('transactions').filter(t => t.categoryId === 'cat_ev').sort((a, b) => key(b).localeCompare(key(a)));
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:420px">
+      <h3>📜 ประวัติการชาร์จ</h3>
+      <div style="max-height:60vh;overflow-y:auto">
+        ${txns.length === 0 ? '<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:.85rem">ยังไม่มีประวัติ</div>' : txns.map(t => {
+          const hasActual = Number(t.evActualDistanceKm) > 0;
+          const distLabel = hasActual ? `${Number(t.evActualDistanceKm).toFixed(0)} กม. (จริง)` : (Number(t.evRangeKm) > 0 ? `≈${Number(t.evRangeKm).toFixed(0)} กม. (ประมาณ)` : 'ไม่มีข้อมูลระยะทาง');
+          const costPerKm = hasActual ? Number(t.evActualCostPerKm) : (Number(t.evRangeKm) > 0 ? Number(t.amount) / Number(t.evRangeKm) : 0);
+          const costLabel = costPerKm > 0 ? `${hasActual ? '' : '≈'}${U.fmtCurrency(costPerKm, cfg.currency)}/กม.` : '–';
+          return `<div class="ev-provider-row">
+            <span style="font-size:1.1rem">⚡</span>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.82rem;font-weight:600">${t.evProvider || 'ไม่ระบุ'} · ${U.fmtDateShort(t.date)}</div>
+              <div style="font-size:.72rem;color:var(--text-secondary)">${U.fmtCurrency(Number(t.amount), cfg.currency)} · ${Number(t.evKwh || 0).toFixed(1)} kWh · ${distLabel}</div>
+            </div>
+            <div style="text-align:right;font-size:.78rem;font-weight:700;color:${hasActual ? '#0d9488' : 'var(--text-secondary)'};flex-shrink:0">${costLabel}</div>
+          </div>`;
+        }).join('')}
+      </div>
+      <div class="modal-actions"><button class="btn btn-outline" id="evHistCan">ปิด</button></div>
+    </div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#evHistCan').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
   },
 
   openVehicleModal() {
