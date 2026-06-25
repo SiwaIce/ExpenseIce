@@ -440,6 +440,7 @@ button,a,label,input,select,textarea,.nchip,.preset-btn,.dshort,.type-btn,.chat-
 .fab-wrap.open .fab-item:nth-child(3){transition-delay:.1s}
 .fab-wrap.open .fab-item:nth-child(4){transition-delay:.15s}
 .fab-wrap.open .fab-item:nth-child(5){transition-delay:.2s}
+.fab-wrap.open .fab-item:nth-child(6){transition-delay:.25s}
 .fab-item-btn{width:46px;height:46px;border-radius:50%;background:var(--bg-card);border:1.5px solid var(--border);box-shadow:var(--shadow-md);font-size:1.15rem;cursor:pointer;touch-action:manipulation;transition:transform .15s}
 .fab-item-btn:active{transform:scale(.9)}
 .fab-item-label{background:var(--bg-card);color:var(--text);font-size:.78rem;font-weight:600;padding:5px 12px;border-radius:20px;box-shadow:var(--shadow-md);white-space:nowrap;border:1px solid var(--border)}
@@ -959,13 +960,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 
 <!-- FAB -->
 <div class="fab-wrap" id="fabWrap">
-  <div class="fab-menu" id="fabMenu">
-    <div class="fab-item" data-fab="settings"><button class="fab-item-btn">⚙️</button><span class="fab-item-label">ตั้งค่า</span></div>
-    <div class="fab-item" data-fab="ai"><button class="fab-item-btn">🤖</button><span class="fab-item-label">AI Dashboard</span></div>
-    <div class="fab-item" data-fab="add"><button class="fab-item-btn">➕</button><span class="fab-item-label">บันทึกรายการ</span></div>
-    <div class="fab-item" data-fab="scan"><button class="fab-item-btn">📷</button><span class="fab-item-label">สแกนใบเสร็จ</span></div>
-    <div class="fab-item" data-fab="transfer"><button class="fab-item-btn">↔️</button><span class="fab-item-label">โอนเงิน</span></div>
-  </div>
+  <div class="fab-menu" id="fabMenu"></div>
   <button class="fab-main" id="fabBtn" title="เมนูลัด">＋</button>
 </div>
 <input type="file" id="fabReceiptInput" accept="image/*" capture="environment" style="display:none">
@@ -994,27 +989,28 @@ if ('serviceWorker' in navigator) {
 }
 
 // FAB
-window.addEventListener('DOMContentLoaded', () => {
-  const fabBtn  = document.getElementById('fabBtn');
-  const fabWrap = document.getElementById('fabWrap');
-  if (!fabBtn || !fabWrap) return;
-
-  fabBtn.addEventListener('click', () => {
-    const isOpen = fabWrap.classList.toggle('open');
-    fabBtn.classList.toggle('open', isOpen);
-  });
-
-  document.addEventListener('click', e => {
-    if (!fabWrap.contains(e.target)) {
-      fabWrap.classList.remove('open');
-      fabBtn.classList.remove('open');
-    }
-  });
-
-  document.querySelectorAll('.fab-item').forEach(item => {
+window.FAB_ITEMS = [
+  { id: 'settings', icon: '⚙️', label: 'ตั้งค่า' },
+  { id: 'ai', icon: '🤖', label: 'AI Dashboard' },
+  { id: 'add', icon: '➕', label: 'บันทึกรายการ' },
+  { id: 'scan', icon: '📷', label: 'สแกนใบเสร็จ' },
+  { id: 'transfer', icon: '↔️', label: 'โอนเงิน' },
+  { id: 'ev', icon: '⚡', label: 'คำนวณ EV' }
+];
+window.renderFabMenu = function() {
+  const fabMenu = document.getElementById('fabMenu');
+  if (!fabMenu) return;
+  const cfg = (typeof U !== 'undefined') ? U.getConfig() : {};
+  const enabled = cfg.fabItems || {};
+  fabMenu.innerHTML = window.FAB_ITEMS.filter(it => enabled[it.id] !== false).map(it =>
+    `<div class="fab-item" data-fab="${it.id}"><button class="fab-item-btn">${it.icon}</button><span class="fab-item-label">${it.label}</span></div>`
+  ).join('');
+  fabMenu.querySelectorAll('.fab-item').forEach(item => {
     item.addEventListener('click', () => {
-      fabWrap.classList.remove('open');
-      fabBtn.classList.remove('open');
+      const fabWrap = document.getElementById('fabWrap');
+      const fabBtn = document.getElementById('fabBtn');
+      fabWrap?.classList.remove('open');
+      fabBtn?.classList.remove('open');
       const action = item.dataset.fab;
       if (action === 'scan') {
         if (typeof App !== 'undefined' && App.cv !== 'add') {
@@ -1029,6 +1025,8 @@ window.addEventListener('DOMContentLoaded', () => {
         if (typeof App !== 'undefined') App.rv('insights');
       } else if (action === 'settings') {
         if (typeof App !== 'undefined') App.rv('settings');
+      } else if (action === 'ev') {
+        if (typeof App !== 'undefined') App.rv('ev');
       } else if (action === 'transfer') {
         if (typeof AccountsView !== 'undefined') {
           if (typeof App !== 'undefined' && App.cv !== 'accounts') {
@@ -1040,6 +1038,26 @@ window.addEventListener('DOMContentLoaded', () => {
         }
       }
     });
+  });
+};
+
+window.addEventListener('DOMContentLoaded', () => {
+  const fabBtn  = document.getElementById('fabBtn');
+  const fabWrap = document.getElementById('fabWrap');
+  if (!fabBtn || !fabWrap) return;
+
+  window.renderFabMenu();
+
+  fabBtn.addEventListener('click', () => {
+    const isOpen = fabWrap.classList.toggle('open');
+    fabBtn.classList.toggle('open', isOpen);
+  });
+
+  document.addEventListener('click', e => {
+    if (!fabWrap.contains(e.target)) {
+      fabWrap.classList.remove('open');
+      fabBtn.classList.remove('open');
+    }
   });
 
   // FAB drag to reposition

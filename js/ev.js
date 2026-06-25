@@ -7,21 +7,29 @@ const EVView = {
   _endTime: '',
   _startPct: 20,
   _endPct: 80,
+  _pctTouched: false,
   _kwhConfirmed: '',
   _rangeConfirmed: '',
   _showExtra: false,
 
+  // Providers are item_groups under cat_ev — same storage as every other subcategory,
+  // so adding/editing/deleting here or from Settings > หมวดรอง stays in sync automatically.
+  _providers() {
+    return ST.getAll('item_groups').filter(g => g.categoryId === 'cat_ev')
+      .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
+  },
+
   render() {
     const cfg = U.getConfig();
     const vehicle = cfg.evVehicle || null;
-    const providers = ST.getAll('ev_providers');
+    const providers = this._providers();
     if (this._selProviderId === null && providers.length) this._selProviderId = providers[0].id;
     const isCustom = this._selProviderId === 'custom';
     const sel = !isCustom ? providers.find(p => p.id === this._selProviderId) : null;
-    const rate = isCustom ? this._customRate : (sel ? sel.rate : 0);
+    const rate = isCustom ? this._customRate : (sel ? Number(sel.rate) || 0 : 0);
     const r = this._calc(rate, vehicle);
 
-    const chipsHTML = providers.map(p => `<span class="ev-chip ${p.id===this._selProviderId?'sel':''}" data-evp="${p.id}">${p.icon} ${p.name} · ${p.rate}/kWh</span>`).join('')
+    const chipsHTML = providers.map(p => `<span class="ev-chip ${p.id===this._selProviderId?'sel':''}" data-evp="${p.id}">${p.icon||'🔌'} ${p.name} · ${p.rate ? p.rate + '/kWh' : 'ยังไม่ตั้งอัตรา'}</span>`).join('')
       + `<span class="ev-chip ${isCustom?'sel':''}" data-evp="custom">✏️ กำหนดเอง</span>`;
 
     const lo = Math.min(this._startPct, this._endPct), hi = Math.max(this._startPct, this._endPct);
@@ -51,12 +59,12 @@ const EVView = {
             <div style="flex:1"><div class="ev-sub-label">⏱ สิ้นสุด</div><input type="time" id="evEndTime" value="${this._endTime}"></div>
           </div>
 
-          <div class="ev-sub-label">🔋 % แบตเตอรี่ — ลากเพื่อระบุช่วงที่ชาร์จ</div>
+          <div class="ev-sub-label">🔋 % แบตเตอรี่ — ลากเพื่อระบุช่วงที่ชาร์จ (ไม่ลาก = ไม่ใช้คำนวณ)</div>
           <div class="ev-batt-preview"><div class="ev-batt-fill" id="evBattFill" style="left:${lo}%;width:${hi-lo}%"></div></div>
           <div style="display:flex;justify-content:space-between;font-size:.66rem;opacity:.8;margin:2px 0 4px"><span>เริ่ม <b id="evStartPctLbl">${this._startPct}</b>%</span><span>จบ <b id="evEndPctLbl">${this._endPct}</b>%</span></div>
           <input type="range" id="evStartPct" class="ev-range" min="0" max="100" value="${this._startPct}">
           <input type="range" id="evEndPct" class="ev-range" min="0" max="100" style="margin-top:6px" value="${this._endPct}">
-          <div style="text-align:center;font-size:.7rem;opacity:.9;margin:6px 0 12px" id="evBattDelta">ได้แบตเพิ่ม <b>+${(hi-lo)}%</b>${vehicle ? ` · ประมาณ <b>${(((hi-lo)/100)*vehicle.batteryKwh).toFixed(1)} kWh</b>` : ''}</div>
+          <div style="text-align:center;font-size:.7rem;opacity:.9;margin:6px 0 12px" id="evBattDelta">${this._pctTouched ? `ได้แบตเพิ่ม <b>+${(hi-lo)}%</b>${vehicle ? ` · ประมาณ <b>${(((hi-lo)/100)*vehicle.batteryKwh).toFixed(1)} kWh</b>` : ''}` : 'ยังไม่ได้ลากระบุช่วง % แบต'}</div>
 
           <div style="display:flex;gap:8px;margin-bottom:4px">
             <div style="flex:1"><div class="ev-sub-label">หน่วยจริงจากเครื่องชาร์จ (kWh)</div><input type="number" id="evKwhConfirmed" value="${this._kwhConfirmed}" placeholder="เช่น 23.1" min="0" step="0.1"></div>
@@ -92,13 +100,15 @@ const EVView = {
         <button class="btn btn-outline btn-sm" id="btnEvAddProvider">+ เพิ่ม</button>
       </div>
       <div class="card">
-        ${providers.length === 0 ? '<div style="font-size:.82rem;color:var(--text-secondary);text-align:center;padding:8px 0">ยังไม่มีผู้ให้บริการ</div>' : providers.map(p => `
+        ${providers.length === 0 ? '<div style="font-size:.82rem;color:var(--text-secondary);text-align:center;padding:8px 0">ยังไม่มีผู้ให้บริการ</div>' : providers.map((p, i) => `
           <div class="ev-provider-row">
-            <span style="font-size:1.1rem">${p.icon}</span>
+            <span style="font-size:1.1rem">${p.icon||'🔌'}</span>
             <div style="flex:1;min-width:0">
               <div style="font-size:.82rem;font-weight:600">${p.name}</div>
-              <div style="font-size:.72rem;color:var(--text-secondary)">${p.rate} บาท/kWh</div>
+              <div style="font-size:.72rem;color:var(--text-secondary)">${p.rate ? p.rate + ' บาท/kWh' : 'ยังไม่ตั้งอัตรา'}</div>
             </div>
+            <button class="btn-ghost btn-sm" data-evpu="${p.id}" ${i===0?'disabled style="opacity:.3"':''}>▲</button>
+            <button class="btn-ghost btn-sm" data-evpdn="${p.id}" ${i===providers.length-1?'disabled style="opacity:.3"':''}>▼</button>
             <button class="btn-ghost btn-sm" data-evpe="${p.id}">✏️</button>
             <button class="btn-ghost btn-sm" data-evpd="${p.id}">🗑️</button>
           </div>
@@ -227,6 +237,7 @@ const EVView = {
     document.getElementById('evEndTime')?.addEventListener('input', e => { this._endTime = e.target.value; });
     const startEl = document.getElementById('evStartPct'), endEl = document.getElementById('evEndPct');
     const onPctChange = () => {
+      this._pctTouched = true;
       this._startPct = parseInt(startEl.value) || 0;
       this._endPct = parseInt(endEl.value) || 0;
       this._updateBattPreview();
@@ -241,12 +252,26 @@ const EVView = {
     document.getElementById('btnEvVehicle')?.addEventListener('click', () => this.openVehicleModal());
     document.getElementById('btnEvAddProvider')?.addEventListener('click', () => this.openProviderModal());
     document.querySelectorAll('[data-evpe]').forEach(btn => btn.addEventListener('click', () => {
-      const p = ST.getById('ev_providers', btn.dataset.evpe); if (p) this.openProviderModal(p);
+      const p = ST.getById('item_groups', btn.dataset.evpe); if (p) this.openProviderModal(p);
     }));
     document.querySelectorAll('[data-evpd]').forEach(btn => btn.addEventListener('click', async () => {
       const ok = await U.confirm('ลบผู้ให้บริการนี้?');
-      if (ok) { ST.delete('ev_providers', btn.dataset.evpd); if (this._selProviderId === btn.dataset.evpd) this._selProviderId = null; App.rv('ev'); }
+      if (ok) { ST.delete('item_groups', btn.dataset.evpd); if (this._selProviderId === btn.dataset.evpd) this._selProviderId = null; App.rv('ev'); }
     }));
+    document.querySelectorAll('[data-evpu]').forEach(btn => btn.addEventListener('click', () => this._moveProvider(btn.dataset.evpu, -1)));
+    document.querySelectorAll('[data-evpdn]').forEach(btn => btn.addEventListener('click', () => this._moveProvider(btn.dataset.evpdn, 1)));
+  },
+
+  _moveProvider(id, dir) {
+    const providers = this._providers();
+    const i = providers.findIndex(p => p.id === id);
+    const j = i + dir;
+    if (i < 0 || j < 0 || j >= providers.length) return;
+    const a = providers[i], b = providers[j];
+    const orderA = a.order ?? i, orderB = b.order ?? j;
+    ST.update('item_groups', a.id, { order: orderB });
+    ST.update('item_groups', b.id, { order: orderA });
+    App.rv('ev');
   },
 
   _updateBattPreview() {
@@ -262,12 +287,14 @@ const EVView = {
   },
 
   // Priority for accuracy: confirmed reading from the charger/trip computer > battery
-  // % delta against the known pack size > a plain rate-based estimate from the price paid.
+  // % delta against the known pack size (only once the user has actually dragged the
+  // sliders — the 20/80 default position is just a UI placeholder, not real data) >
+  // a plain rate-based estimate from the price paid.
   _calc(rate, vehicle) {
     const amt = Number(this._amt) || 0;
     const kwhFromRate = rate > 0 ? amt / rate : 0;
     const pctDelta = Math.abs(this._endPct - this._startPct);
-    const kwhFromPct = vehicle && pctDelta > 0 ? (pctDelta / 100) * Number(vehicle.batteryKwh) : 0;
+    const kwhFromPct = this._pctTouched && vehicle && pctDelta > 0 ? (pctDelta / 100) * Number(vehicle.batteryKwh) : 0;
     const kwhConfirmed = Number(this._kwhConfirmed) || 0;
     const kwh = kwhConfirmed > 0 ? kwhConfirmed : (kwhFromPct > 0 ? kwhFromPct : kwhFromRate);
     const rangeConfirmed = Number(this._rangeConfirmed) || 0;
@@ -280,10 +307,10 @@ const EVView = {
   _updateResult() {
     const cfg = U.getConfig();
     const vehicle = cfg.evVehicle || null;
-    const providers = ST.getAll('ev_providers');
+    const providers = this._providers();
     const isCustom = this._selProviderId === 'custom';
     const sel = !isCustom ? providers.find(p => p.id === this._selProviderId) : null;
-    const rate = isCustom ? this._customRate : (sel ? sel.rate : 0);
+    const rate = isCustom ? this._customRate : (sel ? Number(sel.rate) || 0 : 0);
     const r = this._calc(rate, vehicle);
     const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
     set('evResKwh', r.kwh.toFixed(1) + ' kWh');
@@ -304,10 +331,10 @@ const EVView = {
     if (amt <= 0) { U.toast('กรุณากรอกจำนวนเงินที่จ่าย', 'error'); return; }
     const cfg = U.getConfig();
     const vehicle = cfg.evVehicle || null;
-    const providers = ST.getAll('ev_providers');
+    const providers = this._providers();
     const isCustom = this._selProviderId === 'custom';
     const sel = !isCustom ? providers.find(p => p.id === this._selProviderId) : null;
-    const rate = isCustom ? this._customRate : (sel ? sel.rate : 0);
+    const rate = isCustom ? this._customRate : (sel ? Number(sel.rate) || 0 : 0);
     const r = this._calc(rate, vehicle);
     const providerName = isCustom ? 'กำหนดเอง' : (sel ? sel.name : 'ไม่ระบุ');
     POS.type = 'expense';
@@ -315,10 +342,11 @@ const EVView = {
       name: `ชาร์จรถ EV (${providerName})`,
       amount: amt,
       date: U.today(),
+      groupId: sel ? sel.id : '',
       extra: {
         evKwh: r.kwh, evProvider: providerName, evRate: rate, evRangeKm: r.rangeKm,
         evStartTime: this._startTime, evEndTime: this._endTime,
-        evStartPct: this._startPct, evEndPct: this._endPct
+        ...(this._pctTouched ? { evStartPct: this._startPct, evEndPct: this._endPct } : {})
       }
     });
   },
@@ -380,7 +408,7 @@ const EVView = {
       <h3>${isEdit ? '✏️ แก้ไขผู้ให้บริการ' : '🔌 เพิ่มผู้ให้บริการชาร์จ'}</h3>
       <div class="form-group"><label>ชื่อผู้ให้บริการ</label><input type="text" id="evpName" value="${isEdit ? edit.name : ''}" placeholder="เช่น EA Anywhere"></div>
       <div class="form-group"><label>ไอคอน</label><div style="display:flex;flex-wrap:wrap;gap:5px;margin-bottom:6px" id="evpIconPick">${icons.map(ic => `<span style="font-size:1.3rem;cursor:pointer;padding:3px 5px;border-radius:6px;border:2px solid ${selIcon===ic?'var(--accent)':'transparent'}" data-evpic="${ic}">${ic}</span>`).join('')}</div><input type="text" id="evpIcon" value="${selIcon}" maxlength="4" placeholder="หรือพิมพ์/วางอีโมจิเอง" style="width:120px;margin-top:6px;font-size:1.1rem;text-align:center"></div>
-      <div class="form-group"><label>อัตราค่าไฟ (บาท/kWh)</label><input type="number" id="evpRate" value="${isEdit ? edit.rate : ''}" placeholder="7.5" min="0" step="0.01"></div>
+      <div class="form-group"><label>อัตราค่าไฟ (บาท/kWh)</label><input type="number" id="evpRate" value="${isEdit ? (edit.rate||'') : ''}" placeholder="7.5" min="0" step="0.01"></div>
       <div class="modal-actions"><button class="btn btn-outline" id="evpCan">ยกเลิก</button><button class="btn btn-primary" id="evpSave">💾 บันทึก</button></div>
     </div>`;
     document.getElementById('modalRoot').appendChild(o);
@@ -395,9 +423,9 @@ const EVView = {
       const rate = parseFloat(o.querySelector('#evpRate').value) || 0;
       if (!name) { U.toast('กรุณากรอกชื่อผู้ให้บริการ', 'error'); return; }
       if (rate <= 0) { U.toast('กรุณากรอกอัตราค่าไฟ', 'error'); return; }
-      const data = { name, icon: o.querySelector('#evpIcon').value, rate };
-      if (isEdit) ST.update('ev_providers', edit.id, data);
-      else ST.add('ev_providers', data);
+      const icon = o.querySelector('#evpIcon').value;
+      if (isEdit) ST.update('item_groups', edit.id, { name, icon, rate });
+      else ST.add('item_groups', { categoryId: 'cat_ev', name, icon, rate, order: this._providers().length });
       U.toast(isEdit ? 'อัปเดตแล้ว ✅' : 'เพิ่มแล้ว ✅', 'success');
       o.remove(); App.rv('ev');
     };

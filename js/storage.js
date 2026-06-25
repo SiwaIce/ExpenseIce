@@ -76,7 +76,7 @@ const ST = {
       recurring: 'rec_', budgets: 'bud_', accounts: 'acc_',
       credit_cards: 'cc_', wallet_accounts: 'wa_', account_transfers: 'at_',
       savings_goals: 'sg_', subscriptions: 'subs_', loan_plans: 'lp_',
-      item_groups: 'ig_', ev_providers: 'evp_'
+      item_groups: 'ig_'
     };
     return (p[c] || 'cfg_') + Date.now().toString(36) + Math.random().toString(36).slice(2, 6);
   },
@@ -276,8 +276,22 @@ function seedCashbackCategory() {
   ST.add('categories', { id: 'cat_cashback', name: 'เงินคืน/Cashback', icon: '🔁', color: '#f59e0b', type: 'income', isDefault: true, createdAt: new Date().toISOString() });
 }
 
-function seedEvProviders() {
-  const existing = ST.getAll('ev_providers').map(p => p.name);
+// ev_providers used to be its own collection; providers are now just item_groups
+// under cat_ev so they share the same add/edit/delete UI as every other subcategory
+// and show up automatically in Settings > หมวดรอง. This moves any pre-existing
+// ev_providers rows over once, then the old collection is no longer used.
+function migrateEvProviders() {
+  const old = ST.getAll('ev_providers');
+  if (old.length === 0) return;
+  const existingNames = ST.getAll('item_groups').filter(g => g.categoryId === 'cat_ev').map(g => g.name);
+  let order = ST.getAll('item_groups').filter(g => g.categoryId === 'cat_ev').length;
+  old.filter(p => !existingNames.includes(p.name)).forEach(p => {
+    ST.add('item_groups', { categoryId: 'cat_ev', name: p.name, icon: p.icon, rate: p.rate, order: order++ });
+  });
+  old.forEach(p => ST.delete('ev_providers', p.id));
+}
+function seedEvProviderGroups() {
+  if (ST.getAll('item_groups').some(g => g.categoryId === 'cat_ev')) return;
   [
     { name: 'EA Anywhere', icon: '⚡', rate: 7.5 },
     { name: 'PEA VOLTA', icon: '🔌', rate: 6.5 },
@@ -286,5 +300,5 @@ function seedEvProviders() {
     { name: 'Shell Recharge', icon: '🏪', rate: 8.5 },
     { name: 'Charge+ (อมตะ)', icon: '⚡', rate: 7.0 },
     { name: 'ชาร์จที่บ้าน', icon: '🏠', rate: 4.5 }
-  ].filter(p => !existing.includes(p.name)).forEach(p => ST.add('ev_providers', { ...p, isDefault: true, createdAt: new Date().toISOString() }));
+  ].forEach((p, i) => ST.add('item_groups', { categoryId: 'cat_ev', name: p.name, icon: p.icon, rate: p.rate, order: i }));
 }

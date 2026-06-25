@@ -5,7 +5,8 @@ const App = {
     seedData();
     seedWalletAccounts();
     seedEvCategory();
-    seedEvProviders();
+    migrateEvProviders();
+    seedEvProviderGroups();
     seedCashbackCategory();
     ST.purgeExpired(30);
     this.applyTheme();
