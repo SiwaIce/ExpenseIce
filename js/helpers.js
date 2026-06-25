@@ -501,22 +501,22 @@ function attachAccSelEvents(modal, type, onChange) {
 function deleteTransaction(id, afterDelete, afterUndo) {
   const txn = ST.getById('transactions', id);
   if (!txn) return;
+  // Balance/used reversal is driven uniformly by accountId+type (and payCardId for
+  // debt-payment txns, see openCCPayModal) via POS._applyAcctDelta — this covers wallet
+  // balances and credit-card `used` for both plain and installment-linked transactions,
+  // since installment purchases already route their accountId through the same apply path.
   if (txn.installmentId) {
     const inst = ST.getById('installments', txn.installmentId);
-    if (inst) {
-      ST.softDelete('installments', inst.id);
-      const cc = ST.getById('credit_cards', txn.accountId);
-      if (cc && txn.type === 'expense') ST.update('credit_cards', txn.accountId, { used: Math.max(0, (cc.used || 0) - Number(txn.amount)) });
-    }
+    if (inst) ST.softDelete('installments', inst.id);
   }
+  if (txn.accountId) POS._applyAcctDelta(txn.accountId, txn.type, Number(txn.amount), true);
+  if (txn.payCardId) POS._applyAcctDelta(txn.payCardId, 'income', Number(txn.amount), true);
   ST.softDelete('transactions', id);
   U.toast('ลบแล้ว 🗑️', 'success', () => {
     ST.restore('transactions', id);
-    if (txn.installmentId) {
-      ST.restore('installments', txn.installmentId);
-      const cc = ST.getById('credit_cards', txn.accountId);
-      if (cc && txn.type === 'expense') ST.update('credit_cards', txn.accountId, { used: (cc.used || 0) + Number(txn.amount) });
-    }
+    if (txn.installmentId) ST.restore('installments', txn.installmentId);
+    if (txn.accountId) POS._applyAcctDelta(txn.accountId, txn.type, Number(txn.amount), false);
+    if (txn.payCardId) POS._applyAcctDelta(txn.payCardId, 'income', Number(txn.amount), false);
     if (afterUndo) afterUndo();
   });
   if (afterDelete) afterDelete();

@@ -73,6 +73,8 @@ const EVView = {
         <button class="btn" id="btnEvSave" style="width:100%;margin-top:12px;background:#fff;color:#0d9488;font-weight:700">💾 บันทึกเป็นรายจ่าย</button>
       </div>
 
+      ${this._fuelCompareHTML(cfg, r)}
+
       <div class="pos-section-label" style="margin-top:16px">🚗 รถของฉัน</div>
       <div class="card" style="display:flex;align-items:center;gap:10px">
         ${vehicle ? `
@@ -107,6 +109,44 @@ const EVView = {
     </div>`;
   },
 
+  _fuelCfg(cfg) {
+    return cfg.evFuelCompare || { pricePerLiter: 35.5, kmPerLiter: 12 };
+  },
+
+  _fuelCompareHTML(cfg, r) {
+    const fc = this._fuelCfg(cfg);
+    const amt = Number(this._amt) || 0;
+    const fuelCost = r.rangeKm > 0 && fc.kmPerLiter > 0 ? (r.rangeKm / fc.kmPerLiter) * fc.pricePerLiter : 0;
+    const savings = fuelCost - amt;
+    const savingsPct = fuelCost > 0 ? (savings / fuelCost) * 100 : 0;
+    return `
+      <div class="pos-section-label" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center">
+        <span>⛽ เทียบกับรถน้ำมัน</span>
+        <button class="btn btn-outline btn-sm" id="btnEvFuelCfg">✏️ ตั้งค่า</button>
+      </div>
+      <div class="card" id="evFuelCard">${this._fuelCompareInner(amt, fuelCost, savings, savingsPct, cfg, r)}</div>`;
+  },
+
+  _fuelCompareInner(amt, fuelCost, savings, savingsPct, cfg, r) {
+    if (r.rangeKm <= 0) return `<div style="font-size:.82rem;color:var(--text-secondary);text-align:center;padding:6px 0">ตั้งค่ารถของฉันก่อน เพื่อเทียบกับรถน้ำมัน</div>`;
+    return `
+      <div style="display:flex;align-items:center;gap:10px;margin-bottom:10px">
+        <div style="flex:1;text-align:center;background:var(--bg-input);border-radius:11px;padding:9px">
+          <div style="font-size:.62rem;color:var(--text-secondary);margin-bottom:2px">⚡ ค่าไฟที่จ่าย</div>
+          <div style="font-size:1rem;font-weight:800;color:#0d9488">${U.fmtCurrency(amt, cfg.currency)}</div>
+        </div>
+        <div style="font-size:1.1rem;color:var(--text-secondary)">vs</div>
+        <div style="flex:1;text-align:center;background:var(--danger-light);border-radius:11px;padding:9px">
+          <div style="font-size:.62rem;color:var(--text-secondary);margin-bottom:2px">⛽ ถ้าขับน้ำมัน (${r.rangeKm.toFixed(0)} กม.)</div>
+          <div style="font-size:1rem;font-weight:800;color:var(--expense)">${U.fmtCurrency(fuelCost, cfg.currency)}</div>
+        </div>
+      </div>
+      <div style="background:linear-gradient(135deg,#10b981,#0d9488);border-radius:12px;padding:11px 12px;text-align:center;color:#fff">
+        <div style="font-size:.7rem;opacity:.9">${savings >= 0 ? 'ประหยัดไปครั้งนี้' : 'แพงกว่าน้ำมัน'}</div>
+        <div style="font-size:1.3rem;font-weight:800">${U.fmtCurrency(Math.abs(savings), cfg.currency)} <span style="font-size:.78rem;font-weight:600;opacity:.9">(${Math.abs(savingsPct).toFixed(0)}%)</span></div>
+      </div>`;
+  },
+
   // Monthly summary, month-over-month delta, all-time totals, and a 6-month trend —
   // kept here (not a separate view) since it's specific to cat_ev transactions.
   _statsHTML(cfg) {
@@ -128,6 +168,9 @@ const EVView = {
     const avgRateM = thisM.kwh > 0 ? thisM.cost / thisM.kwh : 0;
     const avgRateAll = all.kwh > 0 ? all.cost / all.kwh : 0;
     const deltaPct = prevM.cost > 0 ? ((thisM.cost - prevM.cost) / prevM.cost) * 100 : null;
+    const fc = this._fuelCfg(cfg);
+    const fuelCostAll = fc.kmPerLiter > 0 ? allEvTxns.reduce((s, t) => s + ((Number(t.evRangeKm) || 0) / fc.kmPerLiter) * fc.pricePerLiter, 0) : 0;
+    const savingsAll = fuelCostAll - all.cost;
 
     const months = [];
     for (let i = 5; i >= 0; i--) {
@@ -161,6 +204,7 @@ const EVView = {
           <div><div class="btag">รวม kWh ทั้งหมด</div><div style="font-weight:800;font-size:.95rem;color:#0d9488">${all.kwh.toFixed(1)} kWh</div></div>
           <div><div class="btag">ระยะทางสะสม</div><div style="font-weight:800;font-size:.95rem">${all.range > 0 ? all.range.toFixed(0) + ' กม.' : '–'}</div></div>
           <div><div class="btag">เฉลี่ย/kWh ทั้งหมด</div><div style="font-weight:800;font-size:.95rem">${all.kwh > 0 ? avgRateAll.toFixed(2) + ' บาท' : '–'}</div></div>
+          <div style="grid-column:1/-1"><div class="btag">⛽ ${savingsAll >= 0 ? 'ประหยัดสะสม' : 'แพงกว่าน้ำมันสะสม'}</div><div style="font-weight:800;font-size:1rem;color:${savingsAll>=0?'#0d9488':'var(--expense)'}">${all.range > 0 ? U.fmtCurrency(Math.abs(savingsAll), cfg.currency) : '–'}</div></div>
         </div>
       </div>`;
   },
@@ -193,6 +237,7 @@ const EVView = {
     document.getElementById('evKwhConfirmed')?.addEventListener('input', e => { this._kwhConfirmed = e.target.value; this._updateResult(); });
     document.getElementById('evRangeConfirmed')?.addEventListener('input', e => { this._rangeConfirmed = e.target.value; this._updateResult(); });
     document.getElementById('btnEvSave')?.addEventListener('click', () => this._saveAsExpense());
+    document.getElementById('btnEvFuelCfg')?.addEventListener('click', () => this.openFuelCompareModal());
     document.getElementById('btnEvVehicle')?.addEventListener('click', () => this.openVehicleModal());
     document.getElementById('btnEvAddProvider')?.addEventListener('click', () => this.openProviderModal());
     document.querySelectorAll('[data-evpe]').forEach(btn => btn.addEventListener('click', () => {
@@ -245,6 +290,13 @@ const EVView = {
     set('evResRange', r.rangeKm > 0 ? r.rangeKm.toFixed(0) + ' กม.' : '–');
     set('evResBatt', vehicle ? r.battPct.toFixed(1) + '%' : '–');
     set('evResCost', r.rangeKm > 0 ? U.fmtCurrency(r.costPerKm, cfg.currency) : '–');
+    const fc = this._fuelCfg(cfg);
+    const amt = Number(this._amt) || 0;
+    const fuelCost = r.rangeKm > 0 && fc.kmPerLiter > 0 ? (r.rangeKm / fc.kmPerLiter) * fc.pricePerLiter : 0;
+    const savings = fuelCost - amt;
+    const savingsPct = fuelCost > 0 ? (savings / fuelCost) * 100 : 0;
+    const fuelCard = document.getElementById('evFuelCard');
+    if (fuelCard) fuelCard.innerHTML = this._fuelCompareInner(amt, fuelCost, savings, savingsPct, cfg, r);
   },
 
   _saveAsExpense() {
@@ -291,6 +343,29 @@ const EVView = {
       const efficiencyKmPerKwh = parseFloat(o.querySelector('#evVEff').value) || 0;
       if (batteryKwh <= 0 || efficiencyKmPerKwh <= 0) { U.toast('กรุณากรอกความจุแบตและอัตราสิ้นเปลือง', 'error'); return; }
       U.updateConfig({ evVehicle: { name: o.querySelector('#evVName').value.trim(), batteryKwh, efficiencyKmPerKwh } });
+      U.toast('บันทึกแล้ว ✅', 'success');
+      o.remove(); App.rv('ev');
+    };
+  },
+
+  openFuelCompareModal() {
+    const cfg = U.getConfig();
+    const fc = this._fuelCfg(cfg);
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:340px">
+      <h3>⛽ ตั้งค่าเทียบรถน้ำมัน</h3>
+      <div class="form-group"><label>ราคาน้ำมัน (บาท/ลิตร)</label><input type="number" id="evFcPrice" value="${fc.pricePerLiter}" placeholder="35.5" min="0" step="0.1"></div>
+      <div class="form-group"><label>อัตราสิ้นเปลือง (กม./ลิตร)</label><input type="number" id="evFcKm" value="${fc.kmPerLiter}" placeholder="12" min="0" step="0.1"></div>
+      <div class="modal-actions"><button class="btn btn-outline" id="evFcCan">ยกเลิก</button><button class="btn btn-primary" id="evFcSave">💾 บันทึก</button></div>
+    </div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#evFcCan').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+    o.querySelector('#evFcSave').onclick = () => {
+      const pricePerLiter = parseFloat(o.querySelector('#evFcPrice').value) || 0;
+      const kmPerLiter = parseFloat(o.querySelector('#evFcKm').value) || 0;
+      if (pricePerLiter <= 0 || kmPerLiter <= 0) { U.toast('กรุณากรอกราคาน้ำมันและอัตราสิ้นเปลือง', 'error'); return; }
+      U.updateConfig({ evFuelCompare: { pricePerLiter, kmPerLiter } });
       U.toast('บันทึกแล้ว ✅', 'success');
       o.remove(); App.rv('ev');
     };

@@ -451,7 +451,10 @@ const AccountsView = {
       const newUsed = Math.max(0, (cc.used || 0) - amount);
       ST.update('credit_cards', ccId, { used: newUsed });
       ST.add('account_transfers', { fromId, toId: ccId, amount, note: `จ่ายหนี้บัตร ${cc.name}`, date });
-      ST.add('transactions', { type: 'expense', amount, categoryId: 'cat_bills', itemName: `จ่ายหนี้บัตร ${cc.name}`, date, note: 'ชำระบัตรเครดิต', accountId: fromId });
+      // payCardId links this txn back to the card so edit/delete (pos.js doSave,
+      // helpers.deleteTransaction) can also reverse the `used` reduction below —
+      // accountId alone only covers the wallet leg of this payment.
+      ST.add('transactions', { type: 'expense', amount, categoryId: 'cat_bills', itemName: `จ่ายหนี้บัตร ${cc.name}`, date, note: 'ชำระบัตรเครดิต', accountId: fromId, payCardId: ccId });
       U.toast(`จ่ายหนี้ ${U.fmtCurrency(amount, U.getConfig().currency)} สำเร็จ credit เหลือ ${U.fmtCurrency((cc.limit || 0) - newUsed, U.getConfig().currency)}`, 'success');
       o.remove(); App.rv('accounts');
     };

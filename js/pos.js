@@ -543,14 +543,17 @@ const POS = {
     const m = { ...(U.getConfig().itemAccounts || {}) }; m[itemId] = accId;
     U.updateConfig({ itemAccounts: m });
   },
-  // Apply (or reverse) a transaction's effect on an account balance
+  // Apply (or reverse) a transaction's effect on an account balance.
+  // For a credit card accountId: 'expense' raises used (a purchase on the card),
+  // 'income' lowers used (e.g. cashback credited straight onto the card, see
+  // openCCCashbackModal) — symmetric to how income/expense move a wallet balance.
   _applyAcctDelta(accountId, type, amount, reverse) {
     if (!accountId || !amount) return;
     const sign = reverse ? -1 : 1;
     const w = ST.getById('wallet_accounts', accountId);
     const cc = ST.getById('credit_cards', accountId);
     if (w) { const delta = (type === 'income' ? amount : -amount) * sign; ST.update('wallet_accounts', accountId, { balance: (w.balance || 0) + delta }); }
-    else if (cc && type === 'expense') { ST.update('credit_cards', accountId, { used: Math.max(0, (cc.used || 0) + amount * sign) }); }
+    else if (cc) { const delta = (type === 'expense' ? amount : -amount) * sign; ST.update('credit_cards', accountId, { used: Math.max(0, (cc.used || 0) + delta) }); }
   },
   // Fast account picker shown when quick-adding (#) — choose which account to pay from,
   // using the accounts configured in settings. `suggested` is pre-highlighted.
@@ -1000,17 +1003,8 @@ const POS = {
       const date = o.querySelector('#mD').value;
       const note = (o.querySelector('#mNote')?.value || '').trim().replace(/^undefined$/i, '');
       if (isEdit) {
-        if (editTxn.accountId) {
-          const oldAcc = ST.getById('wallet_accounts', editTxn.accountId);
-          const oldCC = ST.getById('credit_cards', editTxn.accountId);
-          if (oldAcc) {
-            const rev = editTxn.type === 'income' ? -Number(editTxn.amount) : Number(editTxn.amount);
-            ST.update('wallet_accounts', editTxn.accountId, { balance: (oldAcc.balance || 0) + rev });
-          }
-          if (oldCC && editTxn.type === 'expense') {
-            ST.update('credit_cards', editTxn.accountId, { used: Math.max(0, (oldCC.used || 0) - Number(editTxn.amount)) });
-          }
-        }
+        if (editTxn.accountId) POS._applyAcctDelta(editTxn.accountId, editTxn.type, Number(editTxn.amount), true);
+        if (editTxn.payCardId) POS._applyAcctDelta(editTxn.payCardId, 'income', Number(editTxn.amount), true);
         const reimbEdit = type === 'expense' && !!(o.querySelector('#mReimburse')?.checked);
         const lentEdit = type === 'expense' && !!(o.querySelector('#mLent')?.checked);
         const lentToEdit = lentEdit ? (o.querySelector('#mLentTo')?.value || '') : '';
@@ -1051,16 +1045,8 @@ const POS = {
           ST.update('transactions', newTxn.id, { installmentId: instRec.id });
         }
       }
-      if (accountId) {
-        const acc = ST.getById('wallet_accounts', accountId);
-        const cc = ST.getById('credit_cards', accountId);
-        if (acc) {
-          const delta = type === 'income' ? amount : -amount;
-          ST.update('wallet_accounts', accountId, { balance: (acc.balance || 0) + delta });
-        } else if (cc && type === 'expense') {
-          ST.update('credit_cards', accountId, { used: (cc.used || 0) + amount });
-        }
-      }
+      if (accountId) POS._applyAcctDelta(accountId, type, amount, false);
+      if (isEdit && editTxn.payCardId) POS._applyAcctDelta(editTxn.payCardId, 'income', amount, false);
       if (item && item.id && accountId) POS._rememberItemAcc(item.id, accountId);
       U.toast(isEdit ? 'อัปเดตแล้ว ✅' : 'บันทึกแล้ว ✅', 'success');
       o.remove();
