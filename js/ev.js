@@ -20,14 +20,61 @@ const EVView = {
       .sort((a, b) => (a.order ?? 9999) - (b.order ?? 9999));
   },
 
-  // Most recent past charge that has an ODO reading — used both as the reference
-  // hint shown next to the ODO field, and as the anchor for the next charge's
-  // distance-since-last-charge backfill.
-  _lastOdoTxn() {
+  _sortedTxns() {
     const key = t => t.date + 'T' + (t.createdAt || '');
-    return ST.getAll('transactions')
-      .filter(t => t.categoryId === 'cat_ev' && Number(t.evOdo) > 0)
-      .sort((a, b) => key(b).localeCompare(key(a)))[0] || null;
+    return ST.getAll('transactions').filter(t => t.categoryId === 'cat_ev').sort((a, b) => key(a).localeCompare(key(b)));
+  },
+
+  // Actual distance/cost-per-km is derived fresh every time from consecutive ODO
+  // readings — never stored on the transaction. That means editing or deleting any
+  // charge (or its ODO) self-heals the whole chain automatically on the next read,
+  // with no manual relinking code and no risk of stale data.
+  _evChain() {
+    const txns = this._sortedTxns().filter(t => Number(t.evOdo) > 0);
+    const map = new Map();
+    for (let i = 0; i < txns.length - 1; i++) {
+      const a = txns[i], b = txns[i + 1];
+      const dist = Number(b.evOdo) - Number(a.evOdo);
+      if (dist > 0) map.set(a.id, { distanceKm: dist, costPerKm: Number(a.amount) / dist });
+    }
+    return map;
+  },
+
+  _lastOdoTxn() {
+    const sorted = this._sortedTxns().filter(t => Number(t.evOdo) > 0);
+    return sorted[sorted.length - 1] || null;
+  },
+
+  _bestDistance(t, chain) {
+    const actual = chain.get(t.id);
+    return actual ? actual.distanceKm : (Number(t.evRangeKm) || 0);
+  },
+
+  // kWh delivered per 1% of battery filled — only computable for charges where the
+  // % slider was actually used. A declining trend over time hints at battery degradation
+  // (the same % span holds less real energy as max capacity shrinks).
+  _battHealthSeries() {
+    return this._sortedTxns()
+      .filter(t => t.evStartPct !== undefined && t.evEndPct !== undefined && Number(t.evKwh) > 0 && Math.abs(Number(t.evEndPct) - Number(t.evStartPct)) > 0)
+      .map(t => ({ date: t.date, kwhPerPct: Number(t.evKwh) / Math.abs(Number(t.evEndPct) - Number(t.evStartPct)) }));
+  },
+
+  _providerStats() {
+    const chain = this._evChain();
+    const map = {};
+    this._sortedTxns().forEach(t => {
+      const name = t.evProvider || 'ไม่ระบุ';
+      if (!map[name]) map[name] = { name, count: 0, cost: 0, kwh: 0, distance: 0 };
+      map[name].count++;
+      map[name].cost += Number(t.amount);
+      map[name].kwh += Number(t.evKwh) || 0;
+      map[name].distance += this._bestDistance(t, chain);
+    });
+    return Object.values(map).map(p => ({
+      ...p,
+      avgRatePerKwh: p.kwh > 0 ? p.cost / p.kwh : 0,
+      avgCostPerKm: p.distance > 0 ? p.cost / p.distance : 0
+    })).sort((a, b) => b.count - a.count);
   },
 
   render() {
@@ -173,9 +220,11 @@ const EVView = {
       </div>`;
   },
 
-  // Monthly summary, month-over-month delta, all-time totals, and a 6-month trend —
-  // kept here (not a separate view) since it's specific to cat_ev transactions.
+  // Monthly summary, month-over-month delta, monthly budget target, all-time
+  // totals, and a 6-month trend — kept here (not a separate view) since it's
+  // specific to cat_ev transactions.
   _statsHTML(cfg) {
+    const chain = this._evChain();
     const allEvTxns = ST.getAll('transactions').filter(t => t.categoryId === 'cat_ev');
     const month = U.thisMonth();
     const now = new Date();
@@ -186,7 +235,7 @@ const EVView = {
       count: txns.length,
       kwh: txns.reduce((s, t) => s + (Number(t.evKwh) || 0), 0),
       cost: txns.reduce((s, t) => s + Number(t.amount), 0),
-      range: txns.reduce((s, t) => s + (Number(t.evRangeKm) || 0), 0)
+      range: txns.reduce((s, t) => s + this._bestDistance(t, chain), 0)
     });
     const thisM = sumOf(allEvTxns.filter(t => t.date.startsWith(month)));
     const prevM = sumOf(allEvTxns.filter(t => t.date.startsWith(lastMonth)));
@@ -195,8 +244,11 @@ const EVView = {
     const avgRateAll = all.kwh > 0 ? all.cost / all.kwh : 0;
     const deltaPct = prevM.cost > 0 ? ((thisM.cost - prevM.cost) / prevM.cost) * 100 : null;
     const fc = this._fuelCfg(cfg);
-    const fuelCostAll = fc.kmPerLiter > 0 ? allEvTxns.reduce((s, t) => s + ((Number(t.evRangeKm) || 0) / fc.kmPerLiter) * fc.pricePerLiter, 0) : 0;
+    const fuelCostAll = fc.kmPerLiter > 0 ? allEvTxns.reduce((s, t) => s + (this._bestDistance(t, chain) / fc.kmPerLiter) * fc.pricePerLiter, 0) : 0;
     const savingsAll = fuelCostAll - all.cost;
+    const budget = Number(cfg.evMonthlyBudget) || 0;
+    const budgetPct = budget > 0 ? Math.min(100, (thisM.cost / budget) * 100) : 0;
+    const budgetCls = budgetPct < 70 ? 'bok' : budgetPct < 90 ? 'bwarn' : 'bover';
 
     const months = [];
     for (let i = 5; i >= 0; i--) {
@@ -221,6 +273,17 @@ const EVView = {
         <div class="ev-trend-bars">
           ${months.map(m => `<div class="ev-trend-col"><div class="ev-trend-bar" style="height:${maxCost>0?(m.cost/maxCost*100):0}%"></div><div class="ev-trend-lbl">${m.label}</div></div>`).join('')}
         </div>
+      </div>
+
+      <div class="pos-section-label" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center">
+        <span>🎯 เป้าหมายค่าชาร์จต่อเดือน</span>
+        <button class="btn btn-outline btn-sm" id="btnEvBudget">✏️ ตั้งค่า</button>
+      </div>
+      <div class="card">
+        ${budget > 0 ? `
+          <div style="display:flex;justify-content:space-between;font-size:.8rem;margin-bottom:6px"><span>${U.fmtCurrency(thisM.cost, cfg.currency)} / ${U.fmtCurrency(budget, cfg.currency)}</span><span style="font-weight:700;color:${budgetPct>=100?'var(--danger)':'var(--text-secondary)'}">${budgetPct.toFixed(0)}%</span></div>
+          <div class="sb-bar"><div class="sb-bar-fill ${budgetCls}" style="width:${budgetPct}%"></div></div>
+        ` : `<div style="font-size:.82rem;color:var(--text-secondary);text-align:center;padding:6px 0">ยังไม่ได้ตั้งเป้าหมาย</div>`}
       </div>
 
       <div class="pos-section-label" style="margin-top:16px">🗂 สะสมทั้งหมด (All-time)</div>
@@ -265,6 +328,7 @@ const EVView = {
     document.getElementById('evRangeConfirmed')?.addEventListener('input', e => { this._rangeConfirmed = e.target.value; this._updateResult(); });
     document.getElementById('evOdo')?.addEventListener('input', e => { this._odo = e.target.value; });
     document.getElementById('btnEvHistory')?.addEventListener('click', () => this.openHistoryModal());
+    document.getElementById('btnEvBudget')?.addEventListener('click', () => this.openBudgetModal());
     document.getElementById('btnEvSave')?.addEventListener('click', () => this._saveAsExpense());
     document.getElementById('btnEvFuelCfg')?.addEventListener('click', () => this.openFuelCompareModal());
     document.getElementById('btnEvVehicle')?.addEventListener('click', () => this.openVehicleModal());
@@ -384,22 +448,7 @@ const EVView = {
     const rate = isCustom ? this._customRate : (sel ? Number(sel.rate) || 0 : 0);
     const r = this._calc(rate, vehicle);
     const providerName = isCustom ? 'กำหนดเอง' : (sel ? sel.name : 'ไม่ระบุ');
-
-    // ODO is read off the dashboard, so it's immune to the day-to-day swings in driving
-    // efficiency — diffing it against the previous charge's ODO gives the *actual*
-    // distance that charge achieved, which we backfill onto that earlier record now
-    // that it's finally knowable (you can't know it until the next charge happens).
     const odo = Number(this._odo) || 0;
-    if (odo > 0) {
-      const prevTxn = this._lastOdoTxn();
-      if (prevTxn && odo > Number(prevTxn.evOdo)) {
-        const dist = odo - Number(prevTxn.evOdo);
-        ST.update('transactions', prevTxn.id, { evActualDistanceKm: dist, evActualCostPerKm: Number(prevTxn.amount) / dist });
-      } else if (prevTxn) {
-        U.toast('เลข ODO ต้องมากกว่าครั้งก่อน ข้ามการคำนวณระยะทางจริง', 'error');
-      }
-    }
-
     POS.type = 'expense';
     POS.openModal(null, 'cat_ev', null, {
       name: `ชาร์จรถ EV (${providerName})`,
@@ -413,36 +462,6 @@ const EVView = {
         ...(odo > 0 ? { evOdo: odo } : {})
       }
     });
-  },
-
-  openHistoryModal() {
-    const cfg = U.getConfig();
-    const key = t => t.date + 'T' + (t.createdAt || '');
-    const txns = ST.getAll('transactions').filter(t => t.categoryId === 'cat_ev').sort((a, b) => key(b).localeCompare(key(a)));
-    const o = document.createElement('div'); o.className = 'modal-overlay';
-    o.innerHTML = `<div class="modal" style="max-width:420px">
-      <h3>📜 ประวัติการชาร์จ</h3>
-      <div style="max-height:60vh;overflow-y:auto">
-        ${txns.length === 0 ? '<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:.85rem">ยังไม่มีประวัติ</div>' : txns.map(t => {
-          const hasActual = Number(t.evActualDistanceKm) > 0;
-          const distLabel = hasActual ? `${Number(t.evActualDistanceKm).toFixed(0)} กม. (จริง)` : (Number(t.evRangeKm) > 0 ? `≈${Number(t.evRangeKm).toFixed(0)} กม. (ประมาณ)` : 'ไม่มีข้อมูลระยะทาง');
-          const costPerKm = hasActual ? Number(t.evActualCostPerKm) : (Number(t.evRangeKm) > 0 ? Number(t.amount) / Number(t.evRangeKm) : 0);
-          const costLabel = costPerKm > 0 ? `${hasActual ? '' : '≈'}${U.fmtCurrency(costPerKm, cfg.currency)}/กม.` : '–';
-          return `<div class="ev-provider-row">
-            <span style="font-size:1.1rem">⚡</span>
-            <div style="flex:1;min-width:0">
-              <div style="font-size:.82rem;font-weight:600">${t.evProvider || 'ไม่ระบุ'} · ${U.fmtDateShort(t.date)}</div>
-              <div style="font-size:.72rem;color:var(--text-secondary)">${U.fmtCurrency(Number(t.amount), cfg.currency)} · ${Number(t.evKwh || 0).toFixed(1)} kWh · ${distLabel}</div>
-            </div>
-            <div style="text-align:right;font-size:.78rem;font-weight:700;color:${hasActual ? '#0d9488' : 'var(--text-secondary)'};flex-shrink:0">${costLabel}</div>
-          </div>`;
-        }).join('')}
-      </div>
-      <div class="modal-actions"><button class="btn btn-outline" id="evHistCan">ปิด</button></div>
-    </div>`;
-    document.getElementById('modalRoot').appendChild(o);
-    o.querySelector('#evHistCan').onclick = () => o.remove();
-    o.onclick = e => { if (e.target === o) o.remove(); };
   },
 
   openVehicleModal() {
@@ -493,6 +512,25 @@ const EVView = {
     };
   },
 
+  openBudgetModal() {
+    const cfg = U.getConfig();
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:320px">
+      <h3>🎯 เป้าหมายค่าชาร์จต่อเดือน</h3>
+      <div class="form-group"><label>วงเงินต่อเดือน (บาท)</label><input type="number" id="evBudgetVal" value="${cfg.evMonthlyBudget || ''}" placeholder="เช่น 1000" min="0" step="10"></div>
+      <div class="modal-actions"><button class="btn btn-outline" id="evBudgetCan">ยกเลิก</button><button class="btn btn-primary" id="evBudgetSave">💾 บันทึก</button></div>
+    </div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#evBudgetCan').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+    o.querySelector('#evBudgetSave').onclick = () => {
+      const val = parseFloat(o.querySelector('#evBudgetVal').value) || 0;
+      U.updateConfig({ evMonthlyBudget: val });
+      U.toast('บันทึกแล้ว ✅', 'success');
+      o.remove(); App.rv('ev');
+    };
+  },
+
   openProviderModal(edit = null) {
     const isEdit = !!edit;
     const o = document.createElement('div'); o.className = 'modal-overlay';
@@ -522,6 +560,141 @@ const EVView = {
       else ST.add('item_groups', { categoryId: 'cat_ev', name, icon, rate, order: this._providers().length });
       U.toast(isEdit ? 'อัปเดตแล้ว ✅' : 'เพิ่มแล้ว ✅', 'success');
       o.remove(); App.rv('ev');
+    };
+  },
+
+  // ---------- History: list / edit / delete + provider comparison + trends ----------
+
+  openHistoryModal() {
+    const cfg = U.getConfig();
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:440px">
+      <h3>📜 ประวัติการชาร์จ</h3>
+      <div class="tabs" style="margin-bottom:10px">
+        <div class="tab active" data-evht="hist">ประวัติ</div>
+        <div class="tab" data-evht="prov">เทียบผู้ให้บริการ</div>
+        <div class="tab" data-evht="trend">เทรนด์</div>
+      </div>
+      <div style="max-height:55vh;overflow-y:auto">
+        <div id="evHistPane">${this._historyTabHTML(cfg)}</div>
+        <div id="evProvPane" style="display:none">${this._providerTabHTML(cfg)}</div>
+        <div id="evTrendPane" style="display:none">${this._trendTabHTML(cfg)}</div>
+      </div>
+      <div class="modal-actions"><button class="btn btn-outline" id="evHistCan">ปิด</button></div>
+    </div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelectorAll('[data-evht]').forEach(tab => tab.addEventListener('click', () => {
+      o.querySelectorAll('[data-evht]').forEach(t => t.classList.remove('active'));
+      tab.classList.add('active');
+      o.querySelector('#evHistPane').style.display = tab.dataset.evht === 'hist' ? '' : 'none';
+      o.querySelector('#evProvPane').style.display = tab.dataset.evht === 'prov' ? '' : 'none';
+      o.querySelector('#evTrendPane').style.display = tab.dataset.evht === 'trend' ? '' : 'none';
+    }));
+    o.querySelectorAll('[data-evhe]').forEach(btn => btn.addEventListener('click', () => {
+      const t = ST.getById('transactions', btn.dataset.evhe);
+      if (t) { o.remove(); this.openEditChargeModal(t); }
+    }));
+    o.querySelectorAll('[data-evhd]').forEach(btn => btn.addEventListener('click', async () => {
+      const ok = await U.confirm('ลบรายการชาร์จนี้? (ย้ายไปถังขยะ กู้คืนได้)');
+      if (!ok) return;
+      deleteTransaction(btn.dataset.evhd, () => { o.remove(); App.rv('ev'); this.openHistoryModal(); });
+    }));
+    o.querySelector('#evHistCan').onclick = () => o.remove();
+    o.onclick = e => { if (e.target === o) o.remove(); };
+  },
+
+  _historyTabHTML(cfg) {
+    const chain = this._evChain();
+    const txns = this._sortedTxns().slice().reverse();
+    if (txns.length === 0) return '<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:.85rem">ยังไม่มีประวัติ</div>';
+    return txns.map(t => {
+      const actual = chain.get(t.id);
+      const hasActual = !!actual;
+      const distLabel = hasActual ? `${actual.distanceKm.toFixed(0)} กม. (จริง)` : (Number(t.evRangeKm) > 0 ? `≈${Number(t.evRangeKm).toFixed(0)} กม. (ประมาณ)` : 'ไม่มีข้อมูลระยะทาง');
+      const costPerKm = hasActual ? actual.costPerKm : (Number(t.evRangeKm) > 0 ? Number(t.amount) / Number(t.evRangeKm) : 0);
+      const costLabel = costPerKm > 0 ? `${hasActual ? '' : '≈'}${U.fmtCurrency(costPerKm, cfg.currency)}/กม.` : '–';
+      return `<div class="ev-provider-row">
+        <span style="font-size:1.1rem">⚡</span>
+        <div style="flex:1;min-width:0">
+          <div style="font-size:.82rem;font-weight:600">${t.evProvider || 'ไม่ระบุ'} · ${U.fmtDateShort(t.date)}</div>
+          <div style="font-size:.72rem;color:var(--text-secondary)">${U.fmtCurrency(Number(t.amount), cfg.currency)} · ${Number(t.evKwh || 0).toFixed(1)} kWh · ${distLabel}</div>
+        </div>
+        <div style="text-align:right;font-size:.74rem;font-weight:700;color:${hasActual ? '#0d9488' : 'var(--text-secondary)'};flex-shrink:0;margin-right:2px">${costLabel}</div>
+        <button class="btn-ghost btn-sm" data-evhe="${t.id}">✏️</button>
+        <button class="btn-ghost btn-sm" data-evhd="${t.id}">🗑️</button>
+      </div>`;
+    }).join('');
+  },
+
+  _providerTabHTML(cfg) {
+    const stats = this._providerStats();
+    if (stats.length === 0) return '<div style="text-align:center;padding:16px;color:var(--text-secondary);font-size:.85rem">ยังไม่มีข้อมูล</div>';
+    const maxCount = Math.max(...stats.map(s => s.count));
+    return stats.map(s => `<div class="ev-provider-row">
+      <span style="font-size:1.1rem">🔌</span>
+      <div style="flex:1;min-width:0">
+        <div style="font-size:.82rem;font-weight:600">${s.name}${s.count === maxCount ? ' <span style="font-size:.6rem;background:var(--accent-light);color:var(--accent);padding:1px 6px;border-radius:8px;font-weight:700">🔥 ใช้บ่อยสุด</span>' : ''}</div>
+        <div style="font-size:.72rem;color:var(--text-secondary)">ใช้ ${s.count} ครั้ง · เฉลี่ย ${s.avgRatePerKwh.toFixed(2)} บาท/kWh${s.avgCostPerKm > 0 ? ` · ${s.avgCostPerKm.toFixed(2)} บาท/กม.` : ''}</div>
+      </div>
+    </div>`).join('');
+  },
+
+  _trendTabHTML() {
+    const chain = this._evChain();
+    const costRows = this._sortedTxns().filter(t => chain.get(t.id)).slice(-8);
+    const maxCost = Math.max(...costRows.map(t => chain.get(t.id).costPerKm), 0.01);
+    const battRows = this._battHealthSeries().slice(-8);
+    const maxKwhPct = Math.max(...battRows.map(b => b.kwhPerPct), 0.01);
+    return `
+      <div style="font-size:.78rem;font-weight:700;margin-bottom:6px">💸 บาท/กม.จริง ตามเวลา</div>
+      ${costRows.length === 0 ? '<div style="font-size:.78rem;color:var(--text-secondary);text-align:center;padding:8px 0 16px">ยังไม่มีข้อมูลพอ (ต้องชาร์จอย่างน้อย 2 ครั้งพร้อมใส่ ODO)</div>' : `<div class="ev-trend-bars" style="margin-bottom:16px">${costRows.map(t => `<div class="ev-trend-col"><div class="ev-trend-bar" style="height:${(chain.get(t.id).costPerKm/maxCost*100)}%"></div><div class="ev-trend-lbl">${U.fmtDateShort(t.date)}</div></div>`).join('')}</div>`}
+      <div style="font-size:.78rem;font-weight:700;margin-bottom:6px">🔋 kWh ต่อ 1% แบต <span style="font-weight:400;color:var(--text-secondary)">(ค่าลดลงเรื่อยๆ = แบตเสื่อม)</span></div>
+      ${battRows.length === 0 ? '<div style="font-size:.78rem;color:var(--text-secondary);text-align:center;padding:8px 0">ยังไม่มีข้อมูล — ต้องลากสไลเดอร์ % แบตตอนชาร์จด้วย</div>' : `<div class="ev-trend-bars">${battRows.map(b => `<div class="ev-trend-col"><div class="ev-trend-bar" style="height:${(b.kwhPerPct/maxKwhPct*100)}%;background:linear-gradient(180deg,#f59e0b,#d97706)"></div><div class="ev-trend-lbl">${U.fmtDateShort(b.date)}</div></div>`).join('')}</div>`}
+    `;
+  },
+
+  openEditChargeModal(editTxn) {
+    const providers = this._providers();
+    const knownProvider = providers.some(p => p.name === editTxn.evProvider);
+    const o = document.createElement('div'); o.className = 'modal-overlay';
+    o.innerHTML = `<div class="modal" style="max-width:380px">
+      <h3>✏️ แก้ไขการชาร์จ</h3>
+      <div class="form-group"><label>ผู้ให้บริการ</label><select id="evEProv">${providers.map(p => `<option value="${p.id}" ${p.name===editTxn.evProvider?'selected':''}>${p.icon||'🔌'} ${p.name}</option>`).join('')}${!knownProvider ? `<option value="" selected>✏️ ${editTxn.evProvider || 'ไม่ระบุ'} (เดิม)</option>` : ''}</select></div>
+      <div class="form-group"><label>จำนวนเงินที่จ่าย</label><input type="number" id="evEAmt" value="${editTxn.amount}" min="0" step="0.01"></div>
+      <div class="form-row">
+        <div class="form-group"><label>ได้ไฟ (kWh)</label><input type="number" id="evEKwh" value="${editTxn.evKwh||''}" min="0" step="0.1"></div>
+        <div class="form-group"><label>ระยะที่ได้ (กม.)</label><input type="number" id="evERange" value="${editTxn.evRangeKm||''}" min="0" step="1"></div>
+      </div>
+      <div class="form-group"><label>เลข ODO ก่อนชาร์จ (กม.)</label><input type="number" id="evEOdo" value="${editTxn.evOdo||''}" min="0" step="1"></div>
+      <div class="form-group"><label>วันที่</label><input type="date" id="evEDate" value="${editTxn.date}"></div>
+      <div class="modal-actions"><button class="btn btn-outline" id="evECan">ยกเลิก</button><button class="btn btn-primary" id="evESave">💾 บันทึก</button></div>
+    </div>`;
+    document.getElementById('modalRoot').appendChild(o);
+    o.querySelector('#evECan').onclick = () => { o.remove(); this.openHistoryModal(); };
+    o.onclick = e => { if (e.target === o) { o.remove(); this.openHistoryModal(); } };
+    o.querySelector('#evESave').onclick = () => {
+      const amount = parseFloat(o.querySelector('#evEAmt').value) || 0;
+      if (amount <= 0) { U.toast('กรุณากรอกจำนวนเงิน', 'error'); return; }
+      const provSel = o.querySelector('#evEProv').value;
+      const prov = providers.find(p => p.id === provSel);
+      const evKwh = parseFloat(o.querySelector('#evEKwh').value) || 0;
+      const evRangeKm = parseFloat(o.querySelector('#evERange').value) || 0;
+      const evOdo = parseFloat(o.querySelector('#evEOdo').value) || 0;
+      const date = o.querySelector('#evEDate').value;
+      if (editTxn.accountId && amount !== Number(editTxn.amount)) {
+        POS._applyAcctDelta(editTxn.accountId, editTxn.type, Number(editTxn.amount), true);
+        POS._applyAcctDelta(editTxn.accountId, editTxn.type, amount, false);
+      }
+      const providerName = prov ? prov.name : editTxn.evProvider;
+      ST.update('transactions', editTxn.id, {
+        amount, date, evKwh, evRangeKm, evOdo: evOdo > 0 ? evOdo : undefined,
+        evProvider: providerName, groupId: prov ? prov.id : editTxn.groupId,
+        itemName: `ชาร์จรถ EV (${providerName})`
+      });
+      U.toast('อัปเดตแล้ว ✅', 'success');
+      o.remove();
+      App.rv('ev');
+      this.openHistoryModal();
     };
   }
 };

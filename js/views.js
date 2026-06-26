@@ -89,6 +89,7 @@ const Views = {
   renderTxns() {
     const cfg = U.getConfig();
     const cats = ST.getAll('categories');
+    const groups = ST.getAll('item_groups');
     const hp = new URLSearchParams(window.location.hash.replace('#', ''));
     const wallets = ST.getAll('wallet_accounts');
     const creditCards = ST.getAll('credit_cards');
@@ -98,6 +99,7 @@ const Views = {
     const f = {
       type: hp.get('type') || 'all',
       categoryId: hp.get('cat') || '',
+      groupId: hp.get('grp') || '',
       dateFrom: hp.get('from') || U.daysAgo(30),
       dateTo: hp.get('to') || U.today(),
       search: hp.get('q') || '',
@@ -107,7 +109,7 @@ const Views = {
       hasReceipt: hp.get('rcpt') === '1'
     };
     const hasAdv = !!(f.amountMin || f.amountMax || f.accountId || f.hasReceipt);
-    const totalActiveFilters = [f.type !== 'all', !!f.categoryId, !!f.search, !!f.amountMin, !!f.amountMax, !!f.accountId, f.hasReceipt].filter(Boolean).length;
+    const totalActiveFilters = [f.type !== 'all', !!f.categoryId, !!f.groupId, !!f.search, !!f.amountMin, !!f.amountMax, !!f.accountId, f.hasReceipt].filter(Boolean).length;
     const filterOpen = localStorage.getItem('exp_txnFilter') === '1';
     const txns = EH.getTxns(f);
     const sum = EH.calcSum(txns);
@@ -134,10 +136,12 @@ const Views = {
     }).join('');
 
     const activeCat = f.categoryId ? cats.find(c => c.id === f.categoryId) : null;
+    const activeGroup = f.groupId ? groups.find(g => g.id === f.groupId) : null;
     const _fchip = t => `<span style="padding:1px 7px;background:var(--accent-light);border-radius:20px;font-size:.71rem;color:var(--accent);font-weight:600">${t}</span>`;
     const filterChipsHTML = [
       f.type !== 'all' ? _fchip(f.type === 'income' ? '💚 รายรับ' : '🔴 รายจ่าย') : '',
       activeCat ? _fchip(`${activeCat.icon} ${activeCat.name}`) : '',
+      activeGroup ? _fchip(`${activeGroup.icon||'📋'} ${activeGroup.name}`) : '',
       f.accountId && accMap[f.accountId] ? _fchip(accMap[f.accountId]) : '',
       f.search ? _fchip(`🔍 ${f.search}`) : ''
     ].filter(Boolean).join('');
@@ -155,6 +159,7 @@ const Views = {
     <div class="filter-bar">
       <select id="fType"><option value="all" ${f.type==='all'?'selected':''}>ทั้งหมด</option><option value="income" ${f.type==='income'?'selected':''}>รายรับ</option><option value="expense" ${f.type==='expense'?'selected':''}>รายจ่าย</option></select>
       <select id="fCat"><option value="">ทุกหมวดหมู่</option>${cats.map(c => `<option value="${c.id}" ${f.categoryId===c.id?'selected':''}>${c.icon} ${c.name}</option>`).join('')}</select>
+      <select id="fGroup"><option value="">ทุกหมวดรอง</option>${groups.filter(g => !f.categoryId || g.categoryId === f.categoryId).map(g => { const c = cats.find(c => c.id === g.categoryId); return `<option value="${g.id}" ${f.groupId===g.id?'selected':''}>${g.icon||'📋'} ${g.name}${!f.categoryId && c ? ` (${c.name})` : ''}</option>`; }).join('')}</select>
       <input type="date" id="fFrom" value="${f.dateFrom}">
       <input type="date" id="fTo" value="${f.dateTo}">
       <input type="text" id="fSearch" placeholder="🔍 ชื่อ / หมายเหตุ..." value="${f.search}" style="min-width:130px">
@@ -239,7 +244,7 @@ const Views = {
       const btn = document.getElementById('btnAdvFilter');
       if (btn) { btn.className = `btn btn-sm ${open ? 'btn-primary' : 'btn-outline'}`; }
     });
-    ['fType', 'fCat', 'fFrom', 'fTo', 'fAcc'].forEach(id => document.getElementById(id)?.addEventListener('change', () => this.applyTxnFilter()));
+    ['fType', 'fCat', 'fGroup', 'fFrom', 'fTo', 'fAcc'].forEach(id => document.getElementById(id)?.addEventListener('change', () => this.applyTxnFilter()));
     ['fAmtMin', 'fAmtMax'].forEach(id => document.getElementById(id)?.addEventListener('input', () => this.applyTxnFilter()));
     // Debounce search so the list doesn't re-render mid-word (which stole focus after 1 char)
     const sInput = document.getElementById('fSearch');
@@ -367,8 +372,13 @@ const Views = {
     const p = new URLSearchParams(window.location.hash.replace('#', ''));
     const type = document.getElementById('fType')?.value || 'all';
     if (type !== 'all') p.set('type', type); else p.delete('type');
+    const prevCat = p.get('cat') || '';
     const cat = document.getElementById('fCat')?.value || '';
     if (cat) p.set('cat', cat); else p.delete('cat');
+    const grp = document.getElementById('fGroup')?.value || '';
+    // Changing the main category invalidates whatever subcategory was selected before.
+    if (cat !== prevCat) p.delete('grp');
+    else if (grp) p.set('grp', grp); else p.delete('grp');
     const from = document.getElementById('fFrom')?.value || ''; if (from) p.set('from', from);
     const to = document.getElementById('fTo')?.value || ''; if (to) p.set('to', to);
     const q = document.getElementById('fSearch')?.value || ''; if (q) p.set('q', q); else p.delete('q');

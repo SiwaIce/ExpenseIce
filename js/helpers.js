@@ -3,6 +3,7 @@ const EH = {
     let t = ST.getAll('transactions');
     if (f.type && f.type !== 'all') t = t.filter(x => x.type === f.type);
     if (f.categoryId) t = t.filter(x => x.categoryId === f.categoryId);
+    if (f.groupId) t = t.filter(x => x.groupId === f.groupId);
     if (f.dateFrom) t = t.filter(x => x.date >= f.dateFrom);
     if (f.dateTo) t = t.filter(x => x.date <= f.dateTo);
     if (f.search) {
