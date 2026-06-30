@@ -1,81 +1,84 @@
-// ================================================================
-// SERVICE WORKER — DJI Sales Assistant
-// กลยุทธ์: network-first (ได้โค้ดล่าสุดเสมอเมื่อออนไลน์) + cache fallback (ออฟไลน์)
-// ================================================================
-var CACHE_VERSION = 'dji-sales-v61';   // ⬅️ bump เลขนี้ทุกครั้งที่ deploy โค้ดใหม่ (v1 → v2 → v3 ...)
-
-// app shell ที่จะ precache (relative path → ทำงานใต้ /work-assistant/)
-var APP_SHELL = [
+const CACHE = 'expense-v22';
+const ASSETS = [
   './',
   './index.html',
   './manifest.json',
-  './style.css',
-  './utils.js',
-  './storage.js',
-  './products.js',
-  './firebase-sync.js',
-  './views-today.js',
-  './modals.js',
-  './views-dealer.js',
-  './views-pipeline.js',
-  './views-visit.js',
-  './views-work.js',
-  './views-prospects.js',
-  './views-quotation.js',
-  './kanban.js',
-  './export.js',
-  './admin.js',
-  './features.js',
-  './audit.js',
-  './views-kpi.js',
-  './app.js'
+  './js/pinlock.js',
+  './js/storage.js',
+  './js/helpers.js',
+  './js/pos.js',
+  './js/views.js',
+  './js/accounts.js',
+  './js/savings.js',
+  './js/subscriptions.js',
+  './js/loans.js',
+  './js/chatbot.js',
+  './js/features.js',
+  './js/firebase-sync.js',
+  './js/app.js',
+  './icons/icon-192.png',
+  './icons/icon-512.png'
 ];
 
-// ---- INSTALL: precache (ทนต่อไฟล์ที่ 404 — ไม่ทำให้ install ล้ม) ----
-self.addEventListener('install', function(event) {
-  event.waitUntil(
-    caches.open(CACHE_VERSION).then(function(cache) {
-      return Promise.allSettled(
-        APP_SHELL.map(function(url) { return cache.add(url); })
-      );
-    }).then(function() { return self.skipWaiting(); })
+self.addEventListener('install', e => {
+  e.waitUntil(
+    caches.open(CACHE)
+      .then(c => c.addAll(ASSETS))
+      .then(() => self.skipWaiting())
   );
 });
 
-// ---- ACTIVATE: ลบ cache เวอร์ชันเก่า ----
-self.addEventListener('activate', function(event) {
-  event.waitUntil(
-    caches.keys().then(function(keys) {
-      return Promise.all(
-        keys.filter(function(k) { return k !== CACHE_VERSION; })
-            .map(function(k) { return caches.delete(k); })
-      );
-    }).then(function() { return self.clients.claim(); })
+self.addEventListener('activate', e => {
+  e.waitUntil(
+    caches.keys()
+      .then(keys => Promise.all(keys.filter(k => k !== CACHE).map(k => caches.delete(k))))
+      .then(() => self.clients.claim())
   );
 });
 
-// ---- FETCH: network-first สำหรับ same-origin GET เท่านั้น ----
-self.addEventListener('fetch', function(event) {
-  var req = event.request;
+self.addEventListener('fetch', e => {
+  if (e.request.method !== 'GET') return;
+  const url = e.request.url;
 
-  // ข้าม: ไม่ใช่ GET, หรือ cross-origin (Firebase / gstatic / cdn) → ปล่อยผ่านตรง
-  if (req.method !== 'GET') return;
-  var url = new URL(req.url);
-  if (url.origin !== self.location.origin) return;
+  // Skip Firebase/API calls — never cache
+  if (url.includes('firestore.googleapis.com') ||
+      url.includes('firebasestorage.googleapis.com') ||
+      url.includes('identitytoolkit.google') ||
+      url.includes('googleapis.com') ||
+      url.includes('api.anthropic.com') ||
+      url.includes('generativelanguage.googleapis.com') ||
+      url.includes('gstatic.com')) {
+    return;
+  }
 
-  event.respondWith(
-    fetch(req).then(function(res) {
-      // เก็บสำเนาลง cache (เฉพาะ response ที่ใช้ได้)
-      if (res && res.status === 200 && res.type === 'basic') {
-        var copy = res.clone();
-        caches.open(CACHE_VERSION).then(function(cache) { cache.put(req, copy); });
-      }
-      return res;
-    }).catch(function() {
-      // ออฟไลน์ → ใช้ cache; ถ้าเป็น navigation และไม่มีใน cache ให้ fallback index.html
-      return caches.match(req).then(function(cached) {
-        return cached || caches.match('./index.html');
-      });
+  // Network-first for HTML and JS so updates deploy immediately
+  const isCodeFile = /\.(js|html)(\?|$)/.test(url) || url.endsWith('/') || url === location.origin + '/';
+  if (isCodeFile) {
+    e.respondWith(
+      fetch(e.request)
+        .then(res => {
+          if (res.ok) {
+            const clone = res.clone();
+            caches.open(CACHE).then(c => c.put(e.request, clone));
+          }
+          return res;
+        })
+        .catch(() => caches.match(e.request))
+    );
+    return;
+  }
+
+  // Cache-first for icons and other static assets
+  e.respondWith(
+    caches.match(e.request).then(cached => {
+      if (cached) return cached;
+      return fetch(e.request).then(res => {
+        if (res.ok) {
+          const clone = res.clone();
+          caches.open(CACHE).then(c => c.put(e.request, clone));
+        }
+        return res;
+      }).catch(() => cached);
     })
   );
 });
