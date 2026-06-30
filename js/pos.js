@@ -727,7 +727,7 @@ const POS = {
       <div class="form-group"><label>หมายเหตุ</label><textarea id="mNote" placeholder="หมายเหตุ...">${isEdit ? (editTxn.note && editTxn.note !== 'undefined' ? editTxn.note : '') : ''}</textarea><div class="nchips">${chips.map(ch => `<button class="nchip" data-ch="${ch}">${ch}</button>`).join('')}</div></div>
     `;
     const buildModalHTML = () => isMobile
-      ? `<div class="bs-sheet" style="display:flex;flex-direction:column;max-height:93vh;overflow:hidden"><div class="bs-handle" id="bsHandle"></div><h3 style="font-size:1rem;font-weight:600;margin:0 0 10px;flex:0 0 auto">${modalTitle}</h3><div style="flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:2px 0">${_buildMobileFields()}</div>${_buildMobileNumpad()}${_buildModalActions()}</div>`
+      ? `<div class="bs-sheet" style="display:flex;flex-direction:column;max-height:93vh;overflow:hidden"><div class="bs-handle" id="bsHandle"></div><h3 style="font-size:1rem;font-weight:600;margin:0 0 10px;flex:0 0 auto">${modalTitle}</h3><div style="flex:1;overflow-y:auto;overflow-x:hidden;min-height:0;padding:2px 0;overscroll-behavior:contain">${_buildMobileFields()}</div>${_buildMobileNumpad()}${_buildModalActions()}</div>`
       : `<div class="modal" style="display:flex;flex-direction:column;max-height:90vh"><h3 style="flex:0 0 auto">${modalTitle}</h3><div style="flex:1;overflow-y:auto;min-height:0">${_buildModalBody()}</div>${_buildModalActions()}</div>`;
     const _buildModalBody = () => `
       <div class="form-group"><label>ประเภท</label><div class="type-toggle"><button class="type-btn ${t0==='expense'?'ae':''}" data-mt="expense">รายจ่าย</button><button class="type-btn ${t0==='income'?'ai':''}" data-mt="income">รายรับ</button></div><input type="hidden" id="mT" value="${t0}"></div>
@@ -745,6 +745,8 @@ const POS = {
     `;
     o.innerHTML = buildModalHTML();
     document.getElementById('modalRoot').appendChild(o);
+    if (isMobile) document.body.style.overflow = 'hidden';
+    const _closeModal = () => { o.remove(); if (isMobile) document.body.style.overflow = ''; };
     const refreshDisp = () => {
       const el = o.querySelector('#npDisp'); if (el) el.value = U.fmtCurrency(Number(numVal) || 0, cfg.currency);
     };
@@ -991,12 +993,12 @@ const POS = {
       if (parseFloat(numVal) > 0) return;
       if (catAmounts.length) { numVal = String(catAmounts[0]); refreshDisp(); U.toast('💡 แนะนำจากประวัติ', 'info'); }
     });
-    o.querySelector('#mCan').onclick = () => o.remove();
-    o.onclick = e => { if (e.target === o) o.remove(); };
-    o.querySelector('#bsHandle')?.addEventListener('click', () => o.remove());
+    o.querySelector('#mCan').onclick = _closeModal;
+    o.onclick = e => { if (e.target === o) _closeModal(); };
+    o.querySelector('#bsHandle')?.addEventListener('click', _closeModal);
     o.querySelector('#mRecur')?.addEventListener('click', () => {
       if (!isEdit || typeof RV === 'undefined') return;
-      o.remove();
+      _closeModal();
       App.rv('recurring');
       setTimeout(() => RV.openModal({ name: editTxn.itemName || '', type: editTxn.type, amount: editTxn.amount, categoryId: editTxn.categoryId, dayOfMonth: new Date(editTxn.date).getDate() }), 200);
     });
@@ -1073,7 +1075,7 @@ const POS = {
       if (isEdit && editTxn.payCardId) POS._applyAcctDelta(editTxn.payCardId, 'income', amount, false);
       if (item && item.id && accountId) POS._rememberItemAcc(item.id, accountId);
       U.toast(isEdit ? 'อัปเดตแล้ว ✅' : 'บันทึกแล้ว ✅', 'success');
-      o.remove();
+      _closeModal();
       App.rv(['transactions', 'ev'].includes(App.cv) ? App.cv : 'add');
     };
   }
