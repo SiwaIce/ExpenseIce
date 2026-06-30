@@ -82,12 +82,12 @@ const AccountsView = {
           const activeInsts = allInsts.filter(i=>i.creditCardId===cc.id&&i.status==='active');
           const monthSpend = txns.filter(t=>t.accountId===cc.id&&t.date.startsWith(U.thisMonth())).reduce((s,t)=>s+Number(t.amount),0);
           const dueDays = cc.dueDay ? (() => { const now=new Date(),due=new Date(now.getFullYear(),now.getMonth(),cc.dueDay); if(due<now)due.setMonth(due.getMonth()+1); return Math.ceil((due-now)/86400000); })() : null;
-          return `<div class="cc-card ${cc.network||'other'}">
+          return `<div class="cc-card ${cc.network||'other'}" data-ccdetail="${cc.id}" style="cursor:pointer">
             <button class="acc-fav-btn cc" data-ccfav="${cc.id}" title="ปุ่มลัดบันทึกด่วน">${cc.fav?'⭐':'☆'}</button>
             <div class="cc-chip"></div>
             <div class="cc-number">•••• •••• •••• ${cc.lastFour||'0000'}</div>
             <div class="cc-name-row"><span class="cc-bank">${cc.name}</span><span class="cc-network">${(cc.network||'').replace('cashcard','CASH').toUpperCase()}</span></div>
-            <div style="font-size:.69rem;opacity:.75;margin-bottom:5px">ใช้เดือนนี้ ${U.fmtCurrency(monthSpend,cfg.currency)}${dueDays!==null?` • ครบกำหนด ${dueDays<=3?'<span style="color:#ffd700;font-weight:700">':''}${dueDays} วัน${dueDays<=3?'</span>':''}`:''}</div>
+            <div style="font-size:.69rem;opacity:.75;margin-bottom:5px">ใช้เดือนนี้ ${U.fmtCurrency(monthSpend,cfg.currency)}${cc.statementDay?` • ตัดรอบ ${cc.statementDay}`:''}${dueDays!==null?` • ชำระใน ${dueDays<=3?'<span style="color:#ffd700;font-weight:700">':''}${dueDays} วัน${dueDays<=3?'</span>':''}`:''}</div>
             <div class="cc-limit-bar"><div class="cc-limit-fill ${cls}" style="width:${pct}%"></div></div>
             <div class="cc-stats" style="grid-template-columns:repeat(3,1fr)"><span>ใช้ไป<br><strong>${U.fmtCurrency(used,cfg.currency)}</strong></span><span>วงเงิน<br><strong>${U.fmtCurrency(limit,cfg.currency)}</strong></span><span style="color:${avail<0?'#ff6b6b':'#86efac'}">เหลือ<br><strong>${U.fmtCurrency(avail,cfg.currency)}</strong></span></div>
             <div style="display:flex;gap:5px;margin-top:9px;flex-wrap:wrap">
@@ -193,6 +193,12 @@ const AccountsView = {
       ST.update('credit_cards', cc.id, { fav: !cc.fav });
       App.rv('accounts');
     }));
+    document.querySelectorAll('[data-ccdetail]').forEach(card => {
+      card.addEventListener('click', e => {
+        if (e.target.closest('button')) return;
+        this.openCCDetailModal(card.dataset.ccdetail);
+      });
+    });
     // Reimburse — mark received
     document.querySelectorAll('[data-reimb]').forEach(btn => btn.addEventListener('click', async () => {
       const txn = ST.getById('transactions', btn.dataset.reimb); if (!txn) return;
@@ -269,7 +275,8 @@ const AccountsView = {
       <div class="form-group"><label>4 หลักสุดท้าย</label><input type="text" id="ccLast" value="${isEdit ? edit.lastFour || '' : ''}" maxlength="4" placeholder="0000" inputmode="numeric"></div>
       <div class="form-group"><label>วงเงินรวม (Credit Limit)</label><input type="number" id="ccLimit" value="${isEdit ? edit.limit || 0 : 0}" step="100" min="0"></div>
       <div class="form-group"><label>ยอดหนี้ปัจจุบัน</label><input type="number" id="ccUsed" value="${isEdit ? edit.used || 0 : 0}" step="0.01" min="0"></div>
-      <div class="form-group"><label>วันครบกำหนดชำระ (วันที่ในเดือน)</label><input type="number" id="ccDue" value="${isEdit ? edit.dueDay || 25 : 25}" min="1" max="31"></div>
+      <div class="form-group"><label>วันตัดรอบบัญชี (Statement Day)</label><input type="number" id="ccStmt" value="${isEdit ? edit.statementDay || 25 : 25}" min="1" max="31" placeholder="เช่น 25"></div>
+      <div class="form-group"><label>วันครบกำหนดชำระ (Due Day)</label><input type="number" id="ccDue" value="${isEdit ? edit.dueDay || 15 : 15}" min="1" max="31" placeholder="เช่น 15"></div>
       <div class="modal-actions"><button class="btn btn-outline" id="ccCan">ยกเลิก</button><button class="btn btn-primary" id="ccOk">บันทึก</button></div>
     </div>`;
     document.getElementById('modalRoot').appendChild(o);
@@ -286,10 +293,11 @@ const AccountsView = {
       const lastFour = o.querySelector('#ccLast').value.trim() || '0000';
       const limit = parseFloat(o.querySelector('#ccLimit').value) || 0;
       const used = parseFloat(o.querySelector('#ccUsed').value) || 0;
-      const dueDay = parseInt(o.querySelector('#ccDue').value) || 25;
+      const statementDay = parseInt(o.querySelector('#ccStmt').value) || 25;
+      const dueDay = parseInt(o.querySelector('#ccDue').value) || 15;
       if (!name) { U.toast('กรุณากรอกชื่อบัตร', 'error'); return; }
-      if (isEdit) ST.update('credit_cards', edit.id, { name, network, lastFour, limit, used, dueDay });
-      else ST.add('credit_cards', { name, network, lastFour, limit, used, dueDay });
+      if (isEdit) ST.update('credit_cards', edit.id, { name, network, lastFour, limit, used, statementDay, dueDay });
+      else ST.add('credit_cards', { name, network, lastFour, limit, used, statementDay, dueDay });
       U.toast(isEdit ? 'อัปเดตแล้ว' : 'เพิ่มบัตรแล้ว', 'success');
       o.remove(); App.rv('accounts');
     };
@@ -463,6 +471,151 @@ const AccountsView = {
   // Cash back credited straight back onto the card — reduces the card's `used`
   // debt directly (no wallet involved), and logs an income transaction tagged
   // to the card itself so it shows up in reports under "เงินคืน/Cashback".
+  openCCDetailModal(ccId) {
+    const cc = ST.getById('credit_cards', ccId); if (!cc) return;
+    const cfg = U.getConfig();
+    const cats = ST.getAll('categories');
+    const allTxns = ST.getAll('transactions');
+    const isMobile = window.innerWidth <= 640;
+
+    // ── Billing cycle ──
+    const sd = cc.statementDay || 25;
+    const today = new Date();
+    let cycleStart, cycleEnd;
+    if (today.getDate() <= sd) {
+      cycleStart = new Date(today.getFullYear(), today.getMonth() - 1, sd + 1);
+      cycleEnd   = new Date(today.getFullYear(), today.getMonth(), sd);
+    } else {
+      cycleStart = new Date(today.getFullYear(), today.getMonth(), sd + 1);
+      cycleEnd   = new Date(today.getFullYear(), today.getMonth() + 1, sd);
+    }
+    const csISO = cycleStart.toISOString().slice(0, 10);
+    const ceISO = cycleEnd.toISOString().slice(0, 10);
+    const todayISO = U.today();
+    const daysToStatement = Math.max(0, Math.ceil((cycleEnd - today) / 86400000));
+    const thMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];
+    const fmtD = d => `${d.getDate()} ${thMonths[d.getMonth()]}`;
+
+    // ── Filter transactions for this card in current cycle ──
+    const cycleTxns = allTxns
+      .filter(t => t.accountId === ccId && t.date >= csISO && t.date <= todayISO)
+      .sort((a, b) => b.date.localeCompare(a.date));
+    const cycleExpense = cycleTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount || 0), 0);
+    const cycleIncome  = cycleTxns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount || 0), 0);
+    const cycleNet = cycleExpense - cycleIncome;
+
+    // ── Category breakdown (expense only) ──
+    const catMap = {};
+    cycleTxns.filter(t => t.type === 'expense').forEach(t => {
+      const k = t.categoryId || 'other';
+      catMap[k] = (catMap[k] || 0) + Number(t.amount || 0);
+    });
+    const catSorted = Object.entries(catMap).sort((a, b) => b[1] - a[1]);
+
+    const used  = Number(cc.used) || 0;
+    const limit = Number(cc.limit) || 1;
+    const pct   = Math.min(used / limit * 100, 100);
+    const avail = limit - used;
+    const netColors = { visa: '#0a2054', mastercard: '#1a1a2e', amex: '#1b4a8a', cashcard: '#1e3a5f', other: '#1e3a5f' };
+    const bgColor = netColors[cc.network || 'other'];
+
+    const txnsHTML = cycleTxns.length === 0
+      ? '<div class="empty-state" style="padding:20px 0"><div class="empty-icon">🧾</div>ยังไม่มีรายการในรอบนี้</div>'
+      : cycleTxns.map(t => {
+          const cat = cats.find(c => c.id === t.categoryId) || { icon: '📌', name: 'อื่นๆ', color: '#888' };
+          const isExp = t.type === 'expense';
+          return `<div style="display:flex;align-items:center;gap:10px;padding:9px 0;border-bottom:0.5px solid var(--border)">
+            <div style="width:34px;height:34px;border-radius:50%;background:${cat.color||'#888'}22;display:flex;align-items:center;justify-content:center;font-size:1rem;flex-shrink:0">${cat.icon}</div>
+            <div style="flex:1;min-width:0">
+              <div style="font-size:.83rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.itemName||cat.name}</div>
+              <div style="font-size:.7rem;color:var(--text-secondary);margin-top:1px">${U.fmtDate(t.date)} · ${cat.name}</div>
+            </div>
+            <div style="font-size:.85rem;font-weight:700;color:${isExp?'var(--expense)':'var(--income)'};flex-shrink:0">${isExp?'':'+'}${U.fmtCurrency(Number(t.amount), cfg.currency)}</div>
+          </div>`;
+        }).join('');
+
+    const catBarsHTML = catSorted.length === 0
+      ? '<div style="color:var(--text-muted);font-size:.82rem;padding:12px 0">ยังไม่มีข้อมูล</div>'
+      : catSorted.map(([catId, amt]) => {
+          const cat = cats.find(c => c.id === catId) || { icon: '📌', name: 'อื่นๆ', color: 'var(--accent)' };
+          const p = cycleExpense > 0 ? Math.round(amt / cycleExpense * 100) : 0;
+          return `<div style="margin-bottom:11px">
+            <div style="display:flex;justify-content:space-between;font-size:.78rem;margin-bottom:4px">
+              <span style="color:var(--text-secondary)">${cat.icon} ${cat.name}</span>
+              <span style="font-weight:600;color:var(--text-primary)">${U.fmtCurrency(amt, cfg.currency)} <span style="color:var(--text-muted);font-weight:400">(${p}%)</span></span>
+            </div>
+            <div style="height:5px;background:var(--bg-input);border-radius:3px"><div style="width:${p}%;height:5px;background:${cat.color||'var(--accent)'};border-radius:3px"></div></div>
+          </div>`;
+        }).join('');
+
+    const pad = isMobile ? '0 16px' : '0';
+    const o = document.createElement('div');
+    o.className = isMobile ? 'bs-overlay' : 'modal-overlay';
+    o.style.zIndex = '1100';
+    o.innerHTML = `
+      <div class="${isMobile?'bs-sheet':'modal'}" style="display:flex;flex-direction:column;max-height:${isMobile?'93':'90'}vh;overflow:hidden">
+        ${isMobile?'<div class="bs-handle" id="ccdHandle"></div>':''}
+        <div style="flex-shrink:0;margin:${isMobile?'0 16px 12px':'0 0 12px'};border-radius:14px;padding:14px 16px;background:linear-gradient(135deg,${bgColor} 0%,${bgColor}ee 100%);color:#fff">
+          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:4px">
+            <span style="font-size:.8rem;font-weight:500;opacity:.85">${cc.name}</span>
+            <span style="font-size:.7rem;background:rgba(255,255,255,.2);padding:2px 8px;border-radius:10px">${(cc.network||'').replace('cashcard','CASH').toUpperCase()}</span>
+          </div>
+          <div style="font-size:.82rem;letter-spacing:3px;font-family:monospace;opacity:.75;margin-bottom:10px">•••• •••• •••• ${cc.lastFour||'0000'}</div>
+          <div style="height:3px;background:rgba(255,255,255,.2);border-radius:2px;margin-bottom:7px"><div style="width:${pct}%;height:3px;background:#f59e0b;border-radius:2px"></div></div>
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);text-align:center;font-size:.76rem">
+            <div><div style="font-weight:600">${U.fmtCompact(used,cfg.currency)}</div><div style="opacity:.6;font-size:.64rem;margin-top:1px">ใช้ไป</div></div>
+            <div><div style="font-weight:600">${U.fmtCompact(limit,cfg.currency)}</div><div style="opacity:.6;font-size:.64rem;margin-top:1px">วงเงิน</div></div>
+            <div><div style="font-weight:600;color:${avail<0?'#ff6b6b':'#86efac'}">${U.fmtCompact(avail,cfg.currency)}</div><div style="opacity:.6;font-size:.64rem;margin-top:1px">เหลือ</div></div>
+          </div>
+        </div>
+        <div style="flex-shrink:0;padding:${pad};margin-bottom:8px">
+          <div style="background:var(--bg-input);border-radius:10px;padding:9px 12px;display:flex;gap:12px;flex-wrap:wrap">
+            <div style="font-size:.74rem;flex:1;min-width:110px"><span style="color:var(--text-muted)">📅 ตัดรอบ</span><span style="font-weight:600;color:var(--text-primary);margin-left:5px">วันที่ ${cc.statementDay||'—'}</span></div>
+            <div style="font-size:.74rem;flex:1;min-width:110px"><span style="color:var(--text-muted)">⏰ ชำระ</span><span style="font-weight:600;color:var(--text-primary);margin-left:5px">วันที่ ${cc.dueDay||'—'}</span></div>
+          </div>
+          <div style="font-size:.7rem;color:var(--text-muted);text-align:center;margin-top:5px">รอบนี้: ${fmtD(cycleStart)} – ${fmtD(cycleEnd)} &nbsp;·&nbsp; ${daysToStatement===0?'<span style="color:var(--expense);font-weight:600">ถึงรอบตัดแล้ว</span>':`เหลือ <strong style="color:${daysToStatement<=5?'var(--expense)':'var(--text-primary)'}">${daysToStatement} วัน</strong>`}</div>
+        </div>
+        <div style="flex-shrink:0;display:flex;border-bottom:0.5px solid var(--border);padding:${pad}">
+          <button class="ccd-tab" data-cct="txn" style="flex:1;padding:8px 0;font-size:.82rem;font-weight:600;border:none;border-bottom:2px solid var(--accent);background:none;color:var(--accent);cursor:pointer">รายการ (${cycleTxns.length})</button>
+          <button class="ccd-tab" data-cct="cat" style="flex:1;padding:8px 0;font-size:.82rem;font-weight:600;border:none;border-bottom:2px solid transparent;background:none;color:var(--text-secondary);cursor:pointer">หมวดหมู่</button>
+        </div>
+        <div style="flex:1;overflow-y:auto;min-height:0;overscroll-behavior:contain;padding:8px ${isMobile?'16px':'0'} 0">
+          <div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px;margin-bottom:12px">
+            <div style="background:var(--bg-input);border-radius:var(--radius);padding:8px;text-align:center"><div style="font-size:.82rem;font-weight:700;color:var(--expense)">${U.fmtCompact(cycleNet,cfg.currency)}</div><div style="font-size:.64rem;color:var(--text-muted);margin-top:2px">สุทธิรอบนี้</div></div>
+            <div style="background:var(--bg-input);border-radius:var(--radius);padding:8px;text-align:center"><div style="font-size:.82rem;font-weight:700;color:var(--text-primary)">${cycleTxns.length}</div><div style="font-size:.64rem;color:var(--text-muted);margin-top:2px">รายการ</div></div>
+            <div style="background:var(--bg-input);border-radius:var(--radius);padding:8px;text-align:center"><div style="font-size:.82rem;font-weight:700;color:${daysToStatement<=5?'var(--expense)':'var(--text-primary)'}">${daysToStatement} วัน</div><div style="font-size:.64rem;color:var(--text-muted);margin-top:2px">ถึงตัดรอบ</div></div>
+          </div>
+          <div id="ccdTxns">${txnsHTML}</div>
+          <div id="ccdCats" style="display:none">${catBarsHTML}</div>
+        </div>
+        <div style="flex-shrink:0;padding:10px ${isMobile?'16px':'0'};border-top:0.5px solid var(--border);display:flex;gap:8px">
+          <button class="btn btn-sm" style="flex:1;font-size:.78rem" id="ccdPay">💰 จ่ายหนี้</button>
+          <button class="btn btn-sm" style="flex:1;font-size:.78rem" id="ccdCb">🔁 เงินคืน</button>
+          <button class="btn btn-sm btn-outline" style="flex:1;font-size:.78rem" id="ccdEdit">✏️ แก้ไข</button>
+          <button class="btn btn-sm btn-outline" id="ccdClose">ปิด</button>
+        </div>
+      </div>`;
+
+    document.getElementById('modalRoot').appendChild(o);
+    if (isMobile) document.body.style.overflow = 'hidden';
+    const close = () => { o.remove(); if (isMobile) document.body.style.overflow = ''; };
+
+    o.querySelector('#ccdHandle')?.addEventListener('click', close);
+    o.querySelector('#ccdClose').onclick = close;
+    o.onclick = e => { if (e.target === o) close(); };
+    o.querySelector('#ccdPay').onclick = () => { close(); this.openCCPayModal(ccId); };
+    o.querySelector('#ccdCb').onclick = () => { close(); this.openCCCashbackModal(ccId); };
+    o.querySelector('#ccdEdit').onclick = () => { close(); const c2 = ST.getById('credit_cards', ccId); if (c2) this.openCCModal(c2); };
+
+    o.querySelectorAll('.ccd-tab').forEach(tab => tab.addEventListener('click', () => {
+      o.querySelectorAll('.ccd-tab').forEach(t => { t.style.color = 'var(--text-secondary)'; t.style.borderBottomColor = 'transparent'; });
+      tab.style.color = 'var(--accent)'; tab.style.borderBottomColor = 'var(--accent)';
+      const isTxn = tab.dataset.cct === 'txn';
+      o.querySelector('#ccdTxns').style.display = isTxn ? 'block' : 'none';
+      o.querySelector('#ccdCats').style.display = isTxn ? 'none' : 'block';
+    }));
+  },
+
   openCCCashbackModal(ccId) {
     const cc = ST.getById('credit_cards', ccId); if (!cc) return;
     const cfg = U.getConfig();
