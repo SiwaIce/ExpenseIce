@@ -88,6 +88,7 @@ const POS = {
   _attachCatEvents() {
     document.querySelectorAll('.cat-card').forEach(card =>
       card.addEventListener('click', () => {
+        if (card.dataset.group) return; // group cards handled by [data-group] listener below
         const cid = card.dataset.cat;
         if (cid === 'custom') {
           this.openModal(null, card.dataset.customCat || null, null);

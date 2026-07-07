@@ -281,7 +281,12 @@ const Charts = {
     const pad = { top: 16, right: 16, bottom: 32, left: 44 };
     const cw = w - pad.left - pad.right;
     const ch = h - pad.top - pad.bottom;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255,255,255,.08)' : '#e5e7eb';
+    const labelColor = isDark ? 'rgba(255,255,255,.5)' : '#999';
+    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || (isDark ? '#d1d5db' : '#000');
     const maxVal = Math.max(...data.map(d => Math.max(d.income, d.expense)), 1);
+    const realMax = Math.max(...data.map(d => Math.max(d.income, d.expense)));
     const drawL = (key, color) => {
       ctx.strokeStyle = color; ctx.lineWidth = 2;
       ctx.beginPath();
@@ -297,26 +302,31 @@ const Charts = {
         ctx.fillStyle = color; ctx.beginPath(); ctx.arc(x, y, 3, 0, Math.PI * 2); ctx.fill();
       });
     };
-    ctx.fillStyle = '#f9fafb'; ctx.fillRect(pad.left, pad.top, cw, ch);
+    const shownYVals = new Set();
     for (let i = 0; i <= 4; i++) {
       const y = pad.top + ch - (ch * i / 4);
-      ctx.strokeStyle = '#e5e7eb'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
-      ctx.fillStyle = '#999'; ctx.font = '9px sans-serif'; ctx.textAlign = 'right'; ctx.fillText(Math.round(maxVal * i / 4), pad.left - 3, y + 3);
+      ctx.strokeStyle = gridColor; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+      if (realMax > 0) {
+        const val = Math.round(maxVal * i / 4);
+        if (!shownYVals.has(val)) { shownYVals.add(val); ctx.fillStyle = labelColor; ctx.font = '9px sans-serif'; ctx.textAlign = 'right'; ctx.fillText(val, pad.left - 3, y + 3); }
+      }
     }
     drawL('income', '#10b981'); drawL('expense', '#ef4444');
     const skip = Math.max(1, Math.floor(data.length / 7));
+    let lastLabelX = -Infinity;
     data.forEach((d, i) => {
       if (i % skip === 0 || i === data.length - 1) {
         const x = pad.left + (cw / (data.length - 1 || 1)) * i;
-        ctx.fillStyle = '#999'; ctx.font = '9px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(d.date.slice(5), x, pad.top + ch + 11);
+        if (x - lastLabelX >= 28) {
+          ctx.fillStyle = labelColor; ctx.font = '9px sans-serif'; ctx.textAlign = 'center'; ctx.fillText(d.date.slice(5), x, pad.top + ch + 11);
+          lastLabelX = x;
+        }
       }
     });
     const lx = pad.left + cw - 105;
     ctx.fillStyle = '#10b981'; ctx.fillRect(lx, pad.top + 2, 9, 9);
-    ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#000';
-    ctx.font = '10px sans-serif'; ctx.textAlign = 'left'; ctx.fillText('รายรับ', lx + 12, pad.top + 10);
-    ctx.fillStyle = '#ef4444'; ctx.fillRect(lx + 54, pad.top + 2, 9, 9);
-    ctx.fillText('รายจ่าย', lx + 66, pad.top + 10);
+    ctx.fillStyle = textColor; ctx.font = '10px sans-serif'; ctx.textAlign = 'left'; ctx.fillText('รายรับ', lx + 12, pad.top + 10);
+    ctx.fillStyle = '#ef4444'; ctx.fillRect(lx + 54, pad.top + 2, 9, 9); ctx.fillText('รายจ่าย', lx + 66, pad.top + 10);
   },
   drawBar(id, data, labels) {
     const c = document.getElementById(id); if (!c) return;
@@ -330,29 +340,36 @@ const Charts = {
     const pad = { top: 16, right: 12, bottom: 42, left: 42 };
     const cw = w - pad.left - pad.right;
     const ch = h - pad.top - pad.bottom;
+    const isDark = document.documentElement.getAttribute('data-theme') === 'dark';
+    const gridColor = isDark ? 'rgba(255,255,255,.08)' : '#e5e7eb';
+    const labelColor = isDark ? 'rgba(255,255,255,.5)' : '#999';
+    const textColor = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || (isDark ? '#d1d5db' : '#000');
     const maxVal = Math.max(...data, 1);
+    const realMax = Math.max(...data);
     const barW = Math.min(34, cw / data.length * .56);
     const gap = cw / data.length;
-    ctx.fillStyle = '#e5e7eb'; ctx.fillRect(pad.left, pad.top, cw, ch);
+    const shownYVals = new Set();
     for (let i = 0; i <= 4; i++) {
       const y = pad.top + ch - (ch * i / 4);
-      ctx.strokeStyle = '#ddd'; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
-      ctx.fillStyle = '#999'; ctx.font = '9px sans-serif'; ctx.textAlign = 'right'; ctx.fillText(Math.round(maxVal * i / 4), pad.left - 3, y + 3);
+      ctx.strokeStyle = gridColor; ctx.lineWidth = 1; ctx.beginPath(); ctx.moveTo(pad.left, y); ctx.lineTo(pad.left + cw, y); ctx.stroke();
+      if (realMax > 0) {
+        const val = Math.round(maxVal * i / 4);
+        if (!shownYVals.has(val)) { shownYVals.add(val); ctx.fillStyle = labelColor; ctx.font = '9px sans-serif'; ctx.textAlign = 'right'; ctx.fillText(val, pad.left - 3, y + 3); }
+      }
     }
     data.forEach((val, i) => {
-      const barH = (val / maxVal) * ch;
+      const barH = Math.max(0, (val / maxVal) * ch);
       const x = pad.left + gap * i + (gap - barW) / 2;
       const y = pad.top + ch - barH;
-      const grad = ctx.createLinearGradient(x, y, x, pad.top + ch);
-      grad.addColorStop(0, '#6366f1'); grad.addColorStop(1, '#a5b4fc');
-      ctx.fillStyle = grad;
-      ctx.beginPath();
-      ctx.roundRect(x, y, barW, barH, [4, 4, 0, 0]);
-      ctx.fill();
-      ctx.fillStyle = getComputedStyle(document.documentElement).getPropertyValue('--text').trim() || '#000';
-      ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
+      if (barH > 0) {
+        const grad = ctx.createLinearGradient(x, y, x, pad.top + ch);
+        grad.addColorStop(0, '#6366f1'); grad.addColorStop(1, '#a5b4fc');
+        ctx.fillStyle = grad;
+        ctx.beginPath(); ctx.roundRect(x, y, barW, barH, [4, 4, 0, 0]); ctx.fill();
+      }
+      ctx.fillStyle = labelColor; ctx.font = '9px sans-serif'; ctx.textAlign = 'center';
       ctx.fillText(labels[i] || '', x + barW / 2, pad.top + ch + 13);
-      if (val > 0) ctx.fillText(U.fmtCurrency(val), x + barW / 2, y - 4);
+      if (val > 0) { ctx.fillStyle = textColor; ctx.fillText(U.fmtCurrency(val), x + barW / 2, y - 4); }
     });
   }
 };
