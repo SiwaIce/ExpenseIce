@@ -335,7 +335,7 @@ const POS = {
           </div>
           ${posContent}
           <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px">
-            <label class="btn btn-outline btn-sm" style="cursor:pointer;font-size:.76rem" title="สแกนใบเสร็จด้วย AI">📷 สแกนใบเสร็จ<input type="file" id="receiptInput" accept="image/*" capture="environment" style="display:none"></label>
+            <button class="btn btn-outline btn-sm" id="btnOCRScan" style="font-size:.76rem;gap:5px">📷 สแกนใบเสร็จ <span style="font-size:.62rem;background:var(--success-light);color:var(--success);padding:1px 6px;border-radius:6px;font-weight:700">OFFLINE</span></button>
             <span id="receiptStatus" style="font-size:.72rem;color:var(--text-secondary)"></span>
           </div>
         </div>
@@ -478,30 +478,16 @@ const POS = {
       if (fr) { fr.classList.add('row-flash'); fr.scrollIntoView({ block: 'nearest' }); }
       window.__flashTxnId = null;
     }
-    document.getElementById('receiptInput')?.addEventListener('change', async (e) => {
-      const file = e.target.files[0]; if (!file) return;
-      const status = document.getElementById('receiptStatus');
-      if (!AI._key()) { U.toast(AI._provider()==='gemini' ? 'กรุณาตั้งค่า Gemini API Key ก่อน' : 'กรุณาตั้งค่า Anthropic API Key ก่อน', 'error'); return; }
-      if (status) { status.textContent = '🔄 กำลังวิเคราะห์...'; status.style.color = 'var(--accent)'; }
-      try {
-        const { b64, mimeType } = await POS._prepareReceiptImage(file);
-        const expCats = ST.getAll('categories').filter(c => c.type === 'expense');
-        const catList = expCats.map(c => `${c.id}:${c.name}`).join(', ');
-        const text = await AI.vision(
-          `จากรูปใบเสร็จหรือสลิปนี้ ตอบเป็น JSON เท่านั้น ไม่มีข้อความอื่น:\n{"amount":<ยอดรวม>,"name":"<ชื่อร้าน/รายการ>","date":"<YYYY-MM-DD หรือ null>","categoryId":"<id ที่เหมาะสม หรือ null>"}\nหมวดหมู่: ${catList}`,
-          b64, mimeType, { maxTokens: 400 }
-        );
-        const match = text.match(/\{[\s\S]*?\}/);
-        if (!match) throw new Error('parse');
-        const data = JSON.parse(match[0]);
-        if (status) { status.textContent = ''; status.style.color = ''; }
-        this._pendingReceiptFile = file;
-        e.target.value = '';
-        this.openModal(null, data.categoryId || null, null, { amount: data.amount, name: data.name, date: data.date });
-      } catch {
-        if (status) { status.textContent = '⚠️ วิเคราะห์ไม่ได้ ลองใหม่'; status.style.color = 'var(--danger)'; }
-        e.target.value = '';
-      }
+    document.getElementById('btnOCRScan')?.addEventListener('click', () => {
+      OCRScanner.open(data => {
+        if (!data) return;
+        if (data._file) this._pendingReceiptFile = data._file;
+        this.openModal(null, data.categoryId || null, null, {
+          amount: data.amount,
+          name: data.name,
+          date: data.date,
+        });
+      });
     });
   },
   flash(text) {
