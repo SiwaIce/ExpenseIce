@@ -22,11 +22,22 @@ const OCRScanner = {
           <span class="ocr-title">📷 สแกนใบเสร็จ / สลิป</span>
           <button class="ocr-close" id="ocrClose">✕</button>
         </div>
+        <div class="ocr-src-btns">
+          <label class="ocr-src-btn" for="ocrFileGallery">
+            <span class="ocr-src-ico">🖼️</span>
+            <span class="ocr-src-label">แกลเลอรี่</span>
+            <input type="file" id="ocrFileGallery" accept="image/*" style="display:none">
+          </label>
+          <label class="ocr-src-btn" for="ocrFileCamera">
+            <span class="ocr-src-ico">📷</span>
+            <span class="ocr-src-label">กล้อง</span>
+            <input type="file" id="ocrFileCamera" accept="image/*" capture="environment" style="display:none">
+          </label>
+        </div>
         <div class="ocr-drop-zone" id="ocrDropZone">
           <div class="ocr-drop-icon">🧾</div>
-          <div class="ocr-drop-text">แตะเพื่อเลือกรูป</div>
+          <div class="ocr-drop-text">หรือลากรูปมาวางที่นี่</div>
           <div class="ocr-drop-sub">ใบเสร็จ · สลิปโอน · QR PromptPay</div>
-          <input type="file" id="ocrFile" accept="image/*" capture="environment" style="display:none">
         </div>
         <div class="ocr-tips">
           <div class="ocr-tip">📸 ถ่ายตรง ไม่เอียง</div>
@@ -41,28 +52,21 @@ const OCRScanner = {
     ov.querySelector('#ocrClose').onclick = () => this._close();
     ov.addEventListener('click', e => { if (e.target === ov) this._close(); });
 
-    const fileInput = ov.querySelector('#ocrFile');
-    ov.querySelector('#ocrDropZone').addEventListener('click', () => fileInput.click());
+    const onFile = e => { const f = e.target.files[0]; if (f) this._startScan(f); e.target.value = ''; };
+    ov.querySelector('#ocrFileGallery').addEventListener('change', onFile);
+    ov.querySelector('#ocrFileCamera').addEventListener('change', onFile);
 
-    // Drag & drop support
-    ov.querySelector('#ocrDropZone').addEventListener('dragover', e => {
-      e.preventDefault();
-      ov.querySelector('#ocrDropZone').classList.add('drag-over');
-    });
-    ov.querySelector('#ocrDropZone').addEventListener('dragleave', () => {
-      ov.querySelector('#ocrDropZone').classList.remove('drag-over');
-    });
-    ov.querySelector('#ocrDropZone').addEventListener('drop', e => {
-      e.preventDefault();
-      ov.querySelector('#ocrDropZone').classList.remove('drag-over');
+    // Drag & drop on the drop zone
+    const dz = ov.querySelector('#ocrDropZone');
+    dz.addEventListener('dragover', e => { e.preventDefault(); dz.classList.add('drag-over'); });
+    dz.addEventListener('dragleave', () => dz.classList.remove('drag-over'));
+    dz.addEventListener('drop', e => {
+      e.preventDefault(); dz.classList.remove('drag-over');
       const file = e.dataTransfer.files[0];
       if (file && file.type.startsWith('image/')) this._startScan(file);
     });
-
-    fileInput.addEventListener('change', e => {
-      const file = e.target.files[0];
-      if (file) this._startScan(file);
-    });
+    // Clicking drop zone opens gallery (no capture)
+    dz.addEventListener('click', () => ov.querySelector('#ocrFileGallery').click());
   },
 
   // ── State 2: Scanning ─────────────────────────────────────────────

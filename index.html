@@ -868,7 +868,12 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 .ocr-close{background:var(--bg-input);border:none;width:28px;height:28px;border-radius:50%;cursor:pointer;font-size:.8rem;color:var(--text-secondary);display:flex;align-items:center;justify-content:center;flex-shrink:0;transition:background .15s}
 .ocr-close:hover{background:var(--danger-light);color:var(--danger)}
 .ocr-choose{padding-bottom:env(safe-area-inset-bottom,0px)}
-.ocr-drop-zone{margin:16px;border:2.5px dashed var(--accent);border-radius:18px;padding:36px 20px;text-align:center;cursor:pointer;transition:all .18s;background:var(--accent-light)}
+.ocr-src-btns{display:flex;gap:10px;padding:14px 16px 4px}
+.ocr-src-btn{flex:1;display:flex;flex-direction:column;align-items:center;gap:6px;padding:16px 10px;border:2px solid var(--border);border-radius:16px;background:var(--bg-input);cursor:pointer;transition:all .16s;text-align:center}
+.ocr-src-btn:hover{border-color:var(--accent);background:var(--accent-light)}
+.ocr-src-ico{font-size:2rem;line-height:1}
+.ocr-src-label{font-size:.82rem;font-weight:700;color:var(--text)}
+.ocr-drop-zone{margin:4px 16px 0;border:2px dashed var(--border);border-radius:14px;padding:18px 16px;text-align:center;cursor:pointer;transition:all .18s;background:var(--bg-input)}
 .ocr-drop-zone:hover,.ocr-drop-zone.drag-over{background:color-mix(in srgb,var(--accent) 12%,var(--bg-card));border-color:var(--accent-hover);transform:scale(1.01)}
 .ocr-drop-icon{font-size:3rem;margin-bottom:10px;animation:bounceY 2s ease-in-out infinite}
 @keyframes bounceY{0%,100%{transform:translateY(0)}50%{transform:translateY(-6px)}}
