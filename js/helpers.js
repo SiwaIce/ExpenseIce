@@ -18,12 +18,13 @@ const EH = {
   },
   calcSum(t) {
     let inc = 0, exp = 0;
-    t.forEach(x => { if (x.type === 'income') inc += Number(x.amount); else exp += Number(x.amount); });
+    // payCardId = CC debt payment (transfer), not a real new expense — exclude from totals
+    t.forEach(x => { if (x.payCardId) return; if (x.type === 'income') inc += Number(x.amount); else exp += Number(x.amount); });
     return { totalIncome: inc, totalExpense: exp, balance: inc - exp, count: t.length };
   },
   catSpending(txns, cats) {
     const map = {};
-    txns.filter(t => t.type === 'expense').forEach(t => {
+    txns.filter(t => t.type === 'expense' && !t.payCardId).forEach(t => {
       map[t.categoryId] = (map[t.categoryId] || 0) + Number(t.amount);
     });
     const total = Object.values(map).reduce((s, v) => s + v, 0);

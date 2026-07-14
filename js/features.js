@@ -45,10 +45,10 @@ const InsightsView = {
     const txns = ST.getAll('transactions').filter(t => t.date >= dates[0] && t.date <= dates[6]);
     const cats = ST.getAll('categories');
     const income = txns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-    const expense = txns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+    const expense = txns.filter(t => t.type === 'expense' && !t.payCardId).reduce((s, t) => s + Number(t.amount), 0);
     const catBreakdown = EH.catSpending(txns, cats).slice(0, 5).map(s => `${s.name}: ${U.fmtCurrency(s.amount, cfg.currency)}`).join(', ');
     const dayDetails = dates.map(d => {
-      const exp = txns.filter(t => t.date === d && t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+      const exp = txns.filter(t => t.date === d && t.type === 'expense' && !t.payCardId).reduce((s, t) => s + Number(t.amount), 0);
       return `${d}: ${exp > 0 ? U.fmtCurrency(exp, cfg.currency) : 'ไม่มีรายการ'}`;
     }).join('\n');
     const o = document.createElement('div'); o.className = 'modal-overlay';
@@ -71,7 +71,7 @@ const InsightsView = {
   async openSpendingPattern() {
     if (!AI._key()) { U.toast(AI._noKeyMsg().split('\n')[0], 'error'); return; }
     const cfg = U.getConfig();
-    const txns = ST.getAll('transactions').filter(t => t.type === 'expense');
+    const txns = ST.getAll('transactions').filter(t => t.type === 'expense' && !t.payCardId);
     if (txns.length < 10) { U.toast('ต้องมีรายการอย่างน้อย 10 รายการ', 'error'); return; }
     const dayNames = ['อาทิตย์','จันทร์','อังคาร','พุธ','พฤหัส','ศุกร์','เสาร์'];
     const dayTotals = Array(7).fill(0), dayCounts = Array(7).fill(0);
@@ -101,7 +101,7 @@ const InsightsView = {
     if (!AI._key()) { U.toast(AI._noKeyMsg().split('\n')[0], 'error'); return; }
     const cfg = U.getConfig();
     const year = new Date().getFullYear();
-    const txns = ST.getAll('transactions').filter(t => t.type === 'expense' && t.date.startsWith(String(year)));
+    const txns = ST.getAll('transactions').filter(t => t.type === 'expense' && !t.payCardId && t.date.startsWith(String(year)));
     const cats = ST.getAll('categories');
     const spending = EH.catSpending(txns, cats).map(s => `${s.name}: ${U.fmtCurrency(s.amount, cfg.currency)}`).join(', ');
     const allItems = txns.slice(0, 60).map(t => { const cat = cats.find(c => c.id === t.categoryId); return `${t.date} ${t.itemName || (cat?.name || '?')} ${U.fmtCurrency(t.amount, cfg.currency)}`; }).join('\n');
@@ -151,7 +151,7 @@ const InsightsView = {
     const container = document.getElementById('anomalyContainer'); if (!container) return;
     const cfg = U.getConfig();
     const cats = ST.getAll('categories');
-    const allTxns = ST.getAll('transactions').filter(t => t.type === 'expense');
+    const allTxns = ST.getAll('transactions').filter(t => t.type === 'expense' && !t.payCardId);
     const month = U.thisMonth();
     const now = new Date();
     // Compute per-category monthly avg over last 3 months (excluding current)
@@ -192,9 +192,9 @@ const InsightsView = {
     const cats = ST.getAll('categories');
     const txns = ST.getAll('transactions').filter(t => t.date.startsWith(month));
     const income = txns.filter(t => t.type === 'income').reduce((s, t) => s + Number(t.amount), 0);
-    const expense = txns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+    const expense = txns.filter(t => t.type === 'expense' && !t.payCardId).reduce((s, t) => s + Number(t.amount), 0);
     const catBreakdown = cats.map(c => {
-      const spent = txns.filter(t => t.type === 'expense' && t.categoryId === c.id).reduce((s, t) => s + Number(t.amount), 0);
+      const spent = txns.filter(t => t.type === 'expense' && !t.payCardId && t.categoryId === c.id).reduce((s, t) => s + Number(t.amount), 0);
       return spent > 0 ? `${c.name}: ${U.fmtCurrency(spent, cfg.currency)}` : null;
     }).filter(Boolean).join(', ');
     // prev month
@@ -202,7 +202,7 @@ const InsightsView = {
     const prevD = new Date(now.getFullYear(), now.getMonth() - 1, 1);
     const prevM = `${prevD.getFullYear()}-${String(prevD.getMonth()+1).padStart(2,'0')}`;
     const prevTxns = ST.getAll('transactions').filter(t => t.date.startsWith(prevM));
-    const prevExp = prevTxns.filter(t => t.type === 'expense').reduce((s, t) => s + Number(t.amount), 0);
+    const prevExp = prevTxns.filter(t => t.type === 'expense' && !t.payCardId).reduce((s, t) => s + Number(t.amount), 0);
 
     const o = document.createElement('div'); o.className = 'modal-overlay';
     o.innerHTML = `<div class="modal" style="max-width:520px"><h3>📊 รายงานการเงิน ${month}</h3><div id="reportBody"><div class="ins-loading"><div class="ins-dot"></div><div class="ins-dot"></div><div class="ins-dot"></div><span>AI กำลังสร้างรายงาน...</span></div></div><div class="modal-actions" style="margin-top:16px"><button class="btn btn-outline" id="rptClose">ปิด</button></div></div>`;
@@ -350,7 +350,7 @@ const BV = {
     const cats = ST.getAll('categories').filter(c => c.type === 'expense');
     const cfg = U.getConfig();
     const month = U.thisMonth();
-    const txns = ST.getAll('transactions').filter(t => t.date.startsWith(month) && t.type === 'expense');
+    const txns = ST.getAll('transactions').filter(t => t.date.startsWith(month) && t.type === 'expense' && !t.payCardId);
     return `<div class="card"><div class="card-header"><span class="card-title">🎯 งบประมาณรายเดือน — ${month}</span><div style="display:flex;gap:6px"><button class="btn btn-outline btn-sm" id="btnAIBudget">🤖 AI แนะนำ</button><button class="btn btn-primary btn-sm" id="btnAddB">➕ ตั้งงบ</button></div></div>${cats.map(cat => {
       const b = budgets.find(x => x.categoryId === cat.id);
       const spent = txns.filter(t => t.categoryId === cat.id).reduce((s, t) => s + Number(t.amount), 0);

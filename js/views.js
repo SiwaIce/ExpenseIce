@@ -28,7 +28,7 @@ const Views = {
       for (let i = 1; i <= 3; i++) {
         const d = new Date(now.getFullYear(), now.getMonth() - i, 1);
         const m = `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}`;
-        const exp = txns.filter(t => t.date.startsWith(m) && t.type === 'expense').reduce((s,t) => s + Number(t.amount), 0);
+        const exp = txns.filter(t => t.date.startsWith(m) && t.type === 'expense' && !t.payCardId).reduce((s,t) => s + Number(t.amount), 0);
         if (exp > 0) results.push(exp);
       }
       if (!results.length) return null;
@@ -124,10 +124,10 @@ const Views = {
           const cat = cats.find(c => c.id === t.categoryId) || { icon: '❓', name: '?', color: '#ccc' };
           return `<div class="swipe-wrap" data-id="${t.id}"><div class="swipe-del-bg">🗑️</div><div class="swipe-content tl-item">
             <div class="tl-ico" style="background:${cat.color}22"><span style="font-size:1.1rem">${cat.icon}</span></div>
-            <div class="tl-info"><div class="tl-name">${EH.txnLabel(t)}</div><div class="tl-cat">${cat.name}${t.time ? ' · 🕐'+t.time : ''}${(t.note && t.note !== 'undefined') ? ' · ' + t.note : ''}</div>${t.accountId && accMap[t.accountId] ? `<button type="button" class="tl-acc" data-accfilter="${t.accountId}" title="ดูทั้งหมดของบัญชีนี้">${accMap[t.accountId]}</button>` : ''}</div>
+            <div class="tl-info"><div class="tl-name">${EH.txnLabel(t)}${t.payCardId ? ' <span style="font-size:.64rem;background:var(--border);color:var(--text-secondary);padding:1px 5px;border-radius:4px;vertical-align:middle">โอนชำระบัตร</span>' : ''}</div><div class="tl-cat">${cat.name}${t.time ? ' · 🕐'+t.time : ''}${(t.note && t.note !== 'undefined') ? ' · ' + t.note : ''}</div>${t.accountId && accMap[t.accountId] ? `<button type="button" class="tl-acc" data-accfilter="${t.accountId}" title="ดูทั้งหมดของบัญชีนี้">${accMap[t.accountId]}</button>` : ''}</div>
             <div class="tl-right">
               ${t.receiptUrl ? `<img src="${t.receiptUrl}" class="receipt-thumb" title="ดูใบเสร็จ" onclick="event.stopPropagation();window.open('${t.receiptUrl}','_blank')">` : ''}
-              <span class="tl-amount" style="color:${t.type==='income'?'var(--income)':'var(--expense)'}">${t.type==='income'?'+':''}${U.fmtCurrency(t.amount, cfg.currency)}</span>
+              <span class="tl-amount" style="color:${t.payCardId?'var(--text-secondary)':t.type==='income'?'var(--income)':'var(--expense)'}">${t.type==='income'?'+':''}${U.fmtCurrency(t.amount, cfg.currency)}</span>
               <div class="tl-act"><button class="btn-ghost" data-te="${t.id}" title="แก้ไข">✏️</button></div>
             </div>
           </div></div>`;
@@ -1070,7 +1070,7 @@ const Views = {
       const catGroups = {};
       monthTxns.forEach(t => {
         if (!catGroups[t.categoryId]) catGroups[t.categoryId] = {exp:0,inc:0,cnt:0};
-        if (t.type==='expense') catGroups[t.categoryId].exp += Number(t.amount);
+        if (t.type==='expense' && !t.payCardId) catGroups[t.categoryId].exp += Number(t.amount);
         else catGroups[t.categoryId].inc += Number(t.amount);
         catGroups[t.categoryId].cnt++;
       });
