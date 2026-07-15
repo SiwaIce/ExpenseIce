@@ -5,6 +5,8 @@ const POS = {
   q: '',
   selCat: null,
   _pendingReceiptFile: null,
+  _catView: localStorage.getItem('exp_posView') || 'g3',
+  _posTab: 'cats',
   _prepareReceiptImage(file) {
     return new Promise((resolve, reject) => {
       const url = URL.createObjectURL(file);
@@ -43,8 +45,8 @@ const POS = {
       <div class="cat-avatar" style="background:${cc}33"><span class="cat-avatar-inner">${g.icon||'📋'}</span></div>
       <span class="cat-name">${g.name}</span>
     </div>`; }).join('');
-    return this.selCat
-      ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
+    if (this.selCat) {
+      return `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
           <button class="btn btn-outline btn-sm" id="btnBackCat" style="padding:5px 10px;font-size:.78rem">← กลับ</button>
           <span style="font-size:.9rem;font-weight:600">${selCatObj ? selCatObj.icon+' '+selCatObj.name : ''}</span>
         </div>
@@ -62,22 +64,45 @@ const POS = {
           <button class="btn btn-sm btn-primary" id="btnSaveGroup">บันทึก</button>
           <button class="btn btn-sm btn-outline" id="btnCancelGroup">✕</button>
         </div>
-        <button class="btn btn-outline btn-sm" id="btnAddGroup" style="width:100%;font-size:.74rem;margin-top:8px">⊕ เพิ่มหมวดรอง</button>`
-      : `<div class="pos-section-label">📁 หมวดหมู่</div>
-        <div class="pos-grid">
-          ${displayCats.map(cat => {
-            const bs = EH.getBudget(cat.id);
-            return `<div class="cat-card" data-cat="${cat.id}" style="background:linear-gradient(160deg,${cat.color}1a 0%,var(--bg-card) 70%);border-color:${cat.color}55">
-              <div class="cat-avatar" style="background:${cat.color}33"><span class="cat-avatar-inner">${cat.icon}</span></div>
-              <span class="cat-name">${cat.name}</span>
-              ${bs ? `<div class="bbar-wrap" style="margin-top:6px"><div class="bbar-fill ${bs.cls}" style="width:${bs.pct}%"></div></div>` : ''}
-            </div>`;
-          }).join('')}
-          <div class="cat-card cat-card-custom" data-cat="custom" style="background:linear-gradient(160deg,var(--accent-light) 0%,var(--bg-card) 70%)">
-            <div class="cat-avatar" style="background:var(--accent-light)"><span class="cat-avatar-inner">✏️</span></div>
-            <span class="cat-name">กำหนดเอง</span>
+        <button class="btn btn-outline btn-sm" id="btnAddGroup" style="width:100%;font-size:.74rem;margin-top:8px">⊕ เพิ่มหมวดรอง</button>`;
+    }
+    const v = this._catView;
+    if (v === 'list') {
+      const txns = ST.getAll('transactions');
+      const month = U.thisMonth();
+      return displayCats.map(cat => {
+        const bs = EH.getBudget(cat.id);
+        const cnt = txns.filter(t => t.categoryId === cat.id && t.date.startsWith(month)).length;
+        return `<div class="pos-cat-row" data-cat="${cat.id}" style="border-left-color:${cat.color}">
+          <span style="font-size:1.5rem;flex-shrink:0">${cat.icon}</span>
+          <div class="pos-cat-row-info">
+            <div class="pos-cat-row-name">${cat.name}</div>
+            <div class="pos-cat-row-sub">${cnt > 0 ? cnt + ' รายการเดือนนี้' : 'ยังไม่มีรายการ'}</div>
           </div>
+          ${bs ? `<div class="bbar-wrap" style="width:48px;margin-right:4px"><div class="bbar-fill ${bs.cls}" style="width:${bs.pct}%"></div></div>` : ''}
+          <span style="color:var(--text-secondary);font-size:.85rem;flex-shrink:0">›</span>
         </div>`;
+      }).join('') + `<div class="pos-cat-row pos-cat-row-custom" data-cat="custom" style="border-left-color:var(--accent)">
+        <span style="font-size:1.5rem;flex-shrink:0">✏️</span>
+        <div class="pos-cat-row-info"><div class="pos-cat-row-name">กำหนดเอง</div></div>
+        <span style="color:var(--text-secondary);font-size:.85rem;flex-shrink:0">›</span>
+      </div>`;
+    }
+    const gridClass = v === 'g2' ? 'pos-grid pos-grid-2col' : 'pos-grid';
+    return `<div class="${gridClass}">
+      ${displayCats.map(cat => {
+        const bs = EH.getBudget(cat.id);
+        return `<div class="cat-card" data-cat="${cat.id}" style="background:linear-gradient(160deg,${cat.color}1a 0%,var(--bg-card) 70%);border-color:${cat.color}55">
+          <div class="cat-avatar" style="background:${cat.color}33"><span class="cat-avatar-inner">${cat.icon}</span></div>
+          <span class="cat-name">${cat.name}</span>
+          ${bs ? `<div class="bbar-wrap" style="margin-top:6px"><div class="bbar-fill ${bs.cls}" style="width:${bs.pct}%"></div></div>` : ''}
+        </div>`;
+      }).join('')}
+      <div class="cat-card cat-card-custom" data-cat="custom" style="background:linear-gradient(160deg,var(--accent-light) 0%,var(--bg-card) 70%)">
+        <div class="cat-avatar" style="background:var(--accent-light)"><span class="cat-avatar-inner">✏️</span></div>
+        <span class="cat-name">กำหนดเอง</span>
+      </div>
+    </div>`;
   },
   _updateCatSection() {
     const el = document.getElementById('posCatSection');
@@ -86,9 +111,9 @@ const POS = {
     this._attachCatEvents();
   },
   _attachCatEvents() {
-    document.querySelectorAll('.cat-card').forEach(card =>
+    document.querySelectorAll('.cat-card, .pos-cat-row').forEach(card =>
       card.addEventListener('click', () => {
-        if (card.dataset.group) return; // group cards handled by [data-group] listener below
+        if (card.dataset.group) return;
         const cid = card.dataset.cat;
         if (cid === 'custom') {
           this.openModal(null, card.dataset.customCat || null, null);
@@ -258,48 +283,44 @@ const POS = {
       }).join('')}</div>
     </div>` : '';
 
-    const selCatObj = this.selCat ? displayCats.find(c => c.id === this.selCat) : null;
-    const selGroups = this.selCat ? ST.getAll('item_groups').filter(g => g.categoryId === this.selCat) : [];
-    const selGroupsHTML = selGroups.map(g => { const cc = selCatObj?.color || '#6366f1'; return `<div class="cat-card" data-group="${g.id}" data-group-name="${g.name}" data-group-icon="${g.icon||'📋'}" style="background:linear-gradient(160deg,${cc}1a 0%,var(--bg-card) 70%);border-color:${cc}55">
-      <div class="cat-avatar" style="background:${cc}33"><span class="cat-avatar-inner">${g.icon||'📋'}</span></div>
-      <span class="cat-name">${g.name}</span>
-    </div>`; }).join('');
-    const catSection = this.selCat
-      ? `<div style="display:flex;align-items:center;gap:8px;margin-bottom:10px">
-          <button class="btn btn-outline btn-sm" id="btnBackCat" style="padding:5px 10px;font-size:.78rem">← กลับ</button>
-          <span style="font-size:.9rem;font-weight:600">${selCatObj ? selCatObj.icon+' '+selCatObj.name : ''}</span>
+    const catSection = this._buildCatSection();
+    const activeTab = this._posTab;
+    const v = this._catView;
+    const posContent = `<div class="pos-tab-bar">
+      <button class="pos-tab${activeTab==='cats'?' active':''}" data-pt="cats"><span class="pt-ico">🏷️</span>หมวดหมู่</button>
+      <button class="pos-tab${activeTab==='suggest'?' active':''}" data-pt="suggest"><span class="pt-ico">✨</span>แนะนำ</button>
+      <button class="pos-tab${activeTab==='fav'?' active':''}" data-pt="fav"><span class="pt-ico">⭐</span>ใช้บ่อย</button>
+      <button class="pos-tab${activeTab==='scan'?' active':''}" data-pt="scan"><span class="pt-ico">📷</span>สแกน</button>
+    </div>
+    <div id="ptCats"${activeTab!=='cats'?' style="display:none"':''}>
+      <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:8px;margin-top:2px">
+        <span class="pos-section-label" style="margin:0">เลือกหมวด</span>
+        <div class="pos-view-toggle">
+          <button class="pvt-btn${v==='g2'?' active':''}" data-pv="g2" title="2 คอลัมน์">⊞</button>
+          <button class="pvt-btn${v==='g3'?' active':''}" data-pv="g3" title="3 คอลัมน์">⊟</button>
+          <button class="pvt-btn${v==='list'?' active':''}" data-pv="list" title="รายการ">≡</button>
         </div>
-        <div class="pos-section-label">📋 หมวดรอง</div>
-        <div class="pos-grid">
-          ${selGroupsHTML}
-          <div class="cat-card cat-card-custom" data-cat="custom" data-custom-cat="${this.selCat}" style="background:linear-gradient(160deg,var(--accent-light) 0%,var(--bg-card) 70%)">
-            <div class="cat-avatar" style="background:var(--accent-light)"><span class="cat-avatar-inner">✏️</span></div>
-            <span class="cat-name">กำหนดเอง</span>
-          </div>
+      </div>
+      <div id="posCatSection">${catSection}</div>
+    </div>
+    <div id="ptSuggest"${activeTab!=='suggest'?' style="display:none"':''}>
+      ${pinnedHTML}${timeSuggestHTML}${!timeFavs.length && !pinnedObjs.length ? '<div class="empty-state" style="padding:20px 0"><div style="font-size:2.5rem">✨</div><p>ยังไม่มีประวัติการบันทึก<br><small>บันทึกสักสองสามวัน ระบบจะแนะนำตามเวลาของคุณ</small></p></div>' : ''}
+      ${todayWidget}
+    </div>
+    <div id="ptFav"${activeTab!=='fav'?' style="display:none"':''}>
+      ${favHTML || '<div class="empty-state" style="padding:20px 0"><div style="font-size:2.5rem">⭐</div><p>ยังไม่มีรายการที่ใช้บ่อย<br><small>บันทึกรายการซ้ำๆ แล้วจะปรากฏที่นี่</small></p></div>'}
+    </div>
+    <div id="ptScan"${activeTab!=='scan'?' style="display:none"':''}>
+      <div style="padding:8px 0">
+        <div style="background:var(--bg-input);border-radius:14px;padding:24px 16px;text-align:center">
+          <div style="font-size:2.8rem;margin-bottom:8px">📷</div>
+          <div style="font-weight:600;font-size:.95rem;margin-bottom:6px">สแกนใบเสร็จ / สลิป</div>
+          <div style="font-size:.76rem;color:var(--text-secondary);line-height:1.8;margin-bottom:14px">อ่าน QR PromptPay หรือ OCR อัตโนมัติ<br>รองรับ KBank · SCB · KTB · TrueMoney และอื่นๆ</div>
+          <button class="btn btn-primary" id="btnOCRScan" style="width:100%;margin-bottom:8px">📷 ถ่ายรูป / เลือกภาพ</button>
+          <span id="receiptStatus" style="font-size:.72rem;color:var(--text-secondary)"></span>
         </div>
-        <div id="addGroupForm" style="display:none;gap:6px;align-items:center;margin-top:8px">
-          <input type="text" id="newGroupName" placeholder="ชื่อหมวดรอง..." style="flex:1;font-size:.84rem">
-          <input type="text" id="newGroupIcon" placeholder="🏷" style="width:46px;text-align:center;font-size:1.1rem">
-          <button class="btn btn-sm btn-primary" id="btnSaveGroup">บันทึก</button>
-          <button class="btn btn-sm btn-outline" id="btnCancelGroup">✕</button>
-        </div>
-        <button class="btn btn-outline btn-sm" id="btnAddGroup" style="width:100%;font-size:.74rem;margin-top:8px">⊕ เพิ่มหมวดรอง</button>`
-      : `<div class="pos-section-label">📁 หมวดหมู่</div>
-        <div class="pos-grid">
-          ${displayCats.map(cat => {
-            const bs = EH.getBudget(cat.id);
-            return `<div class="cat-card" data-cat="${cat.id}" style="background:linear-gradient(160deg,${cat.color}1a 0%,var(--bg-card) 70%);border-color:${cat.color}55">
-              <div class="cat-avatar" style="background:${cat.color}33"><span class="cat-avatar-inner">${cat.icon}</span></div>
-              <span class="cat-name">${cat.name}</span>
-              ${bs ? `<div class="bbar-wrap" style="margin-top:6px"><div class="bbar-fill ${bs.cls}" style="width:${bs.pct}%"></div></div>` : ''}
-            </div>`;
-          }).join('')}
-          <div class="cat-card cat-card-custom" data-cat="custom" style="background:linear-gradient(160deg,var(--accent-light) 0%,var(--bg-card) 70%)">
-            <div class="cat-avatar" style="background:var(--accent-light)"><span class="cat-avatar-inner">✏️</span></div>
-            <span class="cat-name">กำหนดเอง</span>
-          </div>
-        </div>`;
-    const posContent = pinnedHTML + favHTML + timeSuggestHTML + todayWidget + '<div id="posCatSection">' + catSection + '</div>';
+      </div>
+    </div>`;
 
     const todayTxnHtml = todayTxns.length === 0 ?
       '<div style="text-align:center;color:var(--text-secondary);padding:12px;font-size:.8rem">ยังไม่มีรายการวันนี้</div>' :
@@ -334,10 +355,6 @@ const POS = {
             </div>
           </div>
           ${posContent}
-          <div style="margin-top:10px;padding-top:10px;border-top:1px solid var(--border);display:flex;align-items:center;gap:8px">
-            <button class="btn btn-outline btn-sm" id="btnOCRScan" style="font-size:.76rem;gap:5px">📷 สแกนใบเสร็จ <span style="font-size:.62rem;background:var(--success-light);color:var(--success);padding:1px 6px;border-radius:6px;font-weight:700">OFFLINE</span></button>
-            <span id="receiptStatus" style="font-size:.72rem;color:var(--text-secondary)"></span>
-          </div>
         </div>
       </div>
       <div class="pos-right-col">
@@ -487,6 +504,28 @@ const POS = {
           name: data.name,
           date: data.date,
         });
+      });
+    });
+    // Tab switching (no full re-render — just show/hide panels)
+    document.querySelectorAll('[data-pt]').forEach(tab => {
+      tab.addEventListener('click', () => {
+        const t = tab.dataset.pt;
+        this._posTab = t;
+        document.querySelectorAll('[data-pt]').forEach(b => b.classList.toggle('active', b === tab));
+        const panelMap = { cats: 'ptCats', suggest: 'ptSuggest', fav: 'ptFav', scan: 'ptScan' };
+        Object.entries(panelMap).forEach(([key, id]) => {
+          const el = document.getElementById(id);
+          if (el) el.style.display = t === key ? '' : 'none';
+        });
+      });
+    });
+    // View toggle (g2/g3/list) — update cat section in-place
+    document.querySelectorAll('[data-pv]').forEach(btn => {
+      btn.addEventListener('click', () => {
+        this._catView = btn.dataset.pv;
+        localStorage.setItem('exp_posView', this._catView);
+        document.querySelectorAll('[data-pv]').forEach(b => b.classList.toggle('active', b === btn));
+        this._updateCatSection();
       });
     });
   },
