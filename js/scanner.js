@@ -110,6 +110,22 @@ const OCRScanner = {
         return;
       }
 
+      // ── AI Vision path (Claude / Gemini) — อ่านภาษาไทยได้ดีกว่า Tesseract ──
+      if (typeof AI !== 'undefined' && AI._key()) {
+        setP({ status: '🤖 AI กำลังอ่านใบเสร็จ...', progress: 0.2 });
+        try {
+          const aiResult = await this._scanWithAI(file);
+          URL.revokeObjectURL(imgUrl);
+          setP({ status: '✅ AI อ่านเสร็จ!', progress: 1 });
+          await new Promise(r => setTimeout(r, 250));
+          this._showResult(aiResult, file);
+          return;
+        } catch (_aiErr) {
+          setP({ status: '⚠️ AI ไม่ตอบ — ใช้ OCR สำรอง...', progress: 0.1 });
+          await new Promise(r => setTimeout(r, 400));
+        }
+      }
+
       setP({ status: '🖼️ ปรับคุณภาพภาพ...', progress: 0.07 });
       const canvas = await this._binarize(origCanvas);
 
@@ -743,6 +759,69 @@ const OCRScanner = {
     }
 
     return { value: null, confidence: 'none' };
+  },
+
+  // ── AI Vision scan (Claude / Gemini) — primary path when key exists ──
+  async _scanWithAI(file) {
+    const { b64, mimeType } = await this._toBase64(file);
+    const cats = (typeof ST !== 'undefined' ? ST.getAll('categories') : [])
+      .filter(c => c.type === 'expense').map(c => `${c.id}:${c.name}`).join(', ');
+    const today = new Date().toISOString().slice(0, 10);
+    const prompt = `วิเคราะห์ใบเสร็จ/สลิปในภาพนี้ ตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่น:
+{"amount":0,"date":"YYYY-MM-DD","merchant":"","isSlip":false,"bank":"","categoryId":""}
+- amount: ยอดที่ชำระหรือโอน (ตัวเลขทศนิยม ไม่มี comma ไม่ติดลบ)
+- date: วันที่ทำรายการ รูปแบบ YYYY-MM-DD คริสตศักราช (วันนี้คือ ${today} ถ้าไม่พบให้ใช้วันนี้)
+- merchant: ชื่อร้านค้า หรือชื่อผู้รับโอน
+- isSlip: true ถ้าเป็นสลิปโอนเงิน
+- bank: ชื่อย่อธนาคาร เช่น SCB KBank BBL KTB Krungsri GSB (ถ้าไม่มีให้เว้นว่าง)
+- categoryId: เลือก id ที่เหมาะสมจาก [${cats}] (ถ้าไม่แน่ใจให้เว้นว่าง)`;
+    const raw = await AI.vision(prompt, b64, mimeType, { maxTokens: 400 });
+    const m = raw.replace(/```json|```/g, '').trim().match(/\{[\s\S]*?\}/);
+    if (!m) throw new Error('parse');
+    const p = JSON.parse(m[0]);
+    const amount   = p.amount > 0 ? p.amount : null;
+    const merchant = (p.merchant || '').trim() || null;
+    const date     = p.date && /^\d{4}-\d{2}-\d{2}$/.test(p.date) ? p.date : null;
+    let catId = p.categoryId || null;
+    let resolvedMerchant = merchant;
+    if (merchant) {
+      const learned = this._applyLearning(merchant);
+      if (learned) { resolvedMerchant = learned.merchant; catId = learned.categoryId || catId; }
+      else {
+        const fuzzy = this._fuzzyMerchant(merchant);
+        if (fuzzy) { resolvedMerchant = fuzzy.merchant; catId = fuzzy.categoryId || catId; }
+      }
+    }
+    const bankInfo = p.bank
+      ? (this._detectBank(p.bank) || { name: p.bank, icon: '🏦' })
+      : this._detectBank(merchant || '');
+    return {
+      amount:   { value: amount,           confidence: amount           ? 'high' : 'none' },
+      date:     { value: date,             confidence: date             ? 'high' : 'none' },
+      merchant: { value: resolvedMerchant, confidence: resolvedMerchant ? 'high' : 'none' },
+      bank: bankInfo, isSlip: !!p.isSlip, categoryId: catId,
+      rawText: `(AI Vision — ${p.merchant || ''} / ${p.amount || ''} / ${p.date || ''})`,
+      _fromAI: true,
+    };
+  },
+
+  _toBase64(file) {
+    return new Promise((resolve, reject) => {
+      const url = URL.createObjectURL(file);
+      const img = new Image();
+      img.onload = () => {
+        URL.revokeObjectURL(url);
+        const MAX = 1600;
+        let w = img.width, h = img.height;
+        if (w > MAX || h > MAX) { const r = Math.min(MAX/w, MAX/h); w = Math.round(w*r); h = Math.round(h*r); }
+        const cv = document.createElement('canvas');
+        cv.width = w; cv.height = h;
+        cv.getContext('2d').drawImage(img, 0, 0, w, h);
+        resolve({ b64: cv.toDataURL('image/jpeg', 0.88).split(',')[1], mimeType: 'image/jpeg' });
+      };
+      img.onerror = () => { URL.revokeObjectURL(url); reject(new Error('โหลดภาพไม่ได้')); };
+      img.src = url;
+    });
   },
 
   // ── Category guesser ────────────────────────────────────────────
