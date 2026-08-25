@@ -67,8 +67,35 @@ const ST = {
   },
   _save(c, a) {
     this._cache[c] = a;
-    localStorage.setItem(this._p + c, JSON.stringify(a));
+    try {
+      localStorage.setItem(this._p + c, JSON.stringify(a));
+    } catch (e) {
+      if (e.name === 'QuotaExceededError' || e.name === 'NS_ERROR_DOM_QUOTA_REACHED') {
+        const used = Object.keys(localStorage)
+          .filter(k => k.startsWith(this._p))
+          .reduce((s, k) => s + (localStorage.getItem(k) || '').length * 2, 0);
+        const pct = Math.round(used / 5242880 * 100);
+        const msg = `⚠️ พื้นที่เต็ม (${pct}%) — กรุณา Export ข้อมูลสำรองแล้วลบรายการเก่าใน ⚙️ ตั้งค่า`;
+        if (document.getElementById('toastContainer')) U.toast(msg, 'error');
+        else console.error(msg);
+      }
+    }
+    this._checkQuota();
     window.dispatchEvent(new CustomEvent('sc', { detail: { c } }));
+  },
+  _checkQuota() {
+    try {
+      const used = Object.keys(localStorage)
+        .filter(k => k.startsWith(this._p))
+        .reduce((s, k) => s + (localStorage.getItem(k) || '').length * 2, 0);
+      const pct = Math.round(used / 5242880 * 100);
+      const key = `exp_qwarn_${Math.floor(pct / 10)}`;
+      if (pct >= 75 && !localStorage.getItem(key)) {
+        localStorage.setItem(key, '1');
+        const el = document.getElementById('toastContainer');
+        if (el) U.toast(`💾 พื้นที่ใกล้เต็ม ${pct}% — ควร Export JSON สำรองข้อมูลไว้ก่อน`, 'error');
+      }
+    } catch {}
   },
   _id(c) {
     const p = {
@@ -89,13 +116,14 @@ const ST = {
 
 const U = {
   fmtCurrency(a, cur = 'THB') {
-    const s = { THB: '฿', USD: '$', EUR: '€', JPY: '¥', GBP: '£' };
+    const s = { THB: '฿', USD: '$', EUR: '€', JPY: '¥', GBP: '£', SGD: 'S$', HKD: 'HK$', CNY: '¥', KRW: '₩', MYR: 'RM', AUD: 'A$', TWD: 'NT$' };
     const n = Number(a);
     if (isNaN(n)) return (s[cur] || cur) + '0.00';
-    return (s[cur] || cur) + n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ',');
+    const noDecimal = cur === 'JPY' || cur === 'KRW';
+    return (s[cur] || cur) + (noDecimal ? Math.round(n).toLocaleString() : n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
   },
   fmtCompact(a, cur = 'THB') {
-    const s = { THB: '฿', USD: '$', EUR: '€', JPY: '¥', GBP: '£' };
+    const s = { THB: '฿', USD: '$', EUR: '€', JPY: '¥', GBP: '£', SGD: 'S$', HKD: 'HK$', CNY: '¥', KRW: '₩', MYR: 'RM', AUD: 'A$', TWD: 'NT$' };
     const n = Number(a);
     if (isNaN(n)) return (s[cur] || cur) + '0';
     const sign = n < 0 ? '-' : '';
@@ -155,8 +183,9 @@ const U = {
       el.textContent = msg;
     }
     c.appendChild(el);
-    const t1 = setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, 2800);
-    const t2 = setTimeout(() => el.remove(), 3200);
+    const dur = undoFn ? 5000 : 2800;
+    const t1 = setTimeout(() => { el.style.opacity = '0'; el.style.transition = 'opacity .3s'; }, dur);
+    const t2 = setTimeout(() => el.remove(), dur + 400);
     return el;
   },
   confirm(msg) {

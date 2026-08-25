@@ -731,6 +731,10 @@ const POS = {
       'cat_entertain': ['กับเพื่อน', 'กับครอบครัว']
     };
     const chips = chipMap[defCat] || ['ส่วนตัว', 'งาน', 'ครอบครัว'];
+    const editCur = isEdit ? (editTxn?.currency || cfg.currency) : cfg.currency;
+    const editExRate = isEdit ? (editTxn?.exchangeRate || 1) : 1;
+    const _currOpts = ['THB','USD','EUR','JPY','GBP','SGD','HKD','CNY','KRW','MYR','AUD','TWD'].map(c => { const lb = {THB:'฿ บาท (THB)',USD:'$ ดอลลาร์ (USD)',EUR:'€ ยูโร (EUR)',JPY:'¥ เยน (JPY)',GBP:'£ ปอนด์ (GBP)',SGD:'S$ สิงคโปร์ (SGD)',HKD:'HK$ ฮ่องกง (HKD)',CNY:'¥ หยวน (CNY)',KRW:'₩ วอน (KRW)',MYR:'RM ริงกิต (MYR)',AUD:'A$ ออสเตรเลีย (AUD)',TWD:'NT$ ไต้หวัน (TWD)'}; return `<option value="${c}" ${editCur===c?'selected':''}>${lb[c]||c}</option>`; }).join('');
+    const _currFieldHTML = `<div class="form-group" id="mCurrGrp"><label>💱 สกุลเงิน</label><div style="display:flex;gap:7px;align-items:center;flex-wrap:wrap"><select id="mCurr" style="flex:0 0 auto;min-width:160px">${_currOpts}</select><div id="mExRateGrp" style="${editCur!==cfg.currency?'display:flex':'display:none'};align-items:center;gap:5px"><span style="font-size:.74rem;color:var(--text-secondary);white-space:nowrap">1 <b id="mCurrLabel">${editCur}</b> =</span><input type="number" id="mExRate" value="${editExRate}" min="0.0001" step="any" style="width:72px;padding:4px 6px"><span style="font-size:.74rem;color:var(--text-secondary)">${cfg.currency}</span></div></div></div>`;
     let numVal = String(defAmt || '');
     const isMobile = window.innerWidth <= 640;
     const o = document.createElement('div'); o.className = isMobile ? 'bs-overlay' : 'modal-overlay';
@@ -751,6 +755,8 @@ const POS = {
       <div class="form-group"><label>วันที่</label><input type="date" id="mD" value="${isEdit?editTxn.date:(prefill?.date||U.today())}"><div class="dshorts"><button class="dshort ${!isEdit?'active':''}" data-ds="today">วันนี้</button><button class="dshort" data-ds="yesterday">เมื่อวาน</button><button class="dshort" data-ds="2d">2 วันก่อน</button><button class="dshort" data-ds="3d">3 วันก่อน</button></div></div>
       <div class="form-group" id="mOutgoingGrp" style="${t0 !== 'expense' ? 'display:none' : ''}"><div style="display:flex;flex-direction:column;gap:6px"><label class="inst-toggle-row"><input type="checkbox" id="mReimburse" ${isEdit && editTxn && editTxn.reimbursable ? 'checked' : ''}><span>🔄 รอเบิกคืน <span style="font-size:.72rem;color:var(--text-secondary)">(จ่ายแทน เบิกทีหลัง)</span></span></label><label class="inst-toggle-row"><input type="checkbox" id="mLent" ${isEdit && editTxn && editTxn.lent ? 'checked' : ''}><span>🤝 ให้ยืม <span style="font-size:.72rem;color:var(--text-secondary)">(รอรับเงินคืน)</span></span></label><div id="mLentToGrp" style="${isEdit && editTxn && editTxn.lent ? '' : 'display:none'}"><input type="text" id="mLentTo" placeholder="ชื่อคนที่ยืม..." value="${isEdit && editTxn && editTxn.lentTo ? editTxn.lentTo : ''}" style="margin-top:5px"></div></div></div>
       ${isEdit && editTxn?.payCardId ? `<div class="form-group"><label class="inst-toggle-row"><input type="checkbox" id="mPayCardExp" ${editTxn.payCardExpense ? 'checked' : ''}><span>📊 นับเป็นรายจ่ายในรายงาน <span style="font-size:.72rem;color:var(--text-secondary)">(ยังไม่ได้บันทึกรายการย่อย)</span></span></label></div>` : ''}
+      <div class="form-group" id="mTaxGrp"><label class="inst-toggle-row"><input type="checkbox" id="mTaxDed" ${isEdit && editTxn?.taxDeductible ? 'checked' : ''}><span>🧾 ลดหย่อนภาษี <span style="font-size:.72rem;color:var(--text-secondary)">ประกัน / กองทุน / ดอกเบี้ยบ้าน / บริจาค</span></span></label><div id="mTaxCatGrp" style="${isEdit && editTxn?.taxDeductible ? '' : 'display:none'};margin-top:7px"><select id="mTaxCat" style="width:100%"><option value="ประกันชีวิต" ${isEdit&&editTxn?.taxCategory==='ประกันชีวิต'?'selected':''}>🛡️ ประกันชีวิต (ลด ≤ 100,000)</option><option value="ประกันสุขภาพ" ${isEdit&&editTxn?.taxCategory==='ประกันสุขภาพ'?'selected':''}>💊 ประกันสุขภาพ (ลด ≤ 25,000)</option><option value="กองทุน SSF" ${isEdit&&editTxn?.taxCategory==='กองทุน SSF'?'selected':''}>📈 กองทุน SSF (ลด ≤ 200,000)</option><option value="กองทุน RMF" ${isEdit&&editTxn?.taxCategory==='กองทุน RMF'?'selected':''}>🏦 กองทุน RMF (ลด ≤ 500,000)</option><option value="ดอกเบี้ยบ้าน" ${isEdit&&editTxn?.taxCategory==='ดอกเบี้ยบ้าน'?'selected':''}>🏠 ดอกเบี้ยกู้บ้าน (ลด ≤ 100,000)</option><option value="บริจาคเพื่อการศึกษา" ${isEdit&&editTxn?.taxCategory==='บริจาคเพื่อการศึกษา'?'selected':''}>📚 บริจาคการศึกษา (ลด 2×, ≤ 10%รายได้)</option><option value="บริจาคทั่วไป" ${isEdit&&editTxn?.taxCategory==='บริจาคทั่วไป'?'selected':''}>❤️ บริจาคทั่วไป (ลด ≤ 10%รายได้)</option><option value="อื่นๆ" ${!isEdit||!editTxn?.taxCategory||editTxn?.taxCategory==='อื่นๆ'?'selected':''}>📌 อื่นๆ</option></select></div></div>
+      ${_currFieldHTML}
       <div class="form-group"><label>หมายเหตุ</label><textarea id="mNote" placeholder="หมายเหตุ...">${isEdit ? (editTxn.note && editTxn.note !== 'undefined' ? editTxn.note : '') : ''}</textarea><div class="nchips">${chips.map(ch => `<button class="nchip" data-ch="${ch}">${ch}</button>`).join('')}</div></div>
     `;
     const buildModalHTML = () => isMobile
@@ -769,6 +775,8 @@ const POS = {
       <div class="form-group"><label>วันที่</label><input type="date" id="mD" value="${isEdit?editTxn.date:(prefill?.date||U.today())}"><div class="dshorts"><button class="dshort ${!isEdit?'active':''}" data-ds="today">วันนี้</button><button class="dshort" data-ds="yesterday">เมื่อวาน</button><button class="dshort" data-ds="2d">2 วันก่อน</button><button class="dshort" data-ds="3d">3 วันก่อน</button></div></div>
       <div class="form-group" id="mOutgoingGrp" style="${t0 !== 'expense' ? 'display:none' : ''}"><div style="display:flex;flex-direction:column;gap:6px"><label class="inst-toggle-row"><input type="checkbox" id="mReimburse" ${isEdit && editTxn && editTxn.reimbursable ? 'checked' : ''}><span>🔄 รอเบิกคืน <span style="font-size:.72rem;color:var(--text-secondary)">(จ่ายแทน เบิกทีหลัง)</span></span></label><label class="inst-toggle-row"><input type="checkbox" id="mLent" ${isEdit && editTxn && editTxn.lent ? 'checked' : ''}><span>🤝 ให้ยืม <span style="font-size:.72rem;color:var(--text-secondary)">(รอรับเงินคืน)</span></span></label><div id="mLentToGrp" style="${isEdit && editTxn && editTxn.lent ? '' : 'display:none'}"><input type="text" id="mLentTo" placeholder="ชื่อคนที่ยืม..." value="${isEdit && editTxn && editTxn.lentTo ? editTxn.lentTo : ''}" style="margin-top:5px"></div></div></div>
       ${isEdit && editTxn?.payCardId ? `<div class="form-group"><label class="inst-toggle-row"><input type="checkbox" id="mPayCardExp" ${editTxn.payCardExpense ? 'checked' : ''}><span>📊 นับเป็นรายจ่ายในรายงาน <span style="font-size:.72rem;color:var(--text-secondary)">(ยังไม่ได้บันทึกรายการย่อย)</span></span></label></div>` : ''}
+      <div class="form-group" id="mTaxGrp"><label class="inst-toggle-row"><input type="checkbox" id="mTaxDed" ${isEdit && editTxn?.taxDeductible ? 'checked' : ''}><span>🧾 ลดหย่อนภาษี <span style="font-size:.72rem;color:var(--text-secondary)">ประกัน / กองทุน / ดอกเบี้ยบ้าน / บริจาค</span></span></label><div id="mTaxCatGrp" style="${isEdit && editTxn?.taxDeductible ? '' : 'display:none'};margin-top:7px"><select id="mTaxCat" style="width:100%"><option value="ประกันชีวิต" ${isEdit&&editTxn?.taxCategory==='ประกันชีวิต'?'selected':''}>🛡️ ประกันชีวิต (ลด ≤ 100,000)</option><option value="ประกันสุขภาพ" ${isEdit&&editTxn?.taxCategory==='ประกันสุขภาพ'?'selected':''}>💊 ประกันสุขภาพ (ลด ≤ 25,000)</option><option value="กองทุน SSF" ${isEdit&&editTxn?.taxCategory==='กองทุน SSF'?'selected':''}>📈 กองทุน SSF (ลด ≤ 200,000)</option><option value="กองทุน RMF" ${isEdit&&editTxn?.taxCategory==='กองทุน RMF'?'selected':''}>🏦 กองทุน RMF (ลด ≤ 500,000)</option><option value="ดอกเบี้ยบ้าน" ${isEdit&&editTxn?.taxCategory==='ดอกเบี้ยบ้าน'?'selected':''}>🏠 ดอกเบี้ยกู้บ้าน (ลด ≤ 100,000)</option><option value="บริจาคเพื่อการศึกษา" ${isEdit&&editTxn?.taxCategory==='บริจาคเพื่อการศึกษา'?'selected':''}>📚 บริจาคการศึกษา (ลด 2×, ≤ 10%รายได้)</option><option value="บริจาคทั่วไป" ${isEdit&&editTxn?.taxCategory==='บริจาคทั่วไป'?'selected':''}>❤️ บริจาคทั่วไป (ลด ≤ 10%รายได้)</option><option value="อื่นๆ" ${!isEdit||!editTxn?.taxCategory||editTxn?.taxCategory==='อื่นๆ'?'selected':''}>📌 อื่นๆ</option></select></div></div>
+      ${_currFieldHTML}
       <div class="form-group"><label>หมายเหตุ</label><textarea id="mNote" placeholder="หมายเหตุ...">${isEdit ? (editTxn.note && editTxn.note !== 'undefined' ? editTxn.note : '') : ''}</textarea><div class="nchips">${chips.map(ch => `<button class="nchip" data-ch="${ch}">${ch}</button>`).join('')}</div></div>
     `;
     o.innerHTML = buildModalHTML();
@@ -776,7 +784,9 @@ const POS = {
     if (isMobile) document.body.style.overflow = 'hidden';
     const _closeModal = () => { o.remove(); if (isMobile) document.body.style.overflow = ''; };
     const refreshDisp = () => {
-      const el = o.querySelector('#npDisp'); if (el) el.value = U.fmtCurrency(Number(numVal) || 0, cfg.currency);
+      const el = o.querySelector('#npDisp');
+      const cur = o.querySelector('#mCurr')?.value || cfg.currency;
+      if (el) el.value = U.fmtCurrency(Number(numVal) || 0, cur);
     };
     // Let the user type the amount directly from the mobile keyboard, as an alternative
     // to the custom numpad below — both write to the same numVal.
@@ -895,6 +905,18 @@ const POS = {
     o.querySelector('#mLent')?.addEventListener('change', () => {
       const grp = o.querySelector('#mLentToGrp');
       if (grp) grp.style.display = o.querySelector('#mLent')?.checked ? '' : 'none';
+    });
+    o.querySelector('#mTaxDed')?.addEventListener('change', () => {
+      const grp = o.querySelector('#mTaxCatGrp');
+      if (grp) grp.style.display = o.querySelector('#mTaxDed')?.checked ? '' : 'none';
+    });
+    o.querySelector('#mCurr')?.addEventListener('change', () => {
+      const cur = o.querySelector('#mCurr')?.value || cfg.currency;
+      const rg = o.querySelector('#mExRateGrp');
+      if (rg) rg.style.display = cur !== cfg.currency ? 'flex' : 'none';
+      const lbl = o.querySelector('#mCurrLabel');
+      if (lbl) lbl.textContent = cur;
+      refreshDisp();
     });
     // Voice input — number extraction immediately, then AI parses full sentence if key available
     o.querySelector('#voiceBtn')?.addEventListener('click', () => {
@@ -1050,7 +1072,10 @@ const POS = {
     };
     const doSave = (accountId) => {
       const type = o.querySelector('#mT').value;
-      const amount = parseFloat(numVal);
+      const txnCurr = o.querySelector('#mCurr')?.value || cfg.currency;
+      const txnExRate = txnCurr !== cfg.currency ? (Number(o.querySelector('#mExRate')?.value) || 1) : 1;
+      const origAmt = parseFloat(numVal) || 0;
+      const amount = txnCurr !== cfg.currency ? Math.round(origAmt * txnExRate * 100) / 100 : origAmt;
       const categoryId = o.querySelector('#mC').value;
       const itemName = o.querySelector('#mN').value.trim();
       const groupId = o.querySelector('#mGroupId')?.value || '';
@@ -1063,7 +1088,9 @@ const POS = {
         const lentEdit = type === 'expense' && !!(o.querySelector('#mLent')?.checked);
         const lentToEdit = lentEdit ? (o.querySelector('#mLentTo')?.value || '') : '';
         const payCardExpEdit = editTxn.payCardId ? !!(o.querySelector('#mPayCardExp')?.checked) : undefined;
-        ST.update('transactions', editTxn.id, { type, amount, categoryId, itemName, groupId, date, note, accountId, reimbursable: reimbEdit, reimburseStatus: reimbEdit ? (editTxn.reimburseStatus || 'pending') : '', lent: lentEdit, lentStatus: lentEdit ? (editTxn.lentStatus || 'pending') : '', lentTo: lentToEdit, ...(payCardExpEdit !== undefined && { payCardExpense: payCardExpEdit }) });
+        const taxDeductEdit = !!(o.querySelector('#mTaxDed')?.checked);
+        const taxCatEdit = taxDeductEdit ? (o.querySelector('#mTaxCat')?.value || '') : '';
+        ST.update('transactions', editTxn.id, { type, amount, categoryId, itemName, groupId, date, note, accountId, reimbursable: reimbEdit, reimburseStatus: reimbEdit ? (editTxn.reimburseStatus || 'pending') : '', lent: lentEdit, lentStatus: lentEdit ? (editTxn.lentStatus || 'pending') : '', lentTo: lentToEdit, ...(payCardExpEdit !== undefined && { payCardExpense: payCardExpEdit }), taxDeductible: taxDeductEdit, taxCategory: taxCatEdit, currency: txnCurr, originalAmount: origAmt, exchangeRate: txnExRate });
         window.__flashTxnId = editTxn.id;
       } else {
         const isInstCC = type === 'expense' && accountId ? !!ST.getById('credit_cards', accountId) : false;
@@ -1074,7 +1101,9 @@ const POS = {
         const reimbursable = type === 'expense' && !!(o.querySelector('#mReimburse')?.checked);
         const lent = type === 'expense' && !!(o.querySelector('#mLent')?.checked);
         const lentTo = lent ? (o.querySelector('#mLentTo')?.value || '') : '';
-        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, groupId, date, time: new Date().toTimeString().slice(0,5), note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '', lent, lentStatus: lent ? 'pending' : '', lentTo, ...(prefill?.extra || {}) });
+        const taxDeductible = !!(o.querySelector('#mTaxDed')?.checked);
+        const taxCategory = taxDeductible ? (o.querySelector('#mTaxCat')?.value || '') : '';
+        const newTxn = ST.add('transactions', { type, amount, categoryId, itemId: item ? item.id : '', itemName, groupId, date, time: new Date().toTimeString().slice(0,5), note, accountId, installment: instEnabled, reimbursable, reimburseStatus: reimbursable ? 'pending' : '', lent, lentStatus: lent ? 'pending' : '', lentTo, taxDeductible, taxCategory, currency: txnCurr, originalAmount: origAmt, exchangeRate: txnExRate, ...(prefill?.extra || {}) });
         window.__flashTxnId = newTxn.id;
         // Upload pending receipt image to Firebase Storage
         const pendingFile = POS._pendingReceiptFile;

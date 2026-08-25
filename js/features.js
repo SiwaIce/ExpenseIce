@@ -298,33 +298,84 @@ const RV = {
     ${recs.length === 0 ? `<div class="empty-state"><div class="empty-icon">🔁</div><p>ยังไม่มีรายการประจำ</p><p style="font-size:.8rem;margin-top:5px">เพิ่มรายการที่เกิดซ้ำทุกเดือน เช่น ค่าเช่า ค่าโทรศัพท์</p></div>` : `<div style="display:grid;grid-template-columns:repeat(auto-fill,minmax(280px,1fr));gap:9px;margin-bottom:14px">${recs.map(rec => {
       const cat = cats.find(c => c.id === rec.categoryId) || { icon: '❓', name: '?' };
       const paid = txns.some(t => t.categoryId === rec.categoryId && Math.abs(Number(t.amount) - Number(rec.amount)) < 1 && t.type === rec.type);
-      return `<div class="rec-item"><span style="font-size:1.45rem;margin-right:5px">${cat.icon}</span><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:.86rem">${rec.name}</div><div style="font-size:.7rem;color:var(--text-secondary)">${cat.name} • วันที่ ${rec.dayOfMonth}</div><span class="rec-badge ${paid ? 'rb-paid' : 'rb-unpaid'}">${paid ? '✅ จ่ายแล้ว' : '⏳ ยังไม่ได้จ่าย'}</span></div><div style="text-align:right;flex-shrink:0"><div style="font-weight:700;font-size:.88rem;color:${rec.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(rec.amount, cfg.currency)}</div><div style="display:flex;gap:3px;margin-top:3px;justify-content:flex-end">${!paid ? `<button class="btn btn-success btn-sm" data-rp="${rec.id}">จ่าย</button>` : ''}<button class="btn-ghost btn-sm" data-re="${rec.id}">✏️</button><button class="btn-ghost btn-sm" style="color:var(--danger)" data-rd="${rec.id}">🗑️</button></div></div></div>`;
+      return `<div class="rec-item"><span style="font-size:1.45rem;margin-right:5px">${cat.icon}</span><div style="flex:1;min-width:0"><div style="font-weight:600;font-size:.86rem">${rec.name}</div><div style="font-size:.7rem;color:var(--text-secondary)">${cat.name} • วันที่ ${rec.dayOfMonth}</div><span class="rec-badge ${paid ? 'rb-paid' : 'rb-unpaid'}">${paid ? '✅ จ่ายแล้ว' : '⏳ ยังไม่ได้จ่าย'}</span></div><div style="text-align:right;flex-shrink:0;min-width:80px"><div style="font-weight:700;font-size:.88rem;color:${rec.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(rec.amount, cfg.currency)}</div><div style="display:flex;gap:3px;margin-top:3px;justify-content:flex-end">${!paid ? `<button class="btn btn-success btn-sm" data-rp="${rec.id}">จ่าย</button>` : ''}<button class="btn-ghost btn-sm" data-rmore="${rec.id}" style="opacity:.55;font-size:.95rem;padding:2px 6px;letter-spacing:.05em">···</button></div></div></div>`;
     }).join('')}</div>`}
     <div style="padding-top:10px;border-top:1px solid var(--border);display:flex;gap:16px;flex-wrap:wrap"><div><div class="btag">รายจ่ายประจำรวม</div><div style="font-weight:700;color:var(--expense);font-size:.9rem">${U.fmtCurrency(tExp, cfg.currency)}/เดือน</div></div><div><div class="btag">รายรับประจำรวม</div><div style="font-weight:700;color:var(--income);font-size:.9rem">${U.fmtCurrency(tInc, cfg.currency)}/เดือน</div></div><div><div class="btag">สุทธิต่อเดือน</div><div style="font-weight:700;color:${tInc-tExp>=0?'var(--income)':'var(--expense)'};font-size:.9rem">${U.fmtCurrency(tInc-tExp, cfg.currency)}/เดือน</div></div></div></div>`;
   },
   attachEvents() {
     document.getElementById('btnAddRec')?.addEventListener('click', () => this.openModal());
-    document.querySelectorAll('[data-rp]').forEach(btn => btn.addEventListener('click', () => {
-      const rec = ST.getById('recurring', btn.dataset.rp);
-      if (rec) {
-        ST.add('transactions', { type: rec.type, amount: rec.amount, categoryId: rec.categoryId, itemName: rec.name, date: U.today(), note: 'รายการประจำ' });
+    document.querySelectorAll('[data-rp]').forEach(btn => btn.addEventListener('click', async () => {
+      const rec = ST.getById('recurring', btn.dataset.rp); if (!rec) return;
+      const cfg = U.getConfig();
+      const _doRecord = (accountId) => {
+        if (accountId) POS._applyAcctDelta(accountId, rec.type, Number(rec.amount), false);
+        ST.add('transactions', { type: rec.type, amount: rec.amount, categoryId: rec.categoryId, itemName: rec.name, date: U.today(), note: 'รายการประจำ', accountId: accountId || '' });
         U.toast(`บันทึกแล้ว: ${rec.name}`, 'success');
         App.rv('recurring');
+      };
+      if (rec.accountId) {
+        const acct = ST.getById('wallet_accounts', rec.accountId) || ST.getById('credit_cards', rec.accountId);
+        const acctLabel = acct ? `${acct.icon||''}${acct.name}` : rec.accountId;
+        const ok = await U.confirm(`จ่าย ${U.fmtCurrency(rec.amount, cfg.currency)}\nจากบัญชี "${acctLabel}" ใช่ไหม?`);
+        if (!ok) return;
+        _doRecord(rec.accountId);
+      } else {
+        const wallets = ST.getAll('wallet_accounts');
+        const cards = ST.getAll('credit_cards');
+        const allAccs = [...wallets.map(w => ({ id: w.id, label: `${w.icon||'🏦'} ${w.name}`, color: w.color||'var(--accent)' })), ...cards.map(c => ({ id: c.id, label: `💳 ${c.name}`, color: '#6366f1' }))];
+        const o = document.createElement('div'); o.className = 'modal-overlay';
+        o.innerHTML = `<div class="modal" style="max-width:320px">
+          <div class="modal-header"><span>💳 จ่าย ${U.fmtCurrency(rec.amount, cfg.currency)}<br><span style="font-weight:400;font-size:.8rem">${rec.name}</span></span><button class="btn-ghost" id="rpClose">✕</button></div>
+          <div class="modal-body" style="display:flex;flex-direction:column;gap:8px">
+            <div style="font-size:.78rem;color:var(--text-secondary);padding:2px 0 4px">เลือกบัญชีที่ต้องการตัดเงิน</div>
+            ${allAccs.length === 0 ? '<div style="color:var(--text-secondary);font-size:.82rem">ยังไม่มีบัญชี</div>' : allAccs.map(a => `<button class="btn btn-outline" style="justify-content:flex-start;gap:10px;padding:10px 14px;border-left:3px solid ${a.color}" data-rpid="${a.id}">${a.label}</button>`).join('')}
+            <button class="btn btn-outline" style="color:var(--text-secondary)" data-rpid="">ไม่ระบุบัญชี</button>
+          </div>
+        </div>`;
+        document.getElementById('modalRoot').appendChild(o);
+        o.querySelector('#rpClose').addEventListener('click', () => o.remove());
+        o.addEventListener('click', e => { if (e.target === o) o.remove(); });
+        o.querySelectorAll('[data-rpid]').forEach(b => b.addEventListener('click', () => { o.remove(); _doRecord(b.dataset.rpid); }));
       }
     }));
-    document.querySelectorAll('[data-re]').forEach(btn => btn.addEventListener('click', () => {
-      const rec = ST.getById('recurring', btn.dataset.re); if (rec) this.openModal(rec);
-    }));
-    document.querySelectorAll('[data-rd]').forEach(btn => btn.addEventListener('click', async () => {
-      const ok = await U.confirm('ลบรายการประจำนี้?');
-      if (ok) { ST.delete('recurring', btn.dataset.rd); U.toast('ลบแล้ว', 'success'); App.rv('recurring'); }
+    document.querySelectorAll('[data-rmore]').forEach(btn => btn.addEventListener('click', e => {
+      e.stopPropagation();
+      document.querySelectorAll('.item-more-pop').forEach(p => p.remove());
+      const recId = btn.dataset.rmore;
+      const pop = document.createElement('div');
+      pop.className = 'item-more-pop';
+      const rect = btn.getBoundingClientRect();
+      Object.assign(pop.style, { position:'fixed', zIndex:'900', background:'var(--card)', border:'1px solid var(--border)', borderRadius:'10px', boxShadow:'0 4px 20px rgba(0,0,0,.18)', minWidth:'148px', padding:'5px 0', right:`${window.innerWidth - rect.right}px`, top:`${rect.bottom + 5}px` });
+      pop.innerHTML = `<button class="item-more-btn" data-rmored="${recId}">✏️ แก้ไข</button><button class="item-more-btn" style="color:var(--danger)" data-rmoredl="${recId}">🗑️ ลบรายการ</button>`;
+      document.body.appendChild(pop);
+      const pRect = pop.getBoundingClientRect();
+      if (pRect.left < 8) { pop.style.right = 'auto'; pop.style.left = '8px'; }
+      const _close = ev => { if (!pop.contains(ev.target) && ev.target !== btn) { pop.remove(); document.removeEventListener('click', _close); } };
+      setTimeout(() => document.addEventListener('click', _close), 0);
+      pop.querySelector('[data-rmored]')?.addEventListener('click', () => { pop.remove(); const rec = ST.getById('recurring', recId); if (rec) this.openModal(rec); });
+      pop.querySelector('[data-rmoredl]')?.addEventListener('click', async () => { pop.remove(); const ok = await U.confirm('ลบรายการประจำนี้?'); if (ok) { ST.delete('recurring', recId); U.toast('ลบแล้ว', 'success'); App.rv('recurring'); } });
     }));
   },
   openModal(edit = null) {
     const isEdit = !!edit;
     const cats = ST.getAll('categories');
+    const wallets = ST.getAll('wallet_accounts');
+    const cards = ST.getAll('credit_cards');
+    const acctOpts = [
+      `<option value="">— ไม่ระบุ (ถามตอนจ่าย) —</option>`,
+      ...wallets.map(w => `<option value="${w.id}" ${isEdit && edit.accountId === w.id ? 'selected' : ''}>${w.icon||'🏦'} ${w.name}</option>`),
+      ...cards.map(c => `<option value="${c.id}" ${isEdit && edit.accountId === c.id ? 'selected' : ''}>💳 ${c.name}</option>`)
+    ].join('');
     const o = document.createElement('div'); o.className = 'modal-overlay';
-    o.innerHTML = `<div class="modal"><h3>${isEdit ? '✏️ แก้ไขรายการประจำ' : '➕ เพิ่มรายการประจำ'}</h3><div class="form-group"><label>ชื่อรายการ</label><input type="text" id="rN" value="${isEdit ? edit.name : ''}" placeholder="เช่น ค่าเช่าบ้าน"></div><div class="form-group"><label>ประเภท</label><select id="rT"><option value="expense" ${!isEdit || edit.type === 'expense' ? 'selected' : ''}>รายจ่าย</option><option value="income" ${isEdit && edit.type === 'income' ? 'selected' : ''}>รายรับ</option></select></div><div class="form-group"><label>จำนวนเงิน</label><input type="number" id="rA" value="${isEdit ? edit.amount : ''}" placeholder="0.00" step="0.01" min="0"></div><div class="form-group"><label>หมวดหมู่</label><select id="rC">${cats.map(c => `<option value="${c.id}" ${isEdit && edit.categoryId === c.id ? 'selected' : ''}>${c.icon} ${c.name}</option>`).join('')}</select></div><div class="form-group"><label>วันตัดรายการ (วันที่ในเดือน)</label><input type="number" id="rD" min="1" max="31" value="${isEdit ? edit.dayOfMonth : 1}"></div><div class="modal-actions"><button class="btn btn-outline" id="rc">ยกเลิก</button><button class="btn btn-primary" id="rs">บันทึก</button></div></div>`;
+    o.innerHTML = `<div class="modal"><h3>${isEdit ? '✏️ แก้ไขรายการประจำ' : '➕ เพิ่มรายการประจำ'}</h3>
+      <div class="form-group"><label>ชื่อรายการ</label><input type="text" id="rN" value="${isEdit ? edit.name : ''}" placeholder="เช่น ค่าเช่าบ้าน"></div>
+      <div class="form-group"><label>ประเภท</label><select id="rT"><option value="expense" ${!isEdit || edit.type === 'expense' ? 'selected' : ''}>รายจ่าย</option><option value="income" ${isEdit && edit.type === 'income' ? 'selected' : ''}>รายรับ</option></select></div>
+      <div class="form-group"><label>จำนวนเงิน</label><input type="number" id="rA" value="${isEdit ? edit.amount : ''}" placeholder="0.00" step="0.01" min="0"></div>
+      <div class="form-group"><label>หมวดหมู่</label><select id="rC">${cats.map(c => `<option value="${c.id}" ${isEdit && edit.categoryId === c.id ? 'selected' : ''}>${c.icon} ${c.name}</option>`).join('')}</select></div>
+      <div class="form-group"><label>บัญชีที่ตัดรายการ</label><select id="rAcc">${acctOpts}</select><div style="font-size:.7rem;color:var(--text-secondary);margin-top:3px">ถ้าไม่ระบุ จะถามบัญชีทุกครั้งที่กดจ่าย</div></div>
+      <div class="form-group"><label>วันตัดรายการ (วันที่ในเดือน)</label><input type="number" id="rD" min="1" max="31" value="${isEdit ? edit.dayOfMonth : 1}"></div>
+      <div class="modal-actions"><button class="btn btn-outline" id="rc">ยกเลิก</button><button class="btn btn-primary" id="rs">บันทึก</button></div>
+    </div>`;
     document.getElementById('modalRoot').appendChild(o);
     o.querySelector('#rc').onclick = () => o.remove();
     o.onclick = e => { if (e.target === o) o.remove(); };
@@ -333,10 +384,11 @@ const RV = {
       const type = o.querySelector('#rT').value;
       const amount = parseFloat(o.querySelector('#rA').value);
       const categoryId = o.querySelector('#rC').value;
+      const accountId = o.querySelector('#rAcc').value;
       const dayOfMonth = parseInt(o.querySelector('#rD').value) || 1;
       if (!name || !amount || amount <= 0) { U.toast('กรุณากรอกข้อมูลให้ครบ', 'error'); return; }
-      if (isEdit) ST.update('recurring', edit.id, { name, type, amount, categoryId, dayOfMonth });
-      else ST.add('recurring', { name, type, amount, categoryId, dayOfMonth });
+      if (isEdit) ST.update('recurring', edit.id, { name, type, amount, categoryId, dayOfMonth, accountId });
+      else ST.add('recurring', { name, type, amount, categoryId, dayOfMonth, accountId });
       U.toast(isEdit ? 'อัปเดตแล้ว' : 'เพิ่มแล้ว', 'success');
       o.remove(); App.rv('recurring');
     };

@@ -19,7 +19,12 @@ const App = {
     document.getElementById('btnPrivacy').addEventListener('click', () => this.togglePrivacy());
     if (localStorage.getItem('exp_privacy') === '1') { document.body.classList.add('privacy-mode'); document.getElementById('btnPrivacy').textContent = '🙈'; }
     POS._seedGroups();
-    this.rv('add');
+    // Support PWA shortcuts: index.html#scan → open scanner, #add → add, #reports → reports
+    const startHash = window.location.hash.replace('#', '');
+    const shortcutViews = { add: 'add', reports: 'reports', scan: 'add' };
+    const startView = shortcutViews[startHash] || 'add';
+    this.rv(startView);
+    if (startHash === 'scan') setTimeout(() => Views.openSlipScanner?.(), 400);
     this.updateUI();
     this.updateSBBudgets();
     window.addEventListener('sc', () => { this.updateSBBudgets(); this.updateUI(); CloudSync.schedulePush(); });
@@ -212,6 +217,11 @@ const App = {
     const trashCount = ['transactions','credit_cards','wallet_accounts'].reduce((n,c) => n + ST.getAllDeleted(c).length, 0);
     const navTrash = document.getElementById('navTrash');
     if (navTrash) navTrash.innerHTML = `<span class="nav-icon">🗑️</span> ถังขยะ${trashCount > 0 ? ` <span style="background:var(--danger);color:#fff;font-size:.6rem;font-weight:700;padding:1px 5px;border-radius:10px;vertical-align:middle">${trashCount}</span>` : ''}`;
+    const _recMonth = U.thisMonth();
+    const _recTxns = ST.getAll('transactions').filter(t => t.date.startsWith(_recMonth));
+    const _pendingRec = ST.getAll('recurring').filter(rec => !_recTxns.some(t => t.categoryId === rec.categoryId && Math.abs(Number(t.amount) - Number(rec.amount)) < 1 && t.type === rec.type)).length;
+    const navRec = document.getElementById('navRecurring');
+    if (navRec) navRec.innerHTML = `<span class="nav-icon">🔁</span> รายการประจำ${_pendingRec > 0 ? ` <span style="background:var(--warning);color:#fff;font-size:.6rem;font-weight:700;padding:1px 5px;border-radius:10px;vertical-align:middle">${_pendingRec}</span>` : ''}`;
   },
   updateSBBudgets() {
     const el = document.getElementById('sbBudgets'); if (!el) return;
@@ -236,6 +246,6 @@ const App = {
 
 document.addEventListener('DOMContentLoaded', () => App.init());
 window.addEventListener('hashchange', () => {
-  if (App.cv === 'transactions') App.rv('transactions');
+  if (App.cv === 'transactions') { window._txnPage = 1; App.rv('transactions'); }
   if (App.cv === 'reports') App.rv('reports');
 });

@@ -13,5 +13,28 @@
     { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
   ],
   "screenshots": [],
-  "categories": ["finance", "productivity"]
+  "categories": ["finance", "productivity"],
+  "shortcuts": [
+    {
+      "name": "บันทึกรายการ",
+      "short_name": "บันทึก",
+      "description": "เปิดหน้าบันทึกรายรับ-รายจ่าย",
+      "url": "./index.html#add",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "สแกนใบเสร็จ",
+      "short_name": "สแกน",
+      "description": "สแกนใบเสร็จด้วย AI",
+      "url": "./index.html#scan",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    },
+    {
+      "name": "ดูรายงาน",
+      "short_name": "รายงาน",
+      "description": "ดูรายงานรายเดือน",
+      "url": "./index.html#reports",
+      "icons": [{ "src": "icons/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
 }

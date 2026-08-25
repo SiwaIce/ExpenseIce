@@ -199,28 +199,50 @@ const AccountsView = {
         this.openCCDetailModal(card.dataset.ccdetail);
       });
     });
+    // Shared helper — account picker before recording repayment income
+    const _pickAcctThenSave = (txn, itemName, note, onDone) => {
+      const cfg = U.getConfig();
+      const wallets = ST.getAll('wallet_accounts');
+      const cards = ST.getAll('credit_cards');
+      const allAccs = [...wallets.map(w => ({ id: w.id, label: `${w.icon || '🏦'} ${w.name}`, color: w.color })), ...cards.map(c => ({ id: c.id, label: `💳 ${c.name}`, color: '#6366f1' }))];
+      const o = document.createElement('div'); o.className = 'modal-overlay';
+      o.innerHTML = `<div class="modal" style="max-width:320px">
+        <div class="modal-header"><span>💰 รับเงิน ${U.fmtCurrency(txn.amount, cfg.currency)} เข้าบัญชีไหน?</span><button class="btn-ghost" id="apClose">✕</button></div>
+        <div class="modal-body" style="display:flex;flex-direction:column;gap:8px">
+          ${allAccs.length === 0 ? '<div style="color:var(--text-secondary);font-size:.82rem">ยังไม่มีบัญชี — จะบันทึกโดยไม่ระบุบัญชี</div>' :
+            allAccs.map(a => `<button class="btn btn-outline" style="justify-content:flex-start;gap:10px;padding:10px 14px;border-left:3px solid ${a.color}" data-apid="${a.id}">${a.label}</button>`).join('')}
+          <button class="btn btn-outline" style="color:var(--text-secondary)" data-apid="">ไม่ระบุบัญชี</button>
+        </div>
+      </div>`;
+      document.getElementById('modalRoot').appendChild(o);
+      o.querySelector('#apClose').addEventListener('click', () => o.remove());
+      o.querySelectorAll('[data-apid]').forEach(btn => btn.addEventListener('click', () => {
+        const accountId = btn.dataset.apid;
+        o.remove();
+        onDone(accountId);
+        if (accountId) POS._applyAcctDelta(accountId, 'income', Number(txn.amount), false);
+        ST.add('transactions', { type: 'income', amount: txn.amount, categoryId: txn.categoryId, itemName: itemName, date: U.today(), note: note, accountId: accountId });
+        window.dispatchEvent(new Event('sc'));
+        U.toast(`✅ บันทึกรายรับ ${U.fmtCurrency(txn.amount, cfg.currency)} แล้ว`, 'success');
+        App.rv('accounts');
+      }));
+    };
     // Reimburse — mark received
     document.querySelectorAll('[data-reimb]').forEach(btn => btn.addEventListener('click', async () => {
       const txn = ST.getById('transactions', btn.dataset.reimb); if (!txn) return;
-      const ok = await U.confirm(`รับเงินคืน "${txn.itemName}" ${U.fmtCurrency(txn.amount, U.getConfig().currency)} แล้วใช่ไหม?\n(จะบันทึกเป็นรายรับให้อัตโนมัติ)`);
+      const ok = await U.confirm(`รับเงินคืน "${txn.itemName}" ${U.fmtCurrency(txn.amount, U.getConfig().currency)} แล้วใช่ไหม?`);
       if (!ok) return;
       ST.update('transactions', txn.id, { reimburseStatus: 'received' });
-      ST.add('transactions', { type: 'income', amount: txn.amount, categoryId: txn.categoryId, itemName: `เบิกคืน: ${txn.itemName}`, date: U.today(), note: 'เบิกคืนจากรายการที่จ่ายแทน' });
-      window.dispatchEvent(new Event('sc'));
-      U.toast(`✅ บันทึกรายรับ ${U.fmtCurrency(txn.amount, U.getConfig().currency)} แล้ว`, 'success');
-      App.rv('accounts');
+      _pickAcctThenSave(txn, `เบิกคืน: ${txn.itemName}`, 'เบิกคืนจากรายการที่จ่ายแทน', () => {});
     }));
     // Lent — mark returned
     document.querySelectorAll('[data-lent]').forEach(btn => btn.addEventListener('click', async () => {
       const txn = ST.getById('transactions', btn.dataset.lent); if (!txn) return;
       const who = txn.lentTo ? `จาก "${txn.lentTo}"` : '';
-      const ok = await U.confirm(`ได้รับเงินคืน${who} "${txn.itemName}" ${U.fmtCurrency(txn.amount, U.getConfig().currency)} แล้วใช่ไหม?\n(จะบันทึกเป็นรายรับให้อัตโนมัติ)`);
+      const ok = await U.confirm(`ได้รับเงินคืน${who} "${txn.itemName}" ${U.fmtCurrency(txn.amount, U.getConfig().currency)} แล้วใช่ไหม?`);
       if (!ok) return;
       ST.update('transactions', txn.id, { lentStatus: 'returned' });
-      ST.add('transactions', { type: 'income', amount: txn.amount, categoryId: txn.categoryId, itemName: `รับคืน: ${txn.itemName}`, date: U.today(), note: `รับเงินคืนจาก ${txn.lentTo || 'ผู้ยืม'}` });
-      window.dispatchEvent(new Event('sc'));
-      U.toast(`✅ บันทึกรายรับ ${U.fmtCurrency(txn.amount, U.getConfig().currency)} แล้ว`, 'success');
-      App.rv('accounts');
+      _pickAcctThenSave(txn, `รับคืน: ${txn.itemName}`, `รับเงินคืนจาก ${txn.lentTo || 'ผู้ยืม'}`, () => {});
     }));
   },
 

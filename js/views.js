@@ -113,22 +113,26 @@ const Views = {
     const filterOpen = localStorage.getItem('exp_txnFilter') === '1';
     const txns = EH.getTxns(f);
     const sum = EH.calcSum(txns);
+    const PAGE_SIZE = 60;
+    const _page = window._txnPage || 1;
+    const visibleTxns = txns.slice(0, PAGE_SIZE * _page);
     const grouped = {};
-    txns.forEach(t => { if (!grouped[t.date]) grouped[t.date] = []; grouped[t.date].push(t); });
+    visibleTxns.forEach(t => { if (!grouped[t.date]) grouped[t.date] = []; grouped[t.date].push(t); });
     const view = hp.get('view') || 'timeline';
     if (view === 'month') return this._buildMonthView(hp, cats, cfg);
     const timelineHTML = Object.entries(grouped).map(([date, ts]) => {
       const dSum = EH.calcSum(ts);
-      return `<div class="tl-day-group"><div class="tl-day-hdr"><span>${U.fmtDate(date)}</span><span style="color:${dSum.balance>=0?'var(--income)':'var(--expense)'}">${dSum.balance>=0?'+':''}${U.fmtCurrency(dSum.balance, cfg.currency)}</span></div>
+      return `<div class="tl-day-group"><div class="tl-day-hdr"><label class="bulk-check day-check" style="margin:0 6px 0 0"><input type="checkbox" class="day-all-cb"></label><span>${U.fmtDate(date)}</span><span style="color:${dSum.balance>=0?'var(--income)':'var(--expense)'}">${dSum.balance>=0?'+':''}${U.fmtCurrency(dSum.balance, cfg.currency)}</span></div>
         ${ts.map(t => {
           const cat = cats.find(c => c.id === t.categoryId) || { icon: '❓', name: '?', color: '#ccc' };
           return `<div class="swipe-wrap" data-id="${t.id}"><div class="swipe-del-bg">🗑️</div><div class="swipe-content tl-item">
+            <label class="bulk-check" onclick="event.stopPropagation()"><input type="checkbox" class="txn-cb" data-id="${t.id}"></label>
             <div class="tl-ico" style="background:${cat.color}22"><span style="font-size:1.1rem">${cat.icon}</span></div>
-            <div class="tl-info"><div class="tl-name">${EH.txnLabel(t)}${t.payCardId ? ' <span style="font-size:.64rem;background:var(--border);color:var(--text-secondary);padding:1px 5px;border-radius:4px;vertical-align:middle">โอนชำระบัตร</span>' : ''}</div><div class="tl-cat">${cat.name}${t.time ? ' · 🕐'+t.time : ''}${(t.note && t.note !== 'undefined') ? ' · ' + t.note : ''}</div>${t.accountId && accMap[t.accountId] ? `<button type="button" class="tl-acc" data-accfilter="${t.accountId}" title="ดูทั้งหมดของบัญชีนี้">${accMap[t.accountId]}</button>` : ''}</div>
+            <div class="tl-info"><div class="tl-name">${EH.txnLabel(t)}${t.payCardId ? ' <span style="font-size:.64rem;background:var(--border);color:var(--text-secondary);padding:1px 5px;border-radius:4px;vertical-align:middle">โอนชำระบัตร</span>' : ''}${t.taxDeductible ? ' <span style="font-size:.62rem;background:var(--success-light,#d1fae5);color:var(--success,#10b981);padding:1px 4px;border-radius:3px;vertical-align:middle">🧾ลดหย่อน</span>' : ''}</div><div class="tl-cat">${cat.name}${t.time ? ' · 🕐'+t.time : ''}${(t.note && t.note !== 'undefined') ? ' · ' + t.note : ''}</div>${t.currency && t.currency !== cfg.currency ? `<div style="margin-top:2px"><span style="font-size:.65rem;background:var(--accent-light);color:var(--accent);padding:1px 5px;border-radius:4px">${t.currency} ${U.fmtCurrency(t.originalAmount??t.amount, t.currency)}</span></div>` : ''}${t.accountId && accMap[t.accountId] ? `<button type="button" class="tl-acc" data-accfilter="${t.accountId}" title="ดูทั้งหมดของบัญชีนี้">${accMap[t.accountId]}</button>` : ''}</div>
             <div class="tl-right">
               ${t.receiptUrl ? `<img src="${t.receiptUrl}" class="receipt-thumb" title="ดูใบเสร็จ" onclick="event.stopPropagation();window.open('${t.receiptUrl}','_blank')">` : ''}
               <span class="tl-amount" style="color:${t.payCardId&&!t.payCardExpense?'var(--text-secondary)':t.type==='income'?'var(--income)':'var(--expense)'}">${t.type==='income'?'+':''}${U.fmtCurrency(t.amount, cfg.currency)}</span>
-              <div class="tl-act"><button class="btn-ghost" data-te="${t.id}" title="แก้ไข">✏️</button></div>
+              <div class="tl-act"><button class="btn-ghost" data-te="${t.id}" title="แก้ไข">✏️</button><button class="btn-ghost tl-more-btn" data-more="${t.id}" data-mtype="${t.type}" title="เพิ่มเติม" style="font-size:1rem;letter-spacing:.05em;opacity:.55;padding:2px 5px">···</button></div>
             </div>
           </div></div>`;
         }).join('')}
@@ -148,7 +152,7 @@ const Views = {
 
     return `<div class="stats-grid" style="grid-template-columns:repeat(3,1fr);gap:8px"><div class="stat-card income"><div class="stat-label">📈 รายรับ</div><div class="stat-value" style="font-size:clamp(.82rem,4.4vw,1.2rem)!important" title="${U.fmtCurrency(sum.totalIncome, cfg.currency)}">${U.fmtCompact(sum.totalIncome, cfg.currency)}</div></div><div class="stat-card expense"><div class="stat-label">📉 รายจ่าย</div><div class="stat-value" style="font-size:clamp(.82rem,4.4vw,1.2rem)!important" title="${U.fmtCurrency(sum.totalExpense, cfg.currency)}">${U.fmtCompact(sum.totalExpense, cfg.currency)}</div></div><div class="stat-card balance"><div class="stat-label">⚖️ คงเหลือ</div><div class="stat-value" style="font-size:clamp(.82rem,4.4vw,1.2rem)!important;color:${sum.balance>=0?'var(--income)':'var(--expense)'}" title="${U.fmtCurrency(sum.balance, cfg.currency)}">${U.fmtCompact(sum.balance, cfg.currency)}</div></div></div>
     <div class="card"><div class="card-header" style="flex-wrap:nowrap"><span class="card-title" style="white-space:nowrap">📋 รายการ (${txns.length})</span>
-      <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center;flex-shrink:0"><button class="btn ${view==='timeline'?'btn-primary':'btn-outline'} btn-sm" data-vt="timeline" title="ไทม์ไลน์">📅</button><button class="btn ${view==='table'?'btn-primary':'btn-outline'} btn-sm" data-vt="table" title="ตาราง">📊</button><button class="btn ${view==='month'?'btn-primary':'btn-outline'} btn-sm" data-vt="month" title="สรุปรายเดือน">📆</button><button class="btn btn-primary btn-sm" id="btnAddT" title="เพิ่มรายการ">➕</button><div class="toolbar-menu"><button class="btn btn-outline btn-sm" id="btnTbMenu" title="เพิ่มเติม">⋯</button><div class="toolbar-menu-pop" id="tbMenuPop" style="display:none"><button id="btnStmtScan">📄 นำเข้า Statement</button><button id="btnSlipScan">📲 สแกนสลิป</button><button id="btnExpCSV">📥 Export CSV</button><button id="btnImpCSV">📤 Import CSV</button></div></div><input type="file" id="csvFI" accept=".csv" style="display:none"></div>
+      <div style="display:flex;gap:4px;flex-wrap:nowrap;align-items:center;flex-shrink:0"><button class="btn ${view==='timeline'?'btn-primary':'btn-outline'} btn-sm" data-vt="timeline" title="ไทม์ไลน์">📅</button><button class="btn ${view==='table'?'btn-primary':'btn-outline'} btn-sm" data-vt="table" title="ตาราง">📊</button><button class="btn ${view==='month'?'btn-primary':'btn-outline'} btn-sm" data-vt="month" title="สรุปรายเดือน">📆</button>${view==='timeline'?`<button class="btn btn-outline btn-sm" id="btnBulk" title="เลือกหลายรายการ">☑️</button>`:''}<button class="btn btn-primary btn-sm" id="btnAddT" title="เพิ่มรายการ">➕</button><div class="toolbar-menu"><button class="btn btn-outline btn-sm" id="btnTbMenu" title="เพิ่มเติม">⋯</button><div class="toolbar-menu-pop" id="tbMenuPop" style="display:none"><button id="btnStmtScan">📄 นำเข้า Statement</button><button id="btnSlipScan">📲 สแกนสลิป</button><button id="btnExpCSV">📥 Export CSV</button><button id="btnExpXLSX">📊 Export Excel</button><button id="btnImpCSV">📤 Import CSV</button><button id="btnReceiptGallery">🖼️ Receipt Gallery</button></div></div><input type="file" id="csvFI" accept=".csv" style="display:none"></div>
     </div>
     <div style="display:flex;align-items:center;gap:6px;margin-bottom:10px">
       <div style="flex:1;display:flex;gap:3px;flex-wrap:wrap;align-items:center;min-width:0;overflow:hidden">${filterChipsHTML}<span style="font-size:.71rem;color:var(--text-secondary);white-space:nowrap">${f.dateFrom.slice(5).replace('-','/')} – ${f.dateTo.slice(5).replace('-','/')}</span></div>
@@ -173,12 +177,13 @@ const Views = {
       <label class="flt-check"><input type="checkbox" id="fHasReceipt" ${f.hasReceipt?'checked':''}> <span>🧾 เฉพาะรายการที่มีใบเสร็จ</span></label>
     </div>
     </div>
-    ${view==='timeline' ? `<div id="tlContainer">${txns.length===0?`<div class="empty-state"><div class="empty-icon">📭</div>${totalActiveFilters>0?'ไม่พบรายการตามตัวกรอง':'ยังไม่มีรายการ'}<div><button class="btn btn-primary empty-cta" id="btnEmptyAdd">➕ บันทึกรายการแรก</button></div></div>`:timelineHTML}</div>` : `<div class="table-wrap"><table class="txn-table"><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายการ</th><th>จำนวน</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>${txns.length===0?`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-secondary)">ยังไม่มีรายการ</td></tr>`:txns.map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?',color:'#ccc'};return`<tr><td style="font-size:.78rem">${U.fmtDate(t.date)}${t.time?`<div style="font-size:.68rem;color:var(--text-secondary)">🕐${t.time}</div>`:''}</td><td><span class="badge badge-${t.type}">${t.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${cat.color}"></span>${cat.icon} ${cat.name}</td><td style="font-size:.8rem">${t.itemName||'-'}</td><td style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.78rem;color:var(--text-secondary)">${(t.note && t.note !== 'undefined') ? t.note : '-'}</td><td style="display:flex;gap:4px;padding:6px 10px"><button class="btn-ghost btnE" data-id="${t.id}" title="แก้ไข">✏️</button><button class="btn-ghost btnD" data-id="${t.id}" title="ลบ">🗑️</button></td></tr>`}).join('')}</tbody></table></div>`}
+    ${view==='timeline' ? `<div id="tlContainer">${txns.length===0?`<div class="empty-state"><div class="empty-icon">📭</div>${totalActiveFilters>0?'ไม่พบรายการตามตัวกรอง':'ยังไม่มีรายการ'}<div><button class="btn btn-primary empty-cta" id="btnEmptyAdd">➕ บันทึกรายการแรก</button></div></div>`:timelineHTML}</div>${txns.length > visibleTxns.length ? `<div style="text-align:center;padding:12px 0 20px"><button class="btn btn-outline" id="btnLoadMore" style="gap:8px;padding:9px 22px">⬇️ โหลดเพิ่ม <b>${txns.length - visibleTxns.length}</b> รายการ</button></div>` : ''}` : `<div class="table-wrap"><table class="txn-table"><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายการ</th><th>จำนวน</th><th>หมายเหตุ</th><th></th></tr></thead><tbody>${txns.length===0?`<tr><td colspan="7" style="text-align:center;padding:24px;color:var(--text-secondary)">ยังไม่มีรายการ</td></tr>`:txns.map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?',color:'#ccc'};return`<tr><td style="font-size:.78rem">${U.fmtDate(t.date)}${t.time?`<div style="font-size:.68rem;color:var(--text-secondary)">🕐${t.time}</div>`:''}</td><td><span class="badge badge-${t.type}">${t.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${cat.color}"></span>${cat.icon} ${cat.name}</td><td style="font-size:.8rem">${t.itemName||'-'}</td><td style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.78rem;color:var(--text-secondary)">${(t.note && t.note !== 'undefined') ? t.note : '-'}</td><td style="display:flex;gap:4px;padding:6px 10px"><button class="btn-ghost btnE" data-id="${t.id}" title="แก้ไข">✏️</button><button class="btn-ghost btnD" data-id="${t.id}" title="ลบ">🗑️</button></td></tr>`}).join('')}</tbody></table></div>`}
     </div>`;
   },
   attachTxnEvents() {
     document.getElementById('btnAddT')?.addEventListener('click', () => POS.openModal(null, null, null));
     document.getElementById('btnEmptyAdd')?.addEventListener('click', () => POS.openModal(null, null, null));
+    document.getElementById('btnLoadMore')?.addEventListener('click', () => { window._txnPage = (window._txnPage || 1) + 1; App.rv('transactions'); });
     // Overflow "⋯" menu toggle
     const tbMenu = document.getElementById('btnTbMenu');
     const tbPop = document.getElementById('tbMenuPop');
@@ -207,7 +212,24 @@ const Views = {
       U.dlBlob(EH.exportCSV(ST.getAll('transactions'), ST.getAll('categories')), `txn_${U.today()}.csv`);
       U.toast('ส่งออก CSV สำเร็จ', 'success');
     });
+    document.getElementById('btnExpXLSX')?.addEventListener('click', () => EH.exportExcel(ST.getAll('transactions'), ST.getAll('categories')));
     document.getElementById('btnImpCSV')?.addEventListener('click', () => document.getElementById('csvFI').click());
+    document.getElementById('btnReceiptGallery')?.addEventListener('click', () => {
+      const withReceipts = ST.getAll('transactions').filter(t => t.receiptUrl).sort((a,b) => b.date.localeCompare(a.date));
+      const cats = ST.getAll('categories');
+      const cfg = U.getConfig();
+      const o = document.createElement('div'); o.className = 'modal-overlay';
+      o.innerHTML = `<div class="modal" style="max-width:520px;max-height:88vh;display:flex;flex-direction:column"><div class="modal-header"><span>🖼️ Receipt Gallery (${withReceipts.length})</span><button class="btn-ghost" id="rGClose">✕</button></div><div style="flex:1;overflow-y:auto;padding:12px"><div style="display:grid;grid-template-columns:repeat(3,1fr);gap:8px">${withReceipts.length===0?'<div style="grid-column:1/-1;text-align:center;padding:24px;color:var(--text-secondary)">ยังไม่มีใบเสร็จ</div>':withReceipts.map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓'};return`<div class="rcpt-card" data-rcpt="${t.receiptUrl}" data-info="${U.fmtDate(t.date)} · ${cat.icon} · ${U.fmtCurrency(t.amount,cfg.currency)}" style="cursor:pointer;border-radius:10px;overflow:hidden;border:1.5px solid var(--border);position:relative"><img src="${t.receiptUrl}" style="width:100%;height:100px;object-fit:cover;display:block"><div style="padding:5px 7px;font-size:.63rem;color:var(--text-secondary);white-space:nowrap;overflow:hidden;text-overflow:ellipsis">${U.fmtDate(t.date)} · ${U.fmtCurrency(t.amount,cfg.currency)}</div></div>`;}).join('')}</div></div></div>`;
+      document.getElementById('modalRoot').appendChild(o);
+      o.querySelector('#rGClose').addEventListener('click', () => o.remove());
+      o.addEventListener('click', e => {
+        const card = e.target.closest('[data-rcpt]');
+        if (!card) return;
+        const lv = document.createElement('div'); lv.className = 'modal-overlay'; lv.style.background = 'rgba(0,0,0,.88)';
+        lv.innerHTML = `<div style="position:relative;max-width:90vw;max-height:90vh;display:flex;flex-direction:column;align-items:center;gap:10px"><img src="${card.dataset.rcpt}" style="max-width:90vw;max-height:80vh;border-radius:10px;object-fit:contain"><div style="color:#fff;font-size:.8rem">${card.dataset.info||''}</div><button style="position:absolute;top:-36px;right:-8px;background:rgba(255,255,255,.2);border:none;color:#fff;border-radius:50%;width:32px;height:32px;font-size:1.1rem;cursor:pointer;display:flex;align-items:center;justify-content:center" id="lvClose">✕</button></div>`;
+        document.body.appendChild(lv); lv.querySelector('#lvClose').addEventListener('click', () => lv.remove()); lv.addEventListener('click', e => { if (e.target===lv) lv.remove(); });
+      });
+    });
     document.getElementById('csvFI')?.addEventListener('change', e => {
       const f = e.target.files[0]; if (!f) return;
       const r = new FileReader();
@@ -360,6 +382,153 @@ const Views = {
       if (el.dataset.mitem) nhp.set('mitem', el.dataset.mitem); else nhp.delete('mitem');
       _goM(nhp);
     }));
+    // ---- Bulk Edit ----
+    const _getSelIds = () => [...document.querySelectorAll('.txn-cb:checked')].map(cb => cb.dataset.id);
+    const _updateBulkCount = () => {
+      const n = document.querySelectorAll('.txn-cb:checked').length;
+      const el = document.getElementById('bulkCount');
+      if (el) el.textContent = `เลือก ${n}`;
+    };
+    const _exitBulk = () => {
+      document.getElementById('tlContainer')?.classList.remove('bulk-mode');
+      const bb = document.getElementById('btnBulk');
+      if (bb) { bb.className = 'btn btn-outline btn-sm'; bb.textContent = '☑️'; }
+      document.getElementById('bulkBar')?.remove();
+    };
+    const _showBulkCatModal = ids => {
+      const cats = ST.getAll('categories');
+      const o = document.createElement('div'); o.className = 'modal-overlay';
+      o.innerHTML = `<div class="modal" style="max-width:320px"><div class="modal-header"><span>🏷️ เปลี่ยนหมวดหมู่</span><button class="btn-ghost" id="bBCClose">✕</button></div><div class="modal-body"><div class="form-group"><label>หมวดหมู่ใหม่</label><select id="bBCCat">${cats.map(c=>`<option value="${c.id}">${c.icon} ${c.name}</option>`).join('')}</select></div><button class="btn btn-primary" id="bBCOk" style="width:100%;margin-top:8px">บันทึก (${ids.length} รายการ)</button></div></div>`;
+      document.getElementById('modalRoot').appendChild(o);
+      o.querySelector('#bBCClose').addEventListener('click', () => o.remove());
+      o.querySelector('#bBCOk').addEventListener('click', () => { const catId = o.querySelector('#bBCCat').value; ids.forEach(id => ST.update('transactions', id, { categoryId: catId })); o.remove(); U.toast(`อัปเดต ${ids.length} รายการแล้ว`, 'success'); App.rv('transactions'); });
+    };
+    const _showBulkAccModal = ids => {
+      const wallets = ST.getAll('wallet_accounts'); const cards = ST.getAll('credit_cards');
+      const accs = [...wallets.map(w=>({id:w.id,label:`${w.icon} ${w.name}`})), ...cards.map(c=>({id:c.id,label:`💳 ${c.name}`}))];
+      const o = document.createElement('div'); o.className = 'modal-overlay';
+      o.innerHTML = `<div class="modal" style="max-width:320px"><div class="modal-header"><span>🏧 เปลี่ยนบัญชี</span><button class="btn-ghost" id="bBAClose">✕</button></div><div class="modal-body"><div class="form-group"><label>บัญชีใหม่</label><select id="bBAAcc"><option value="">ไม่ระบุบัญชี</option>${accs.map(a=>`<option value="${a.id}">${a.label}</option>`).join('')}</select></div><button class="btn btn-primary" id="bBAOk" style="width:100%;margin-top:8px">บันทึก (${ids.length} รายการ)</button></div></div>`;
+      document.getElementById('modalRoot').appendChild(o);
+      o.querySelector('#bBAClose').addEventListener('click', () => o.remove());
+      o.querySelector('#bBAOk').addEventListener('click', () => { const accId = o.querySelector('#bBAAcc').value; ids.forEach(id => ST.update('transactions', id, { accountId: accId })); o.remove(); U.toast(`อัปเดต ${ids.length} รายการแล้ว`, 'success'); App.rv('transactions'); });
+    };
+    const _showBulkTaxModal = ids => {
+      const taxCats = ['ประกันชีวิต','ประกันสุขภาพ','กองทุน SSF','กองทุน RMF','ดอกเบี้ยบ้าน','บริจาคเพื่อการศึกษา','บริจาคทั่วไป','อื่นๆ'];
+      const o = document.createElement('div'); o.className = 'modal-overlay';
+      o.innerHTML = `<div class="modal" style="max-width:320px"><div class="modal-header"><span>🧾 ลดหย่อนภาษี</span><button class="btn-ghost" id="bBTClose">✕</button></div><div class="modal-body"><div class="form-group"><label>หมวดลดหย่อน</label><select id="bBTCat">${taxCats.map(tc=>`<option value="${tc}">${tc}</option>`).join('')}</select></div><div style="display:flex;gap:8px;margin-top:8px"><button class="btn btn-primary" id="bBTOn" style="flex:1">✅ เปิด (${ids.length})</button><button class="btn btn-outline" id="bBTOff" style="flex:1">❌ ปิด (${ids.length})</button></div></div></div>`;
+      document.getElementById('modalRoot').appendChild(o);
+      o.querySelector('#bBTClose').addEventListener('click', () => o.remove());
+      o.querySelector('#bBTOn').addEventListener('click', () => { const tc = o.querySelector('#bBTCat').value; ids.forEach(id => ST.update('transactions', id, { taxDeductible: true, taxCategory: tc })); o.remove(); U.toast(`เปิดลดหย่อน ${ids.length} รายการแล้ว`, 'success'); App.rv('transactions'); });
+      o.querySelector('#bBTOff').addEventListener('click', () => { ids.forEach(id => ST.update('transactions', id, { taxDeductible: false, taxCategory: '' })); o.remove(); U.toast(`ปิดลดหย่อน ${ids.length} รายการแล้ว`, 'success'); App.rv('transactions'); });
+    };
+    document.getElementById('btnBulk')?.addEventListener('click', () => {
+      const tlc = document.getElementById('tlContainer');
+      if (!tlc) return;
+      const entering = !tlc.classList.contains('bulk-mode');
+      tlc.classList.toggle('bulk-mode', entering);
+      const bb = document.getElementById('btnBulk');
+      if (bb) { bb.className = `btn btn-sm ${entering ? 'btn-primary' : 'btn-outline'}`; bb.textContent = entering ? '✕' : '☑️'; }
+      if (!entering) { _exitBulk(); return; }
+      // Create bulk action bar
+      const bar = document.createElement('div'); bar.id = 'bulkBar'; bar.className = 'bulk-bar';
+      bar.innerHTML = `<span id="bulkCount" style="font-weight:700;font-size:.82rem;color:var(--accent);min-width:55px;flex-shrink:0">เลือก 0</span><button class="btn btn-outline btn-sm" id="btnBulkCat">🏷️ หมวด</button><button class="btn btn-outline btn-sm" id="btnBulkAcc">🏧 บัญชี</button><button class="btn btn-outline btn-sm" id="btnBulkTax">🧾 ลดหย่อน</button><button class="btn btn-sm" id="btnBulkDel" style="background:var(--danger);color:#fff;flex-shrink:0">🗑️ ลบ</button>`;
+      document.body.appendChild(bar);
+      bar.querySelector('#btnBulkCat').addEventListener('click', () => { const ids = _getSelIds(); if (!ids.length) return U.toast('ไม่มีรายการที่เลือก','error'); _showBulkCatModal(ids); });
+      bar.querySelector('#btnBulkAcc').addEventListener('click', () => { const ids = _getSelIds(); if (!ids.length) return U.toast('ไม่มีรายการที่เลือก','error'); _showBulkAccModal(ids); });
+      bar.querySelector('#btnBulkTax').addEventListener('click', () => { const ids = _getSelIds(); if (!ids.length) return U.toast('ไม่มีรายการที่เลือก','error'); _showBulkTaxModal(ids); });
+      bar.querySelector('#btnBulkDel').addEventListener('click', async () => {
+        const ids = _getSelIds();
+        if (!ids.length) return U.toast('ไม่มีรายการที่เลือก','error');
+        const ok = await U.confirm(`ลบ ${ids.length} รายการ?`);
+        if (!ok) return;
+        ids.forEach(id => deleteTransaction(id, null, null));
+        U.toast(`ลบ ${ids.length} รายการแล้ว`, 'success');
+        App.rv('transactions');
+      });
+    });
+    document.querySelectorAll('.txn-cb').forEach(cb => cb.addEventListener('change', () => {
+      const item = cb.closest('.tl-item');
+      if (item) item.classList.toggle('txn-selected', cb.checked);
+      _updateBulkCount();
+    }));
+    document.querySelectorAll('.day-all-cb').forEach(dayCb => dayCb.addEventListener('change', () => {
+      const group = dayCb.closest('.tl-day-group');
+      group?.querySelectorAll('.txn-cb').forEach(cb => {
+        cb.checked = dayCb.checked;
+        const item = cb.closest('.tl-item');
+        if (item) item.classList.toggle('txn-selected', dayCb.checked);
+      });
+      _updateBulkCount();
+    }));
+    // ---- End Bulk Edit ----
+    // Bill Split — extracted helper (called from per-item ··· context menu)
+    const _openSplitModal = (txnId) => {
+      const cfg = U.getConfig();
+      const txn = ST.getById('transactions', txnId); if (!txn) return;
+      const o = document.createElement('div'); o.className = 'modal-overlay';
+      o.innerHTML = `<div class="modal" style="max-width:340px">
+        <div class="modal-header"><span>👥 แบ่งจ่าย</span><button class="btn-ghost" id="spClose">✕</button></div>
+        <div class="modal-body">
+          <div style="background:var(--bg-input);border-radius:8px;padding:10px 12px;margin-bottom:12px">
+            <div style="font-size:.8rem;font-weight:600">${txn.itemName||'รายการ'}</div>
+            <div style="font-size:1.1rem;font-weight:700;color:var(--expense)">${U.fmtCurrency(txn.amount,cfg.currency)}</div>
+          </div>
+          <div class="form-group"><label>จำนวนคนทั้งหมด (รวมคุณ)</label>
+            <div style="display:flex;gap:8px;align-items:center">
+              <input type="number" id="spN" value="2" min="2" max="20" style="width:70px">
+              <span style="font-size:.8rem;color:var(--text-secondary)">คน แต่ละคนจ่าย <b id="spPer">${U.fmtCurrency(txn.amount/2,cfg.currency)}</b></span>
+            </div>
+          </div>
+          <div class="form-group"><label>รายชื่อคนที่ต้องเก็บเงินคืน (ทีละบรรทัด)</label>
+            <textarea id="spNames" placeholder="สมชาย&#10;สมหญิง&#10;สมศักดิ์" rows="4" style="width:100%;resize:vertical"></textarea>
+          </div>
+          <div style="font-size:.72rem;color:var(--text-secondary);margin-bottom:10px">ระบบจะสร้าง "ให้ยืม" ในรายการสำหรับแต่ละคน</div>
+          <button class="btn btn-primary" id="spSave" style="width:100%">✅ บันทึก</button>
+        </div>
+      </div>`;
+      document.getElementById('modalRoot').appendChild(o);
+      o.querySelector('#spClose').addEventListener('click', () => o.remove());
+      o.addEventListener('click', e => { if (e.target === o) o.remove(); });
+      const calcPer = () => { const n = parseInt(o.querySelector('#spN').value)||2; o.querySelector('#spPer').textContent = U.fmtCurrency(txn.amount/n, cfg.currency); };
+      o.querySelector('#spN').addEventListener('input', calcPer);
+      o.querySelector('#spSave').addEventListener('click', () => {
+        const n = parseInt(o.querySelector('#spN').value)||2;
+        const perPerson = Math.round(txn.amount / n * 100) / 100;
+        const names = (o.querySelector('#spNames').value||'').split('\n').map(s=>s.trim()).filter(Boolean);
+        if (!names.length) return U.toast('กรุณาระบุชื่ออย่างน้อย 1 คน','error');
+        const cats = ST.getAll('categories');
+        const lentCat = cats.find(c=>c.id==='cat_lent'||c.name.includes('ให้ยืม'))||cats[0];
+        names.forEach(name => ST.add('transactions', { type:'expense', amount:perPerson, categoryId:lentCat?.id||txn.categoryId, itemName:`แบ่งจ่าย: ${txn.itemName||'รายการ'}`, date:txn.date, note:`แบ่งจ่ายจาก ${txn.itemName||'รายการ'} (${n} คน)`, accountId:txn.accountId||'', lent:true, lentStatus:'pending', lentTo:name }));
+        o.remove();
+        U.toast(`สร้าง ${names.length} รายการให้ยืมแล้ว`, 'success');
+        App.rv('transactions');
+      });
+    };
+    // Per-item ··· context menu
+    document.querySelectorAll('[data-more]').forEach(btn => btn.addEventListener('click', e => {
+      e.stopPropagation();
+      document.querySelectorAll('.item-more-pop').forEach(p => p.remove());
+      const txnId = btn.dataset.more;
+      const isExp = btn.dataset.mtype === 'expense';
+      const pop = document.createElement('div');
+      pop.className = 'item-more-pop';
+      const rect = btn.getBoundingClientRect();
+      Object.assign(pop.style, { position:'fixed', zIndex:'900', background:'var(--card)', border:'1px solid var(--border)', borderRadius:'10px', boxShadow:'0 4px 20px rgba(0,0,0,.18)', minWidth:'148px', padding:'5px 0', right: `${window.innerWidth - rect.right}px`, top: `${rect.bottom + 5}px` });
+      pop.innerHTML = `${isExp ? `<button class="item-more-btn" data-mpop="split">👥 แบ่งจ่าย</button>` : ''}<button class="item-more-btn" data-mpop="del" style="color:var(--danger)">🗑️ ลบรายการ</button>`;
+      document.body.appendChild(pop);
+      // Clamp so popover never bleeds past left edge
+      const pRect = pop.getBoundingClientRect();
+      if (pRect.left < 8) { pop.style.right = 'auto'; pop.style.left = '8px'; }
+      const _closePop = ev => { if (!pop.contains(ev.target) && ev.target !== btn) { pop.remove(); document.removeEventListener('click', _closePop); } };
+      setTimeout(() => document.addEventListener('click', _closePop), 0);
+      pop.querySelector('[data-mpop="split"]')?.addEventListener('click', () => { pop.remove(); _openSplitModal(txnId); });
+      pop.querySelector('[data-mpop="del"]')?.addEventListener('click', async () => {
+        pop.remove();
+        const ok = await U.confirm('ลบรายการนี้?');
+        if (!ok) return;
+        deleteTransaction(txnId, () => App.rv('transactions'), () => App.rv('transactions'));
+      });
+    }));
     const tl = document.getElementById('tlContainer'); if (tl) initSwipe(tl);
     // Restore focus + caret to the search box after a search-triggered re-render
     if (window.__txnSearchCaret != null) {
@@ -369,6 +538,7 @@ const Views = {
     }
   },
   applyTxnFilter() {
+    window._txnPage = 1;
     const p = new URLSearchParams(window.location.hash.replace('#', ''));
     const type = document.getElementById('fType')?.value || 'all';
     if (type !== 'all') p.set('type', type); else p.delete('type');
@@ -401,12 +571,19 @@ const Views = {
     const txns = ST.getAll('transactions');
     const cats = ST.getAll('categories');
     const now = new Date();
-    const sel = new URLSearchParams(window.location.hash.replace('#', '')).get('month') ||
-      `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
+    const hp = new URLSearchParams(window.location.hash.replace('#', ''));
+    const rmode = hp.get('rmode') || 'month';
+    const sel = hp.get('month') || `${now.getFullYear()}-${String(now.getMonth()+1).padStart(2,'0')}`;
     const [sy, sm] = sel.split('-').map(Number);
-    const mTxns = txns.filter(t => t.date.startsWith(sel));
-    const sum = EH.calcSum(mTxns);
-    const spending = EH.catSpending(mTxns, cats);
+    // Custom range mode
+    const rFrom = hp.get('rfrom') || U.daysAgo(29);
+    const rTo = hp.get('rto') || U.today();
+    const isRange = rmode === 'range';
+    const fTxns = isRange
+      ? txns.filter(t => t.date >= rFrom && t.date <= rTo)
+      : txns.filter(t => t.date.startsWith(sel));
+    const sum = EH.calcSum(fTxns);
+    const spending = EH.catSpending(fTxns, cats);
     const prevM = sm === 1 ? `${sy-1}-12` : `${sy}-${String(sm-1).padStart(2,'0')}`;
     const prevS = EH.calcSum(txns.filter(t => t.date.startsWith(prevM)));
     const months = [];
@@ -414,29 +591,131 @@ const Views = {
       const d = new Date(sy, sm - 1 - i, 1);
       months.push({ label: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` });
     }
-    return `<div class="card"><div class="card-header"><span class="card-title">📅 รายงานประจำเดือน</span><div style="display:flex;gap:7px;align-items:center"><input type="month" id="repM" value="${sel}" style="max-width:165px"><button class="btn btn-outline btn-sm" id="btnPrint">🖨️ PDF</button></div></div><div class="stats-grid" style="grid-template-columns:repeat(3,1fr)"><div class="stat-card income"><div class="stat-label">รายรับเดือนนี้</div><div class="stat-value">${U.fmtCurrency(sum.totalIncome, cfg.currency)}</div></div><div class="stat-card expense"><div class="stat-label">รายจ่ายเดือนนี้</div><div class="stat-value">${U.fmtCurrency(sum.totalExpense, cfg.currency)}</div></div><div class="stat-card balance"><div class="stat-label">คงเหลือ</div><div class="stat-value">${U.fmtCurrency(sum.balance, cfg.currency)}</div></div></div><div style="font-size:.78rem;color:var(--text-secondary)">เดือนก่อน: รายรับ ${U.fmtCurrency(prevS.totalIncome, cfg.currency)} | รายจ่าย ${U.fmtCurrency(prevS.totalExpense, cfg.currency)} | คงเหลือ ${U.fmtCurrency(prevS.balance, cfg.currency)}</div></div><div class="charts-row"><div class="card"><div class="card-header"><span class="card-title">📊 รายจ่าย 6 เดือน</span></div><div class="chart-container"><canvas id="barChart"></canvas></div></div><div class="card"><div class="card-header"><span class="card-title">🍩 สัดส่วนรายจ่ายเดือนนี้</span></div><div class="chart-container"><canvas id="repDonut"></canvas></div><div class="prog-legend">${spending.slice(0,6).map(s => `<div class="prog-legend-item"><span class="ldot" style="background:${s.color}"></span>${s.icon} ${s.name} (${s.percent.toFixed(1)}%)</div>`).join('')}</div></div></div><div class="card"><div class="card-header"><span class="card-title">📋 รายการเดือนนี้ (${mTxns.length})</span></div><div class="table-wrap"><table><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายการ</th><th>จำนวน</th><th>หมายเหตุ</th></tr></thead><tbody>${mTxns.length===0?`<tr><td colspan="6" style="text-align:center;padding:18px;color:var(--text-secondary)">ไม่มีรายการ</td></tr>`:mTxns.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?',color:'#ccc'};return`<tr><td style="font-size:.78rem">${U.fmtDate(t.date)}${t.time?`<div style="font-size:.68rem;color:var(--text-secondary)">🕐${t.time}</div>`:''}</td><td><span class="badge badge-${t.type}">${t.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${cat.color}"></span>${cat.icon} ${cat.name}</td><td style="font-size:.8rem">${t.itemName||'-'}</td><td style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.78rem;color:var(--text-secondary)">${(t.note && t.note !== 'undefined') ? t.note : '-'}</td></tr>`}).join('')}</tbody></table></div></div>`;
+    // Day-of-week breakdown
+    const dowLabels = ['อา','จ','อ','พ','พฤ','ศ','ส'];
+    const dowTotals = [0,0,0,0,0,0,0];
+    fTxns.filter(t => t.type==='expense' && (!t.payCardId||t.payCardExpense)).forEach(t => { const d = new Date(t.date).getDay(); dowTotals[d] += Number(t.amount); });
+    const dowMax = Math.max(...dowTotals, 1);
+    // Merchant analytics
+    const merchantMap = {};
+    fTxns.filter(t => t.type==='expense' && t.itemName).forEach(t => { const k = t.itemName.trim(); if (!merchantMap[k]) merchantMap[k] = { total:0, count:0, catId:t.categoryId }; merchantMap[k].total += Number(t.amount); merchantMap[k].count++; });
+    const topMerchants = Object.entries(merchantMap).sort((a,b)=>b[1].total-a[1].total).slice(0,8);
+    // Anomaly detection — expenses > 2.5× that category's historical average
+    const _allExp = ST.getAll('transactions').filter(t=>t.type==='expense');
+    const _cGrp = {}; _allExp.forEach(t=>{if(!_cGrp[t.categoryId])_cGrp[t.categoryId]=[];_cGrp[t.categoryId].push(Number(t.amount));});
+    const catAvgs = {}; Object.entries(_cGrp).forEach(([c,a])=>{catAvgs[c]=a.reduce((s,v)=>s+v,0)/a.length;});
+    const anomalies = fTxns.filter(t=>t.type==='expense'&&Number(t.amount)>200&&catAvgs[t.categoryId]&&Number(t.amount)>catAvgs[t.categoryId]*2.5).sort((a,b)=>Number(b.amount)-Number(a.amount)).slice(0,5);
+    // Range label
+    const rangeLabel = isRange
+      ? `${U.fmtDate(rFrom)} – ${U.fmtDate(rTo)} (${fTxns.length} รายการ)`
+      : `เดือน ${sel.slice(2).replace('-','/')} (${fTxns.length} รายการ)`;
+    const periodLabel = isRange ? 'ช่วงเวลานี้' : 'เดือนนี้';
+
+    return `<div class="card"><div class="card-header"><span class="card-title">📈 รายงาน</span><button class="btn btn-outline btn-sm" id="btnPrint">🖨️ PDF</button></div>
+    <div class="tabs" style="margin-bottom:12px">
+      <div class="tab ${!isRange?'active':''}" data-rmode="month">📅 รายเดือน</div>
+      <div class="tab ${isRange?'active':''}" data-rmode="range">📆 กำหนดเอง</div>
+    </div>
+    <div id="repModeMonth" style="display:${!isRange?'flex':'none'};gap:7px;align-items:center;margin-bottom:12px">
+      <input type="month" id="repM" value="${sel}" style="flex:1;max-width:175px">
+    </div>
+    <div id="repModeRange" style="display:${isRange?'flex':'none'};gap:7px;align-items:center;flex-wrap:wrap;margin-bottom:12px">
+      <input type="date" id="repFrom" value="${rFrom}" style="flex:1;min-width:130px">
+      <span style="color:var(--text-secondary);font-size:.8rem">ถึง</span>
+      <input type="date" id="repTo" value="${rTo}" style="flex:1;min-width:130px">
+      <button class="btn btn-primary btn-sm" id="btnApplyRange">ดู</button>
+    </div>
+    <div style="font-size:.75rem;color:var(--text-secondary);margin-bottom:12px">${rangeLabel}</div>
+    </div>
+    <div class="stats-grid" style="grid-template-columns:repeat(3,1fr)"><div class="stat-card income"><div class="stat-label">📈 รายรับ</div><div class="stat-value">${U.fmtCurrency(sum.totalIncome, cfg.currency)}</div></div><div class="stat-card expense"><div class="stat-label">📉 รายจ่าย</div><div class="stat-value">${U.fmtCurrency(sum.totalExpense, cfg.currency)}</div></div><div class="stat-card balance"><div class="stat-label">⚖️ คงเหลือ</div><div class="stat-value" style="color:${sum.balance>=0?'var(--income)':'var(--expense)'}">${U.fmtCurrency(sum.balance, cfg.currency)}</div></div></div>
+    ${!isRange?`<div style="font-size:.78rem;color:var(--text-secondary);margin-bottom:12px">เดือนก่อน: รายรับ ${U.fmtCurrency(prevS.totalIncome, cfg.currency)} | รายจ่าย ${U.fmtCurrency(prevS.totalExpense, cfg.currency)} | คงเหลือ ${U.fmtCurrency(prevS.balance, cfg.currency)}</div>`:''}
+    <div class="charts-row"><div class="card"><div class="card-header"><span class="card-title">📊 ${isRange?'รายจ่ายตามวัน':'รายจ่าย 6 เดือน'}</span></div><div class="chart-container"><canvas id="barChart"></canvas></div></div><div class="card"><div class="card-header"><span class="card-title">🍩 สัดส่วนรายจ่าย${periodLabel}</span></div><div class="chart-container"><canvas id="repDonut"></canvas></div><div class="prog-legend">${spending.slice(0,6).map(s => `<div class="prog-legend-item"><span class="ldot" style="background:${s.color}"></span>${s.icon} ${s.name} (${s.percent.toFixed(1)}%)</div>`).join('')}</div></div></div>
+    <div class="card"><div class="card-header"><span class="card-title">📋 รายการ${periodLabel} (${fTxns.length})</span></div><div class="table-wrap"><table><thead><tr><th>วันที่</th><th>ประเภท</th><th>หมวดหมู่</th><th>รายการ</th><th>จำนวน</th><th>หมายเหตุ</th></tr></thead><tbody>${fTxns.length===0?`<tr><td colspan="6" style="text-align:center;padding:18px;color:var(--text-secondary)">ไม่มีรายการ</td></tr>`:fTxns.sort((a,b)=>new Date(b.date)-new Date(a.date)).map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?',color:'#ccc'};return`<tr><td style="font-size:.78rem">${U.fmtDate(t.date)}${t.time?`<div style="font-size:.68rem;color:var(--text-secondary)">🕐${t.time}</div>`:''}</td><td><span class="badge badge-${t.type}">${t.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${cat.color}"></span>${cat.icon} ${cat.name}</td><td style="font-size:.8rem">${t.itemName||'-'}${t.taxDeductible?` <span style="font-size:.6rem;background:#fef3c7;color:#92400e;padding:1px 4px;border-radius:4px;vertical-align:middle">🧾ลดหย่อน</span>`:''}</td><td style="font-weight:700;color:${t.type==='income'?'var(--income)':'var(--expense)'}">${U.fmtCurrency(t.amount, cfg.currency)}</td><td style="font-size:.78rem;color:var(--text-secondary)">${(t.note && t.note !== 'undefined') ? t.note : '-'}</td></tr>`}).join('')}</tbody></table></div></div>
+    ${(() => {
+      const taxTxns = ST.getAll('transactions').filter(t => t.taxDeductible);
+      if (!taxTxns.length) return '';
+      const taxMap = {};
+      const limits = {'ประกันชีวิต':100000,'ประกันสุขภาพ':25000,'กองทุน SSF':200000,'กองทุน RMF':500000,'ดอกเบี้ยบ้าน':100000};
+      taxTxns.forEach(t => { const k = t.taxCategory || 'อื่นๆ'; taxMap[k] = (taxMap[k]||0) + Number(t.amount); });
+      const total = Object.values(taxMap).reduce((s,v) => s+v, 0);
+      const rows = Object.entries(taxMap).sort((a,b)=>b[1]-a[1]).map(([k,v]) => {
+        const lim = limits[k];
+        const eff = lim ? Math.min(v, lim) : v;
+        return `<div style="display:flex;justify-content:space-between;align-items:center;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:.82rem">${k}</span><div style="text-align:right"><div style="font-weight:700;font-size:.85rem">${U.fmtCurrency(v, cfg.currency)}</div>${lim?`<div style="font-size:.68rem;color:${v>lim?'var(--danger)':'var(--success)'}">${v>lim?`⚠️ เกินเพดาน — ลดได้สูงสุด`:'✅ ลดหย่อนได้'} ${U.fmtCurrency(eff, cfg.currency)}</div>`:''}</div></div>`;
+      }).join('');
+      return `<div class="card" style="border-left:3px solid #f59e0b"><div class="card-header"><span class="card-title">🧾 สรุปลดหย่อนภาษี (ทั้งปี)</span><button class="btn btn-outline btn-sm" id="btnExpTaxXLSX">📊 Export</button></div>${rows}<div style="display:flex;justify-content:space-between;padding-top:9px;font-weight:700"><span>ยอดรวม</span><span style="color:var(--warning)">${U.fmtCurrency(total, cfg.currency)}</span></div><div style="font-size:.72rem;color:var(--text-secondary);margin-top:6px">💡 ยอดจริงที่ลดหย่อนได้ขึ้นอยู่กับเพดานแต่ละประเภทและรายได้สุทธิ</div></div>`;
+    })()}
+    <div class="card"><div class="card-header"><span class="card-title">📅 รายจ่ายแต่ละวันในสัปดาห์</span></div>
+      <div style="display:flex;gap:5px;align-items:flex-end;height:72px;margin-bottom:5px">
+        ${dowLabels.map((l,i)=>{const h=Math.max(2,Math.round(dowTotals[i]/dowMax*68));return`<div style="flex:1;display:flex;flex-direction:column;align-items:center;justify-content:flex-end;gap:0"><div style="width:100%;background:var(--accent);border-radius:3px 3px 0 0;height:${h}px;opacity:.78;transition:height .3s"></div></div>`;}).join('')}
+      </div>
+      <div style="display:flex;gap:5px;margin-bottom:3px">${dowLabels.map((l,i)=>`<div style="flex:1;text-align:center;font-size:.68rem;font-weight:700;color:${dowTotals[i]===dowMax?'var(--accent)':'var(--text-secondary)'}">${l}</div>`).join('')}</div>
+      <div style="display:flex;gap:5px">${dowLabels.map((l,i)=>`<div style="flex:1;text-align:center;font-size:.58rem;color:var(--text-secondary)">${dowTotals[i]>0?U.fmtCompact(dowTotals[i],cfg.currency):''}</div>`).join('')}</div>
+    </div>
+    ${topMerchants.length>0?`<div class="card"><div class="card-header"><span class="card-title">🏪 ร้านค้า / Merchant</span><span style="font-size:.72rem;color:var(--text-secondary)">Top ${topMerchants.length}</span></div>
+      ${topMerchants.map(([name,d],idx)=>{const cat=cats.find(c=>c.id===d.catId)||{icon:'❓',name:'?'};const pct=Math.round(d.total/topMerchants[0][1].total*100);return`<div style="display:flex;align-items:center;gap:8px;margin-bottom:9px"><span style="font-size:.72rem;font-weight:700;color:var(--text-secondary);min-width:18px">${idx+1}</span><div style="flex:1;min-width:0"><div style="display:flex;justify-content:space-between;margin-bottom:3px"><span style="font-size:.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap;max-width:55%">${name}</span><span style="font-size:.8rem;font-weight:700;color:var(--expense)">${U.fmtCurrency(d.total,cfg.currency)}</span></div><div style="background:var(--bg-input);border-radius:3px;height:5px"><div style="background:var(--accent);width:${pct}%;height:100%;border-radius:3px"></div></div><div style="font-size:.62rem;color:var(--text-secondary);margin-top:2px">${d.count} ครั้ง · ${cat.icon} ${cat.name}</div></div></div>`;}).join('')}
+    </div>`:''}
+    ${anomalies.length>0?`<div class="card" style="border-left:3px solid var(--danger)"><div class="card-header"><span class="card-title">⚠️ รายการผิดปกติ</span><span style="font-size:.72rem;color:var(--text-secondary)">ยอดสูง &gt; 2.5× ค่าเฉลี่ย</span></div>
+      ${anomalies.map(t=>{const cat=cats.find(c=>c.id===t.categoryId)||{icon:'❓',name:'?'};const avg=catAvgs[t.categoryId];return`<div style="display:flex;align-items:center;gap:8px;padding:7px 0;border-bottom:1px solid var(--border)"><span style="font-size:1rem">${cat.icon}</span><div style="flex:1;min-width:0"><div style="font-size:.8rem;font-weight:600;overflow:hidden;text-overflow:ellipsis;white-space:nowrap">${t.itemName||cat.name}</div><div style="font-size:.68rem;color:var(--text-secondary)">${U.fmtDate(t.date)} · เฉลี่ย ${U.fmtCurrency(avg,cfg.currency)}</div></div><div style="text-align:right;flex-shrink:0"><div style="font-weight:700;color:var(--danger)">${U.fmtCurrency(t.amount,cfg.currency)}</div><div style="font-size:.65rem;color:var(--danger)">${(t.amount/avg).toFixed(1)}× ค่าเฉลี่ย</div></div></div>`;}).join('')}
+    </div>`:''}`;
   },
   attachReportCharts() {
     const txns = ST.getAll('transactions');
     const cats = ST.getAll('categories');
-    const sel = document.getElementById('repM')?.value || '';
-    const [sy, sm] = sel.split('-').map(Number);
-    const months = [];
-    for (let i = 5; i >= 0; i--) {
-      const d = new Date(sy, sm - 1 - i, 1);
-      months.push({ label: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` });
+    const hp = new URLSearchParams(window.location.hash.replace('#', ''));
+    const rmode = hp.get('rmode') || 'month';
+    const isRange = rmode === 'range';
+    const sel = document.getElementById('repM')?.value || hp.get('month') || '';
+    const rFrom = document.getElementById('repFrom')?.value || hp.get('rfrom') || '';
+    const rTo   = document.getElementById('repTo')?.value   || hp.get('rto')   || '';
+    // Mode tabs
+    document.querySelectorAll('[data-rmode]').forEach(t => t.addEventListener('click', () => {
+      const nhp = new URLSearchParams(window.location.hash.replace('#', ''));
+      nhp.set('rmode', t.dataset.rmode);
+      const s = nhp.toString();
+      if (window.location.hash.replace(/^#/, '') === s) App.rv('reports'); else window.location.hash = s;
+    }));
+    if (isRange) {
+      // Draw daily bar for range
+      const fTxns = txns.filter(t => rFrom && rTo && t.date >= rFrom && t.date <= rTo);
+      // Group by date
+      const dayMap = {}; fTxns.forEach(t => { dayMap[t.date] = (dayMap[t.date] || 0) + (t.type === 'expense' && (!t.payCardId || t.payCardExpense) ? Number(t.amount) : 0); });
+      const days = Object.keys(dayMap).sort();
+      setTimeout(() => {
+        Charts.drawBar('barChart', days.map(d => dayMap[d]), days.map(d => d.slice(5).replace('-','/')));
+        Charts.drawDonut('repDonut', EH.catSpending(fTxns, cats));
+      }, 100);
+      document.getElementById('btnApplyRange')?.addEventListener('click', () => {
+        const f = document.getElementById('repFrom')?.value;
+        const tV = document.getElementById('repTo')?.value;
+        if (!f || !tV) return U.toast('กรุณาเลือกวันที่', 'error');
+        const nhp = new URLSearchParams(window.location.hash.replace('#', ''));
+        nhp.set('rfrom', f); nhp.set('rto', tV);
+        const s = nhp.toString();
+        if (window.location.hash.replace(/^#/, '') === s) App.rv('reports'); else window.location.hash = s;
+      });
+    } else {
+      const [sy, sm] = (sel || `${new Date().getFullYear()}-${String(new Date().getMonth()+1).padStart(2,'0')}`).split('-').map(Number);
+      const months = [];
+      for (let i = 5; i >= 0; i--) {
+        const d = new Date(sy, sm - 1 - i, 1);
+        months.push({ label: `${d.getFullYear()}-${String(d.getMonth()+1).padStart(2,'0')}` });
+      }
+      setTimeout(() => {
+        Charts.drawBar('barChart', months.map(m => EH.calcSum(txns.filter(t => t.date.startsWith(m.label))).totalExpense), months.map(m => m.label.slice(2)));
+        Charts.drawDonut('repDonut', EH.catSpending(txns.filter(t => t.date.startsWith(sel)), cats));
+      }, 100);
+      document.getElementById('repM')?.addEventListener('change', function() {
+        window.location.hash = 'month=' + this.value;
+        App.rv('reports');
+      });
     }
-    setTimeout(() => {
-      Charts.drawBar('barChart', months.map(m => EH.calcSum(txns.filter(t => t.date.startsWith(m.label))).totalExpense), months.map(m => m.label.slice(2)));
-      Charts.drawDonut('repDonut', EH.catSpending(txns.filter(t => t.date.startsWith(sel)), cats));
-    }, 100);
-    document.getElementById('repM')?.addEventListener('change', function() {
-      window.location.hash = 'month=' + this.value;
-      App.rv('reports');
-    });
     document.getElementById('btnPrint')?.addEventListener('click', () => {
       window.print();
       U.toast('เปิด Print Dialog', 'info');
+    });
+    document.getElementById('btnExpTaxXLSX')?.addEventListener('click', () => {
+      EH.exportExcel(ST.getAll('transactions').filter(t => t.taxDeductible), ST.getAll('categories'));
     });
   },
 
@@ -664,7 +943,8 @@ const Views = {
     return `<div class="card"><div class="card-header"><span class="card-title">⚙️ การตั้งค่า</span></div><div class="form-group"><label>ชื่อผู้ใช้</label><input type="text" id="sUN" value="${cfg.userName||'ผู้ใช้'}"></div>
 <div class="form-group"><label>🤖 ผู้ให้บริการ AI</label><div style="display:flex;gap:8px;margin-bottom:8px"><button class="btn btn-sm ${aiProv==='claude'?'btn-primary':'btn-outline'}" id="sPrvClaude" data-prv="claude">🟣 Claude (Anthropic)</button><button class="btn btn-sm ${aiProv==='gemini'?'btn-primary':'btn-outline'}" id="sPrvGemini" data-prv="gemini">🔵 Gemini (Google)</button></div><input type="hidden" id="sAiProvider" value="${aiProv}"></div>
 <div class="form-group" id="grpClaudeKey" style="${aiProv==='gemini'?'display:none':''}"><label>Anthropic API Key <span style="font-size:.7rem;color:var(--text-secondary)">(Claude)</span></label><input type="password" id="sApiKey" value="${cfg.apiKey||''}" placeholder="sk-ant-api03-..."><div style="font-size:.72rem;color:var(--text-secondary);margin-top:4px">รับได้ที่ console.anthropic.com · มีค่าใช้จ่าย</div>${aiProv==='claude'&&!cfg.apiKey?'<div style="font-size:.72rem;color:var(--danger);margin-top:2px">⚠️ ยังไม่ได้ตั้งค่า</div>':''}</div>
-<div class="form-group" id="grpGeminiKey" style="${aiProv!=='gemini'?'display:none':''}"><label>Gemini API Key <span style="font-size:.7rem;color:var(--success)">✅ ฟรี!</span></label><input type="password" id="sGeminiKey" value="${cfg.geminiApiKey||''}" placeholder="AIzaSy..."><div style="font-size:.72rem;color:var(--text-secondary);margin-top:4px">รับฟรีที่ aistudio.google.com · 1,500 req/วัน</div>${aiProv==='gemini'&&!cfg.geminiApiKey?'<div style="font-size:.72rem;color:var(--danger);margin-top:2px">⚠️ ยังไม่ได้ตั้งค่า</div>':''}</div><div class="form-group"><label>สกุลเงิน</label><select id="sCur"><option value="THB" ${cfg.currency==='THB'?'selected':''}>บาท (฿)</option><option value="USD" ${cfg.currency==='USD'?'selected':''}>ดอลลาร์ ($)</option><option value="EUR" ${cfg.currency==='EUR'?'selected':''}>ยูโร (€)</option><option value="JPY" ${cfg.currency==='JPY'?'selected':''}>เยน (¥)</option><option value="GBP" ${cfg.currency==='GBP'?'selected':''}>ปอนด์ (£)</option></select></div><div class="form-group"><label>สีธีม</label><div class="ac-swatches">${accentColors.map(ac=>`<div class="ac-sw ${(cfg.accent||'indigo')===ac.id?'active':''}" style="background:${ac.color}" data-ac="${ac.id}" title="${ac.label}"></div>`).join('')}</div></div><button class="btn btn-primary" id="btnSaveS">💾 บันทึก</button></div><div class="card"><div class="card-header"><span class="card-title">☁️ ซิงค์ข้อมูล (Cloud)</span><span id="syncStatus" class="sync-dot ${CloudSync.isLoggedIn()?'sync-synced':'sync-offline'}" title="${CloudSync.isLoggedIn()?'ซิงค์แล้ว':'ออฟไลน์'}">${CloudSync.isLoggedIn()?'✅':'☁️'}</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ซิงค์ข้อมูลกับ Firebase Firestore — ใช้ได้ทุกอุปกรณ์ iOS, Android, PC</p><div class="form-group"><label>Firebase Config <span style="font-size:.72rem;color:var(--text-secondary)">(JSON)</span></label><textarea id="sFBConfig" rows="5" style="font-size:.72rem;font-family:monospace;resize:vertical" placeholder='&#123;"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."&#125;'>${cfg.firebaseConfig||''}</textarea></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-primary btn-sm" id="btnSaveFB">💾 บันทึก Config</button>${CloudSync.isLoggedIn()?`<button class="btn btn-outline btn-sm" id="btnForcePush">⬆️ Push</button><button class="btn btn-outline btn-sm" id="btnForcePull">⬇️ Pull</button><button class="btn btn-outline btn-sm" id="btnCloudSignOut" style="color:var(--danger)">🚪 ออกจากระบบ</button>`:CloudSync.isConfigured()?`<button class="btn btn-success btn-sm" id="btnCloudSignIn">🔑 Sign in with Google</button>`:''}</div><details style="margin-top:4px"><summary style="font-size:.78rem;color:var(--text-secondary);cursor:pointer">📋 วิธีตั้งค่า Firebase (ขยายดู)</summary><ol style="font-size:.74rem;color:var(--text-secondary);padding:8px 0 0 16px;line-height:2.1"><li>ไปที่ <b>console.firebase.google.com</b> → สร้างโปรเจคใหม่</li><li>เพิ่ม Web App (<b>&lt;/&gt;</b>) → คัดลอก <b>firebaseConfig</b> ทั้งก้อน JSON</li><li>เปิด <b>Firestore Database</b> → สร้างฐานข้อมูล → <b>Test Mode</b></li><li>เปิด <b>Authentication</b> → Sign-in method → เปิดใช้ <b>Google</b></li><li>เพิ่ม domain ที่ใช้งาน (localhost หรือ URL) ใน Authorized domains</li><li>วาง config → กด <b>บันทึก Config</b> → กด <b>☁️ Sign in</b> ใน sidebar</li></ol></details></div><div class="card"><div class="card-header"><span class="card-title">📁 หมวดหมู่ & รายการ</span><button class="btn btn-primary btn-sm" id="btnAddCat">➕ หมวดหมู่</button></div><div class="tabs"><div class="tab active" data-st="cats">หมวดหมู่ (${cats.length})</div><div class="tab" data-st="groups">หมวดรอง (${groups.length})</div><div class="tab" data-st="items">รายการ (${items.length})</div></div><div id="st-cats"><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>ประเภท</th><th>สี</th><th></th></tr></thead><tbody>${cats.map(c=>`<tr><td style="font-size:1.2rem">${c.icon}</td><td>${c.name}</td><td><span class="badge badge-${c.type}">${c.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${c.color}"></span>${c.color}</td><td><button class="btn-ghost btnEC" data-id="${c.id}">✏️</button><button class="btn-ghost btnDC" data-id="${c.id}" style="color:var(--danger)">🗑️</button></td></tr>`).join('')}</tbody></table></div></div><div id="st-groups" style="display:none"><div style="margin-bottom:7px"><button class="btn btn-success btn-sm" id="btnAddGroupS">➕ หมวดรอง</button></div><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>หมวดหลัก</th><th></th></tr></thead><tbody>${groups.map(g=>{const cat=cats.find(c=>c.id===g.categoryId)||{icon:'❓',name:'?'};return`<tr><td style="font-size:1rem">${g.icon||'📋'}</td><td>${g.name}${g.categoryId==='cat_ev'&&g.rate?` <span style="font-size:.7rem;color:var(--text-secondary)">(${g.rate} บาท/kWh)</span>`:''}</td><td>${cat.icon} ${cat.name}</td><td><button class="btn-ghost btnEG" data-id="${g.id}">✏️</button><button class="btn-ghost btnDG" data-id="${g.id}" style="color:var(--danger)">🗑️</button></td></tr>`}).join('')}</tbody></table></div></div><div id="st-items" style="display:none"><div style="margin-bottom:7px"><button class="btn btn-success btn-sm" id="btnAddItem">➕ รายการ</button></div><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>หมวดหมู่</th><th>หมวดรอง</th><th>จำนวนเริ่มต้น</th><th></th></tr></thead><tbody>${items.map(i=>{const cat=cats.find(c=>c.id===i.categoryId)||{icon:'❓',name:'?'};const grp=groups.find(g=>g.id===i.groupId);return`<tr><td style="font-size:1rem">${i.icon}</td><td>${i.name}</td><td>${cat.icon} ${cat.name}</td><td>${grp?`${grp.icon||'📋'} ${grp.name}`:'-'}</td><td>${U.fmtCurrency(i.defaultAmount, cfg.currency)}</td><td><button class="btn-ghost btnEI" data-id="${i.id}">✏️</button><button class="btn-ghost btnDI" data-id="${i.id}" style="color:var(--danger)">🗑️</button></td></tr>`}).join('')}</tbody></table></div></div></div><div class="card"><div class="card-header"><span class="card-title">💾 สำรองข้อมูล</span></div><p style="color:var(--text-secondary);margin-bottom:10px;font-size:.84rem">Export ข้อมูลทั้งหมดเป็น JSON เพื่อสำรอง หรือ Import เพื่อกู้คืน</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="btnExportJSON">📤 Export JSON</button><button class="btn btn-outline" id="btnExportCSV">📊 Export CSV</button><label class="btn btn-outline" style="cursor:pointer">📥 Import JSON<input type="file" id="inputImportJSON" accept=".json" style="display:none"></label><label class="btn btn-outline" style="cursor:pointer">📋 Import CSV (ธนาคาร)<input type="file" id="inputImportCSV" accept=".csv,.txt" style="display:none"></label></div></div><div class="card"><div class="card-header"><span class="card-title">🚀 เมนูลัด (FAB)</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:10px">เลือกปุ่มที่จะแสดงในเมนูลัด (ปุ่ม ＋ มุมจอ)</p><div style="display:flex;flex-direction:column;gap:8px">${(window.FAB_ITEMS||[]).map(it => `<label class="inst-toggle-row"><input type="checkbox" class="cbFabItem" data-fabid="${it.id}" ${(cfg.fabItems||{})[it.id] !== false ? 'checked' : ''}><span>${it.icon} ${it.label}</span></label>`).join('')}</div></div><div class="card"><div class="card-header"><span class="card-title">🔐 PIN Lock</span><span style="font-size:.72rem;color:var(--text-secondary)">${cfg.pinHash ? '✅ เปิดใช้งาน' : 'ปิดอยู่'}</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ป้องกันการเข้าถึงแอปด้วย PIN 4 หลัก</p><div style="display:flex;gap:8px;flex-wrap:wrap">${cfg.pinHash ? `<button class="btn btn-outline btn-sm" id="btnChangePin">🔄 เปลี่ยน PIN</button><button class="btn btn-outline btn-sm" id="btnRemovePin" style="color:var(--danger)">🗑️ ปิด PIN</button>` : `<button class="btn btn-primary btn-sm" id="btnSetPin">🔐 ตั้ง PIN</button>`}</div></div><div class="card" style="border:2px solid var(--danger)"><div class="card-header"><span class="card-title" style="color:var(--danger)">⚠️ โซนอันตราย</span></div><p style="color:var(--text-secondary);margin-bottom:9px;font-size:.84rem">รีเซ็ตจะลบข้อมูลทั้งหมด</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-danger" id="btnReset">🗑️ รีเซ็ตทั้งหมด</button><button class="btn btn-outline btn-sm" id="btnResetOB">🎯 แสดง Onboarding ใหม่</button></div></div>`;
+<div class="form-group" id="grpGeminiKey" style="${aiProv!=='gemini'?'display:none':''}"><label>Gemini API Key <span style="font-size:.7rem;color:var(--success)">✅ ฟรี!</span></label><input type="password" id="sGeminiKey" value="${cfg.geminiApiKey||''}" placeholder="AIzaSy..."><div style="font-size:.72rem;color:var(--text-secondary);margin-top:4px">รับฟรีที่ aistudio.google.com · 1,500 req/วัน</div>${aiProv==='gemini'&&!cfg.geminiApiKey?'<div style="font-size:.72rem;color:var(--danger);margin-top:2px">⚠️ ยังไม่ได้ตั้งค่า</div>':''}</div><div class="form-group"><label>สกุลเงินหลัก (Base Currency)</label><select id="sCur"><option value="THB" ${cfg.currency==='THB'?'selected':''}>฿ บาท (THB)</option><option value="USD" ${cfg.currency==='USD'?'selected':''}>$ ดอลลาร์ (USD)</option><option value="EUR" ${cfg.currency==='EUR'?'selected':''}>€ ยูโร (EUR)</option><option value="JPY" ${cfg.currency==='JPY'?'selected':''}>¥ เยน (JPY)</option><option value="GBP" ${cfg.currency==='GBP'?'selected':''}>£ ปอนด์ (GBP)</option><option value="SGD" ${cfg.currency==='SGD'?'selected':''}>S$ สิงคโปร์ (SGD)</option><option value="HKD" ${cfg.currency==='HKD'?'selected':''}>HK$ ฮ่องกง (HKD)</option><option value="CNY" ${cfg.currency==='CNY'?'selected':''}>¥ หยวน (CNY)</option><option value="KRW" ${cfg.currency==='KRW'?'selected':''}>₩ วอน (KRW)</option><option value="MYR" ${cfg.currency==='MYR'?'selected':''}>RM ริงกิต (MYR)</option><option value="AUD" ${cfg.currency==='AUD'?'selected':''}>A$ ออสเตรเลีย (AUD)</option><option value="TWD" ${cfg.currency==='TWD'?'selected':''}>NT$ ไต้หวัน (TWD)</option></select></div><div class="form-group"><label>สีธีม</label><div class="ac-swatches">${accentColors.map(ac=>`<div class="ac-sw ${(cfg.accent||'indigo')===ac.id?'active':''}" style="background:${ac.color}" data-ac="${ac.id}" title="${ac.label}"></div>`).join('')}</div></div><button class="btn btn-primary" id="btnSaveS">💾 บันทึก</button></div><div class="card"><div class="card-header"><span class="card-title">☁️ ซิงค์ข้อมูล (Cloud)</span><span id="syncStatus" class="sync-dot ${CloudSync.isLoggedIn()?'sync-synced':'sync-offline'}" title="${CloudSync.isLoggedIn()?'ซิงค์แล้ว':'ออฟไลน์'}">${CloudSync.isLoggedIn()?'✅':'☁️'}</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ซิงค์ข้อมูลกับ Firebase Firestore — ใช้ได้ทุกอุปกรณ์ iOS, Android, PC</p><div class="form-group"><label>Firebase Config <span style="font-size:.72rem;color:var(--text-secondary)">(JSON)</span></label><textarea id="sFBConfig" rows="5" style="font-size:.72rem;font-family:monospace;resize:vertical" placeholder='&#123;"apiKey":"...","authDomain":"...","projectId":"...","storageBucket":"...","messagingSenderId":"...","appId":"..."&#125;'>${cfg.firebaseConfig||''}</textarea></div><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-primary btn-sm" id="btnSaveFB">💾 บันทึก Config</button>${CloudSync.isLoggedIn()?`<button class="btn btn-outline btn-sm" id="btnForcePush">⬆️ Push</button><button class="btn btn-outline btn-sm" id="btnForcePull">⬇️ Pull</button><button class="btn btn-outline btn-sm" id="btnCloudSignOut" style="color:var(--danger)">🚪 ออกจากระบบ</button>`:CloudSync.isConfigured()?`<button class="btn btn-success btn-sm" id="btnCloudSignIn">🔑 Sign in with Google</button>`:''}</div><details style="margin-top:4px"><summary style="font-size:.78rem;color:var(--text-secondary);cursor:pointer">📋 วิธีตั้งค่า Firebase (ขยายดู)</summary><ol style="font-size:.74rem;color:var(--text-secondary);padding:8px 0 0 16px;line-height:2.1"><li>ไปที่ <b>console.firebase.google.com</b> → สร้างโปรเจคใหม่</li><li>เพิ่ม Web App (<b>&lt;/&gt;</b>) → คัดลอก <b>firebaseConfig</b> ทั้งก้อน JSON</li><li>เปิด <b>Firestore Database</b> → สร้างฐานข้อมูล → <b>Test Mode</b></li><li>เปิด <b>Authentication</b> → Sign-in method → เปิดใช้ <b>Google</b></li><li>เพิ่ม domain ที่ใช้งาน (localhost หรือ URL) ใน Authorized domains</li><li>วาง config → กด <b>บันทึก Config</b> → กด <b>☁️ Sign in</b> ใน sidebar</li></ol></details></div><div class="card"><div class="card-header"><span class="card-title">📁 หมวดหมู่ & รายการ</span><button class="btn btn-primary btn-sm" id="btnAddCat">➕ หมวดหมู่</button></div><div class="tabs"><div class="tab active" data-st="cats">หมวดหมู่ (${cats.length})</div><div class="tab" data-st="groups">หมวดรอง (${groups.length})</div><div class="tab" data-st="items">รายการ (${items.length})</div></div><div id="st-cats"><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>ประเภท</th><th>สี</th><th></th></tr></thead><tbody>${cats.map(c=>`<tr><td style="font-size:1.2rem">${c.icon}</td><td>${c.name}</td><td><span class="badge badge-${c.type}">${c.type==='income'?'รายรับ':'รายจ่าย'}</span></td><td><span class="cdot" style="background:${c.color}"></span>${c.color}</td><td><button class="btn-ghost btnEC" data-id="${c.id}">✏️</button><button class="btn-ghost btnDC" data-id="${c.id}" style="color:var(--danger)">🗑️</button></td></tr>`).join('')}</tbody></table></div></div><div id="st-groups" style="display:none"><div style="margin-bottom:7px"><button class="btn btn-success btn-sm" id="btnAddGroupS">➕ หมวดรอง</button></div><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>หมวดหลัก</th><th></th></tr></thead><tbody>${groups.map(g=>{const cat=cats.find(c=>c.id===g.categoryId)||{icon:'❓',name:'?'};return`<tr><td style="font-size:1rem">${g.icon||'📋'}</td><td>${g.name}${g.categoryId==='cat_ev'&&g.rate?` <span style="font-size:.7rem;color:var(--text-secondary)">(${g.rate} บาท/kWh)</span>`:''}</td><td>${cat.icon} ${cat.name}</td><td><button class="btn-ghost btnEG" data-id="${g.id}">✏️</button><button class="btn-ghost btnDG" data-id="${g.id}" style="color:var(--danger)">🗑️</button></td></tr>`}).join('')}</tbody></table></div></div><div id="st-items" style="display:none"><div style="margin-bottom:7px"><button class="btn btn-success btn-sm" id="btnAddItem">➕ รายการ</button></div><div class="table-wrap"><table><thead><tr><th>ไอคอน</th><th>ชื่อ</th><th>หมวดหมู่</th><th>หมวดรอง</th><th>จำนวนเริ่มต้น</th><th></th></tr></thead><tbody>${items.map(i=>{const cat=cats.find(c=>c.id===i.categoryId)||{icon:'❓',name:'?'};const grp=groups.find(g=>g.id===i.groupId);return`<tr><td style="font-size:1rem">${i.icon}</td><td>${i.name}</td><td>${cat.icon} ${cat.name}</td><td>${grp?`${grp.icon||'📋'} ${grp.name}`:'-'}</td><td>${U.fmtCurrency(i.defaultAmount, cfg.currency)}</td><td><button class="btn-ghost btnEI" data-id="${i.id}">✏️</button><button class="btn-ghost btnDI" data-id="${i.id}" style="color:var(--danger)">🗑️</button></td></tr>`}).join('')}</tbody></table></div></div></div><div class="card"><div class="card-header"><span class="card-title">💾 สำรองข้อมูล</span></div><p style="color:var(--text-secondary);margin-bottom:10px;font-size:.84rem">Export ข้อมูลทั้งหมดเป็น JSON เพื่อสำรอง หรือ Import เพื่อกู้คืน</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-outline" id="btnExportJSON">📤 Export JSON</button><button class="btn btn-outline" id="btnExportCSV">📊 Export CSV</button><button class="btn btn-outline" id="btnExportXLSX">📋 Export Excel</button><label class="btn btn-outline" style="cursor:pointer">📥 Import JSON<input type="file" id="inputImportJSON" accept=".json" style="display:none"></label><label class="btn btn-outline" style="cursor:pointer">📋 Import CSV (ธนาคาร)<input type="file" id="inputImportCSV" accept=".csv,.txt" style="display:none"></label></div></div>
+<div class="card" style="border-left:3px solid #4285f4"><div class="card-header"><span class="card-title">☁️ Cloud Backup</span><span style="font-size:.72rem;color:var(--text-secondary)">Google Drive / iCloud Drive</span></div><p style="font-size:.82rem;color:var(--text-secondary);margin-bottom:12px">บันทึกไฟล์สำรองไปยังโฟลเดอร์ Google Drive หรือ iCloud Drive ของคุณโดยตรง</p><div style="display:flex;gap:8px;flex-wrap:wrap;margin-bottom:10px"><button class="btn btn-outline" id="btnCloudBackup" style="border-color:#4285f4;color:#4285f4">☁️ Save to Cloud Folder</button><button class="btn btn-outline" id="btnCloudRestore">📥 Restore from Cloud</button></div><div id="cloudBkStatus" style="font-size:.74rem;color:var(--text-secondary)">💡 เลือกโฟลเดอร์ใน Google Drive Sync หรือ iCloud Drive เพื่อบันทึกอัตโนมัติ</div></div><div class="card"><div class="card-header"><span class="card-title">🚀 เมนูลัด (FAB)</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:10px">เลือกปุ่มที่จะแสดงในเมนูลัด (ปุ่ม ＋ มุมจอ)</p><div style="display:flex;flex-direction:column;gap:8px">${(window.FAB_ITEMS||[]).map(it => `<label class="inst-toggle-row"><input type="checkbox" class="cbFabItem" data-fabid="${it.id}" ${(cfg.fabItems||{})[it.id] !== false ? 'checked' : ''}><span>${it.icon} ${it.label}</span></label>`).join('')}</div></div><div class="card"><div class="card-header"><span class="card-title">🔐 PIN Lock</span><span style="font-size:.72rem;color:var(--text-secondary)">${cfg.pinHash ? '✅ เปิดใช้งาน' : 'ปิดอยู่'}</span></div><p style="font-size:.8rem;color:var(--text-secondary);margin-bottom:12px">ป้องกันการเข้าถึงแอปด้วย PIN 4 หลัก</p><div style="display:flex;gap:8px;flex-wrap:wrap">${cfg.pinHash ? `<button class="btn btn-outline btn-sm" id="btnChangePin">🔄 เปลี่ยน PIN</button><button class="btn btn-outline btn-sm" id="btnRemovePin" style="color:var(--danger)">🗑️ ปิด PIN</button>` : `<button class="btn btn-primary btn-sm" id="btnSetPin">🔐 ตั้ง PIN</button>`}</div></div><div class="card" style="border:2px solid var(--danger)"><div class="card-header"><span class="card-title" style="color:var(--danger)">⚠️ โซนอันตราย</span></div><p style="color:var(--text-secondary);margin-bottom:9px;font-size:.84rem">รีเซ็ตจะลบข้อมูลทั้งหมด</p><div style="display:flex;gap:8px;flex-wrap:wrap"><button class="btn btn-danger" id="btnReset">🗑️ รีเซ็ตทั้งหมด</button><button class="btn btn-outline btn-sm" id="btnResetOB">🎯 แสดง Onboarding ใหม่</button></div></div>`;
   },
   attachSettingsEvents() {
     // AI provider toggle
@@ -715,6 +995,9 @@ const Views = {
       U.dlBlob(csv, `transactions-${U.today()}.csv`);
       U.toast('Export CSV สำเร็จ 📊', 'success');
     });
+    document.getElementById('btnExportXLSX')?.addEventListener('click', () => {
+      EH.exportExcel(ST.getAll('transactions'), ST.getAll('categories'));
+    });
     document.getElementById('btnExportJSON')?.addEventListener('click', () => {
       const data = {};
       ['transactions','categories','items','recurring','budgets','wallet_accounts','credit_cards','account_transfers','installments','savings_goals','subscriptions','loan_plans'].forEach(k => { data[k] = ST.getAll(k); });
@@ -745,6 +1028,54 @@ const Views = {
         U.toast('ไฟล์ไม่ถูกต้อง กรุณาใช้ไฟล์ backup เท่านั้น', 'error');
       }
       e.target.value = '';
+    });
+    // Cloud Backup (Google Drive / iCloud Drive via File System Access API)
+    const _buildBackupData = () => {
+      const data = {};
+      ['transactions','categories','items','recurring','budgets','wallet_accounts','credit_cards','account_transfers','installments','savings_goals','subscriptions','loan_plans'].forEach(k => { data[k] = ST.getAll(k); });
+      data._config = U.getConfig(); data._exportedAt = new Date().toISOString(); data._version = '1';
+      return data;
+    };
+    const _doImportData = async (text) => {
+      const ok = await U.confirm('⚠️ Restore จะแทนที่ข้อมูลปัจจุบันทั้งหมด ยืนยัน?');
+      if (!ok) return;
+      const data = JSON.parse(text);
+      ['transactions','categories','items','recurring','budgets','wallet_accounts','credit_cards','account_transfers','installments','savings_goals','subscriptions','loan_plans'].forEach(k => {
+        if (Array.isArray(data[k])) localStorage.setItem('exp_' + k, JSON.stringify(data[k]));
+      });
+      if (data._config) localStorage.setItem('exp_config', JSON.stringify(data._config));
+      ST.invalidate(); U.toast('📥 Restore สำเร็จ', 'success'); App.applyTheme(); App.updateUI(); App.rv('settings');
+    };
+    document.getElementById('btnCloudBackup')?.addEventListener('click', async () => {
+      const st = document.getElementById('cloudBkStatus');
+      if ('showSaveFilePicker' in window) {
+        try {
+          const handle = await window.showSaveFilePicker({ suggestedName: `expense-cloud-backup-${U.today()}.json`, types: [{ description: 'JSON Backup', accept: { 'application/json': ['.json'] } }] });
+          const writable = await handle.createWritable();
+          await writable.write(JSON.stringify(_buildBackupData(), null, 2));
+          await writable.close();
+          if (st) st.textContent = `✅ Backup สำเร็จ — ${new Date().toLocaleString('th-TH')}`;
+          U.toast('☁️ Cloud Backup สำเร็จ', 'success');
+        } catch (e) { if (e.name !== 'AbortError') U.toast('เกิดข้อผิดพลาด: ' + e.message, 'error'); }
+      } else {
+        // Fallback: normal download
+        const blob = new Blob([JSON.stringify(_buildBackupData(), null, 2)], { type: 'application/json' });
+        const url = URL.createObjectURL(blob); const a = document.createElement('a'); a.href = url;
+        a.download = `expense-cloud-backup-${U.today()}.json`; a.click(); URL.revokeObjectURL(url);
+        if (st) st.textContent = '💡 บันทึกไฟล์แล้ว — ย้ายไปโฟลเดอร์ Google Drive / iCloud Drive ด้วยตนเอง';
+        U.toast('📤 Export สำเร็จ', 'success');
+      }
+    });
+    document.getElementById('btnCloudRestore')?.addEventListener('click', async () => {
+      if ('showOpenFilePicker' in window) {
+        try {
+          const [handle] = await window.showOpenFilePicker({ types: [{ description: 'JSON Backup', accept: { 'application/json': ['.json'] } }] });
+          const file = await handle.getFile();
+          await _doImportData(await file.text());
+        } catch (e) { if (e.name !== 'AbortError') U.toast('เกิดข้อผิดพลาด: ' + e.message, 'error'); }
+      } else {
+        document.getElementById('inputImportJSON')?.click();
+      }
     });
     document.getElementById('inputImportCSV')?.addEventListener('change', async (e) => {
       const file = e.target.files[0]; if (!file) return;

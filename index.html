@@ -130,6 +130,7 @@ table tbody tr:hover{background:var(--bg-input)}
 .tab{padding:8px 14px;cursor:pointer;border-bottom:2px solid transparent;margin-bottom:-2px;font-weight:500;color:var(--text-secondary);transition:all var(--transition);font-size:.84rem}
 .tab.active,.tab:hover{color:var(--accent);border-bottom-color:var(--accent)}
 .toast-container{position:fixed;top:14px;right:14px;z-index:9999;display:flex;flex-direction:column;gap:5px}
+@media(max-width:767px){.toast-container{top:calc(var(--header-h) + 8px);right:12px;left:12px;align-items:flex-end}}
 .toast{padding:10px 14px;border-radius:var(--radius-sm);color:#fff;font-weight:500;font-size:.84rem;animation:slideIn .26s ease;box-shadow:var(--shadow-lg);max-width:320px;display:flex;align-items:center;justify-content:space-between;gap:10px}
 .toast-success{background:var(--success)}.toast-error{background:var(--danger)}.toast-info{background:var(--accent)}.toast-undo{background:#1e293b}
 .toast-undo-btn{background:rgba(255,255,255,.2);border:none;color:#fff;padding:2px 8px;border-radius:4px;cursor:pointer;font-size:.72rem;font-family:var(--font);white-space:nowrap}.toast-undo-btn:hover{background:rgba(255,255,255,.35)}
@@ -245,7 +246,6 @@ button,a,label,input,select,textarea,.nchip,.preset-btn,.dshort,.type-btn,.chat-
 .swipe-content{position:relative;transition:transform .2s ease;background:transparent}
 .rec-item{display:flex;align-items:center;justify-content:space-between;padding:9px 10px;border:1px solid var(--border);border-radius:9px;margin-bottom:6px;transition:border-color .14s}
 .rec-item:hover{border-color:var(--accent)}
-.rec-badge{display:inline-flex;align-items:center;gap:2px;font-size:.62rem;font-weight:600;border-radius:8px;padding:1px 5px}
 .rb-paid{background:var(--success-light);color:var(--success)}
 .rb-unpaid{background:var(--warning-light);color:var(--warning)}
 .qa-flash{position:fixed;bottom:78px;right:20px;background:var(--success);color:#fff;border-radius:9px;padding:7px 13px;font-size:.84rem;font-weight:600;box-shadow:var(--shadow-lg);animation:popUp .24s ease,fadeOut .24s ease 1.7s forwards;z-index:300;pointer-events:none}
@@ -265,6 +265,18 @@ button,a,label,input,select,textarea,.nchip,.preset-btn,.dshort,.type-btn,.chat-
 .tl-amount{font-weight:700;font-size:.88rem;flex-shrink:0}
 .tl-act{display:flex;gap:1px;opacity:0;transition:opacity .13s}
 .tl-item:hover .tl-act{opacity:1}
+.tl-more-btn{opacity:.45;transition:opacity .13s}
+.tl-item:hover .tl-more-btn{opacity:.75}
+@media(hover:none){.tl-act{opacity:1}.tl-more-btn{opacity:.65}}
+.item-more-btn{display:flex;align-items:center;gap:8px;width:100%;padding:9px 14px;font-size:.84rem;font-weight:500;background:none;border:none;cursor:pointer;color:var(--text);text-align:left;transition:background .12s;white-space:nowrap}
+.item-more-btn:hover{background:var(--bg-input)}
+.bulk-check{display:none;align-items:center;flex-shrink:0;margin-right:2px;cursor:pointer}
+.bulk-check input{width:16px;height:16px;accent-color:var(--accent);cursor:pointer}
+#tlContainer.bulk-mode .bulk-check{display:flex}
+#tlContainer.bulk-mode .tl-act{display:none!important}
+#tlContainer.bulk-mode .swipe-del-bg{display:none}
+#tlContainer.bulk-mode .tl-item.txn-selected{background:var(--accent-light);outline:1.5px solid var(--accent)}
+.bulk-bar{position:fixed;bottom:56px;left:0;right:0;background:var(--card);border-top:2px solid var(--accent);padding:8px 14px;display:flex;align-items:center;gap:7px;z-index:800;box-shadow:0 -3px 16px rgba(0,0,0,.13);flex-wrap:nowrap;overflow-x:auto}
 .insight-card{background:var(--accent-light);border:1.5px solid var(--accent);border-radius:10px;padding:10px 12px;margin-bottom:7px;display:flex;align-items:flex-start;gap:8px}
 .insight-icon{font-size:1.35rem;flex-shrink:0;margin-top:1px}
 .insight-text{font-size:.82rem;line-height:1.5;color:var(--text)}
@@ -436,7 +448,7 @@ button,a,label,input,select,textarea,.nchip,.preset-btn,.dshort,.type-btn,.chat-
 }
 .sync-dot{font-size:.9rem;line-height:1;transition:opacity .3s}
 .sync-dot.sync-syncing,.sync-dot.sync-pending{animation:spin .8s linear infinite;display:inline-block}
-.receipt-thumb{width:26px;height:26px;border-radius:4px;object-fit:cover;flex-shrink:0;cursor:pointer;border:1px solid var(--border);transition:transform .15s}
+.receipt-thumb{width:36px;height:36px;border-radius:6px;object-fit:cover;flex-shrink:0;cursor:pointer;border:1px solid var(--border);transition:transform .15s}
 .receipt-thumb:hover{transform:scale(1.1)}
 /* Header cloud button */
 .hcloud-btn{min-width:32px;border-radius:20px!important;font-size:.82rem;overflow:hidden;transition:all .2s}
@@ -484,8 +496,8 @@ body{-webkit-font-smoothing:antialiased;-moz-osx-font-smoothing:grayscale}
 .stat-card:hover{transform:translateY(-3px)!important;box-shadow:0 10px 32px rgba(0,0,0,.1)!important}
 .stat-label{font-size:.7rem;font-weight:700;letter-spacing:.5px;margin-bottom:6px;text-transform:uppercase}
 .stat-value{font-size:1.18rem!important;font-weight:800;letter-spacing:-.3px}
-.stat-card.income{background:linear-gradient(135deg,#edfbf4 0%,var(--bg-card) 70%);border-top:none;border-left:4px solid var(--success)!important}
-.stat-card.expense{background:linear-gradient(135deg,#fef4f4 0%,var(--bg-card) 70%);border-top:none;border-left:4px solid var(--expense)!important}
+.stat-card.income{background:linear-gradient(135deg,var(--success-light) 0%,var(--bg-card) 70%);border-top:none;border-left:4px solid var(--success)!important}
+.stat-card.expense{background:linear-gradient(135deg,var(--danger-light) 0%,var(--bg-card) 70%);border-top:none;border-left:4px solid var(--expense)!important}
 .stat-card.balance{background:linear-gradient(135deg,var(--accent-light) 0%,var(--bg-card) 70%);border-top:none;border-left:4px solid var(--accent)!important}
 [data-theme="dark"] .stat-card{box-shadow:0 2px 16px rgba(0,0,0,.4);border-color:rgba(255,255,255,.05)}
 [data-theme="dark"] .stat-card.income{background:linear-gradient(135deg,rgba(16,185,129,.09) 0%,var(--bg-card) 70%)}
@@ -837,7 +849,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 .flt-check input{flex:0 0 auto;width:18px;height:18px;margin:0}
 .flt-check span{flex:1;min-width:0}
 /* Account pill in transaction rows (tap → filter by that account) */
-.tl-acc{display:inline-flex;align-items:center;max-width:100%;margin-top:3px;padding:2px 9px;border-radius:12px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-secondary);font-size:.66rem;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-tap-highlight-color:transparent}
+.tl-acc{display:inline-flex;align-items:center;max-width:100%;margin-top:3px;padding:4px 9px;min-height:26px;border-radius:12px;border:1px solid var(--border);background:var(--bg-input);color:var(--text-secondary);font-size:.66rem;font-weight:600;cursor:pointer;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;-webkit-tap-highlight-color:transparent}
 .tl-acc:active{transform:scale(.95)}
 .tl-acc:hover{border-color:var(--accent);color:var(--accent)}
 /* Quick-account settings rows */
@@ -980,7 +992,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
     <a data-view="reports"><span class="nav-icon">📈</span> รายงาน</a>
     <a data-view="budget"><span class="nav-icon">🎯</span> งบประมาณ</a>
     <span class="nav-group">ค่าใช้จ่ายประจำ</span>
-    <a data-view="recurring"><span class="nav-icon">🔁</span> รายการประจำ</a>
+    <a data-view="recurring" id="navRecurring"><span class="nav-icon">🔁</span> รายการประจำ</a>
     <a data-view="subscriptions"><span class="nav-icon">📱</span> สมาชิก/Subscription</a>
     <a data-view="loans"><span class="nav-icon">🏦</span> แผนผ่อนชำระ</a>
     <span class="nav-group">ยานพาหนะ</span>
@@ -1041,6 +1053,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 </div>
 <input type="file" id="fabReceiptInput" accept="image/*" capture="environment" style="display:none">
 
+<script src="https://cdn.jsdelivr.net/npm/xlsx/dist/xlsx.full.min.js"></script>
 <script src="js/pinlock.js"></script>
 <script src="js/storage.js"></script>
 <script src="js/helpers.js"></script>

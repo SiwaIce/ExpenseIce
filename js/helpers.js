@@ -156,6 +156,52 @@ const EH = {
     });
     return r.join('\n');
   },
+  exportExcel(txns, cats) {
+    if (typeof XLSX === 'undefined') { U.toast('กำลังโหลด SheetJS...', 'info'); return; }
+    const wallets = ST.getAll('wallet_accounts');
+    const cards = ST.getAll('credit_cards');
+    const accMap = {};
+    [...wallets, ...cards].forEach(a => { accMap[a.id] = a.name; });
+    // Sheet 1: Transactions
+    const txnRows = [['วันที่','เวลา','ประเภท','หมวดหมู่','รายการ','จำนวน','บัญชี','หมายเหตุ','ลดหย่อนภาษี','ประเภทลดหย่อน']];
+    txns.sort((a,b) => a.date < b.date ? 1 : -1).forEach(t => {
+      const cat = cats.find(c => c.id === t.categoryId);
+      txnRows.push([
+        t.date, t.time || '',
+        t.type === 'income' ? 'รายรับ' : 'รายจ่าย',
+        cat ? cat.name : '?',
+        t.itemName || '',
+        Number(t.amount),
+        accMap[t.accountId] || '',
+        t.note || '',
+        t.taxDeductible ? 'ใช่' : '',
+        t.taxCategory || ''
+      ]);
+    });
+    // Sheet 2: Category summary
+    const catMap = {};
+    txns.filter(t => t.type === 'expense' && (!t.payCardId || t.payCardExpense)).forEach(t => {
+      const cat = cats.find(c => c.id === t.categoryId) || { name: '?', icon: '' };
+      const key = cat.name;
+      catMap[key] = (catMap[key] || 0) + Number(t.amount);
+    });
+    const catRows = [['หมวดหมู่','ยอดรวมรายจ่าย']];
+    Object.entries(catMap).sort((a,b) => b[1]-a[1]).forEach(([k,v]) => catRows.push([k, v]));
+    // Sheet 3: Tax deduction summary
+    const taxRows = [['ประเภทลดหย่อน','ยอดรวม']];
+    const taxMap = {};
+    txns.filter(t => t.taxDeductible).forEach(t => {
+      const k = t.taxCategory || 'ทั่วไป';
+      taxMap[k] = (taxMap[k] || 0) + Number(t.amount);
+    });
+    Object.entries(taxMap).sort((a,b) => b[1]-a[1]).forEach(([k,v]) => taxRows.push([k, v]));
+    const wb = XLSX.utils.book_new();
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(txnRows), 'รายการทั้งหมด');
+    XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(catRows), 'สรุปตามหมวด');
+    if (taxRows.length > 1) XLSX.utils.book_append_sheet(wb, XLSX.utils.aoa_to_sheet(taxRows), 'ลดหย่อนภาษี');
+    XLSX.writeFile(wb, `expense_${U.today()}.xlsx`);
+    U.toast('📊 Export Excel สำเร็จ', 'success');
+  },
   importCSV(txt) {
     const rows = U.parseCSV(txt);
     const cats = ST.getAll('categories');
