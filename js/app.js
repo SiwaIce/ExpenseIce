@@ -23,7 +23,7 @@ const App = {
     const startHash = window.location.hash.replace('#', '');
     const shortcutViews = { add: 'add', reports: 'reports', scan: 'add' };
     const startView = shortcutViews[startHash] || 'add';
-    this.rv(startView);
+    if (startView === 'add') this.rv('add'); else this.nav(startView);
     if (startHash === 'scan') setTimeout(() => Views.openSlipScanner?.(), 400);
     this.updateUI();
     this.updateSBBudgets();
@@ -62,23 +62,23 @@ const App = {
     const today = U.today();
     if (cfg.lastNotifDate === today) return;
     const checkAndNotify = () => {
-      const todayD = new Date(today);
-      const soon = d => { const diff = (new Date(d) - todayD) / 86400000; return diff >= 0 && diff <= 3; };
+      const todayD = new Date(today + 'T00:00:00');
+      const soon = d => { const diff = (new Date(d + 'T00:00:00') - todayD) / 86400000; return diff >= 0 && diff <= 3; };
       const items = [];
       ST.getAll('subscriptions').filter(s => s.active !== false && soon(s.nextBillingDate)).forEach(s =>
         items.push(`📱 ${s.name} — ${new Date(s.nextBillingDate).toLocaleDateString('th-TH',{day:'numeric',month:'short'})}`)
       );
       ST.getAll('loan_plans').filter(p => p.status === 'active').forEach(p => {
-        const d = p.dayOfMonth; const now = new Date();
+        const d = p.dayOfMonth; const now = todayD;
         const due = new Date(now.getFullYear(), now.getMonth(), d);
         if (due < now) due.setMonth(due.getMonth()+1);
-        if (soon(due.toISOString().slice(0,10))) items.push(`🏦 ${p.name} — วันที่ ${d} ของเดือน`);
+        if (soon(U._ld(due))) items.push(`🏦 ${p.name} — วันที่ ${d} ของเดือน`);
       });
       ST.getAll('recurring').forEach(r => {
-        const d = Number(r.dayOfMonth); const now = new Date();
+        const d = Number(r.dayOfMonth); const now = todayD;
         const due = new Date(now.getFullYear(), now.getMonth(), d);
         if (due < now) due.setMonth(due.getMonth()+1);
-        if (soon(due.toISOString().slice(0,10))) items.push(`🔁 ${r.name} — วันที่ ${d} ของเดือน`);
+        if (soon(U._ld(due))) items.push(`🔁 ${r.name} — วันที่ ${d} ของเดือน`);
       });
       if (items.length > 0) {
         new Notification('💰 Expense Tracker — แจ้งเตือน', {
@@ -97,13 +97,16 @@ const App = {
     const today = U.today();
     const cfg = U.getConfig();
     if (cfg.lastAutoRecurDate === today) return;
-    const dayOfMonth = new Date().getDate();
+    const now = new Date();
+    const dayOfMonth = now.getDate();
+    const daysInMonth = new Date(now.getFullYear(), now.getMonth() + 1, 0).getDate();
     const month = U.thisMonth();
     const txns = ST.getAll('transactions');
     const recs = ST.getAll('recurring');
     let created = 0;
     recs.forEach(rec => {
-      if (Number(rec.dayOfMonth) > dayOfMonth) return;
+      // Clamp to month end so a "day 31" item still fires in 30-day months / February
+      if (Math.min(Number(rec.dayOfMonth), daysInMonth) > dayOfMonth) return;
       const alreadyDone = txns.some(t =>
         t.date.startsWith(month) &&
         t.categoryId === rec.categoryId &&
@@ -113,6 +116,8 @@ const App = {
       );
       if (!alreadyDone) {
         ST.add('transactions', { type: rec.type, amount: rec.amount, categoryId: rec.categoryId, itemName: rec.name, date: today, note: 'รายการประจำ (อัตโนมัติ)', accountId: rec.accountId || '' });
+        // Keep the account balance in sync — deleteTransaction() reverses this delta
+        if (rec.accountId) POS._applyAcctDelta(rec.accountId, rec.type, Number(rec.amount), false);
         created++;
       }
     });
@@ -120,6 +125,7 @@ const App = {
     if (created > 0) {
       U.toast(`✅ สร้างรายการประจำอัตโนมัติ ${created} รายการ`, 'success');
       this.updateUI(); this.updateSBBudgets();
+      this.rv(this.cv);
     }
   },
   applyTheme() {

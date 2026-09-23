@@ -120,7 +120,8 @@ const U = {
     const n = Number(a);
     if (isNaN(n)) return (s[cur] || cur) + '0.00';
     const noDecimal = cur === 'JPY' || cur === 'KRW';
-    return (s[cur] || cur) + (noDecimal ? Math.round(n).toLocaleString() : n.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
+    const abs = Math.abs(n);
+    return (n < 0 ? '-' : '') + (s[cur] || cur) + (noDecimal ? Math.round(abs).toLocaleString() : abs.toFixed(2).replace(/\B(?=(\d{3})+(?!\d))/g, ','));
   },
   fmtCompact(a, cur = 'THB') {
     const s = { THB: '฿', USD: '$', EUR: '€', JPY: '¥', GBP: '£', SGD: 'S$', HKD: 'HK$', CNY: '¥', KRW: '₩', MYR: 'RM', AUD: 'A$', TWD: 'NT$' };
@@ -149,21 +150,21 @@ const U = {
     return `${n.getFullYear()}-${String(n.getMonth() + 1).padStart(2, '0')}`;
   },
   getDayLabel(iso) {
-    return ['อา','จ','อ','พ','พฤ','ศ','ส'][new Date(iso).getDay()];
+    return ['อา','จ','อ','พ','พฤ','ศ','ส'][new Date(iso + 'T00:00:00').getDay()];
   },
   last7() {
     const a = [];
     for (let i = 6; i >= 0; i--) {
       const d = new Date(); d.setDate(d.getDate() - i);
-      a.push(d.toISOString().split('T')[0]);
+      a.push(this._ld(d));
     }
     return a;
   },
   getStreak() {
     const dates = new Set(ST.getAll('transactions').map(t => t.date));
-    let s = 0, d = new Date(dates.has(this.today()) ? this.today() : this.yesterday());
+    let s = 0, d = new Date((dates.has(this.today()) ? this.today() : this.yesterday()) + 'T00:00:00');
     while (true) {
-      const k = d.toISOString().split('T')[0];
+      const k = this._ld(d);
       if (!dates.has(k)) break;
       s++; d.setDate(d.getDate() - 1);
     }
@@ -191,7 +192,7 @@ const U = {
   confirm(msg) {
     return new Promise(r => {
       const o = document.createElement('div'); o.className = 'modal-overlay';
-      o.innerHTML = `<div class="modal" style="max-width:340px;text-align:center"><p style="margin-bottom:12px;font-size:.9rem">${msg}</p><div class="modal-actions" style="justify-content:center"><button class="btn btn-outline" id="cc">ยกเลิก</button><button class="btn btn-danger" id="co">ยืนยัน</button></div></div>`;
+      o.innerHTML = `<div class="modal" style="max-width:340px;text-align:center"><p style="margin-bottom:12px;font-size:.9rem;white-space:pre-line">${msg}</p><div class="modal-actions" style="justify-content:center"><button class="btn btn-outline" id="cc">ยกเลิก</button><button class="btn btn-danger" id="co">ยืนยัน</button></div></div>`;
       document.getElementById('modalRoot').appendChild(o);
       o.querySelector('#cc').onclick = () => { o.remove(); r(false); };
       o.querySelector('#co').onclick = () => { o.remove(); r(true); };

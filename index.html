@@ -48,10 +48,10 @@ body{font-family:var(--font);background:var(--bg);color:var(--text);min-height:1
 .sb-bar-fill{height:100%;border-radius:2px}
 .main{margin-left:var(--nav-width);flex:1;min-width:0;min-height:100vh;display:flex;flex-direction:column}
 .header{height:var(--header-h);background:var(--bg-card);border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;padding:0 20px;position:sticky;top:0;z-index:50;gap:14px}
-.header-left{display:flex;align-items:center;gap:10px}
+.header-left{display:flex;align-items:center;gap:10px;min-width:0;flex:1}
 .menu-toggle{display:none;background:none;border:none;font-size:1.4rem;cursor:pointer;color:var(--text);padding:4px}
 .header-title{font-weight:600;font-size:1rem}
-.header-right{display:flex;align-items:center;gap:7px}
+.header-right{display:flex;align-items:center;gap:7px;flex-shrink:0}
 .content{flex:1;padding:16px 20px;max-width:1400px;width:100%}
 .stats-grid{display:grid;grid-template-columns:repeat(auto-fit,minmax(155px,1fr));gap:10px;margin-bottom:14px}
 .stat-card{background:var(--bg-card);border-radius:var(--radius);padding:14px 16px;box-shadow:var(--shadow);border:1px solid var(--border);transition:all var(--transition);position:relative;overflow:hidden}
@@ -578,7 +578,7 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 
 /* ─── Header ─── */
 .header{box-shadow:0 1px 0 var(--border),0 2px 8px rgba(0,0,0,.03)}
-.header-title{font-weight:700;font-size:1rem;letter-spacing:-.01em}
+.header-title{font-weight:700;font-size:1rem;letter-spacing:-.01em;min-width:0;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
 
 /* ─── POS ─── */
 .pos-section{border-radius:18px;padding:16px}
@@ -953,7 +953,8 @@ input:focus,select:focus,textarea:focus{border-color:var(--accent);box-shadow:0 
 .ev-calc-card .form-group label{font-size:.74rem}
 .ev-calc-card input[type="number"]{background:rgba(255,255,255,.95);color:#1a1d28}
 .ev-amt-box{background:rgba(255,255,255,.14);border-radius:13px;padding:10px 12px;margin:10px 0}
-.ev-amt-box input{width:100%;border:none;background:transparent;color:#fff;font-size:1.3rem;font-weight:800;padding:0}
+.ev-calc-card .ev-amt-box input[type="number"]{width:100%;border:none;background:transparent;color:#fff;font-size:1.3rem;font-weight:800;padding:0}
+.ev-amt-box input::placeholder{color:rgba(255,255,255,.6)}
 .ev-res-grid{display:grid;grid-template-columns:1fr 1fr;gap:8px}
 .ev-res-box{background:#fff;border-radius:12px;padding:9px 10px;color:#1a1d28}
 .ev-res-label{font-size:.6rem;color:#6b7280;font-weight:600;margin-bottom:2px}
@@ -1115,23 +1116,23 @@ window.renderFabMenu = function() {
           }
         };
         if (typeof App !== 'undefined' && App.cv !== 'add') {
-          App.rv('add');
+          App.nav('add');
           setTimeout(doScan, 350);
         } else {
           doScan();
         }
       } else if (action === 'add') {
-        if (typeof App !== 'undefined') App.rv('add');
+        if (typeof App !== 'undefined') App.nav('add');
       } else if (action === 'ai') {
-        if (typeof App !== 'undefined') App.rv('insights');
+        if (typeof App !== 'undefined') App.nav('insights');
       } else if (action === 'settings') {
-        if (typeof App !== 'undefined') App.rv('settings');
+        if (typeof App !== 'undefined') App.nav('settings');
       } else if (action === 'ev') {
-        if (typeof App !== 'undefined') App.rv('ev');
+        if (typeof App !== 'undefined') App.nav('ev');
       } else if (action === 'transfer') {
         if (typeof AccountsView !== 'undefined') {
           if (typeof App !== 'undefined' && App.cv !== 'accounts') {
-            App.rv('accounts');
+            App.nav('accounts');
             setTimeout(() => AccountsView.openTransferModal && AccountsView.openTransferModal(), 350);
           } else {
             AccountsView.openTransferModal && AccountsView.openTransferModal();
@@ -1308,7 +1309,7 @@ window.addEventListener('DOMContentLoaded', () => {
           if (typeof POS !== 'undefined' && POS._applyAcctDelta) POS._applyAcctDelta(mAcc, 'expense', amount, false);
           window.__flashTxnId = tx.id;
           if (typeof U !== 'undefined') U.toast(`✅ ${(grp ? grp.icon : cat.icon) || ''} ${(grp ? grp.name : cat.name) || ''} ${amount.toLocaleString('th-TH')} บันทึกแล้ว`, 'success');
-          if (typeof App !== 'undefined') App.rv('add');
+          if (typeof App !== 'undefined') { if (App.cv === 'add') App.rv('add'); else App.nav('add'); }
         }
         closeMiniNumpad();
       };

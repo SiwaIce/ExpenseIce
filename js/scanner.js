@@ -766,7 +766,7 @@ const OCRScanner = {
     const { b64, mimeType } = await this._toBase64(file);
     const cats = (typeof ST !== 'undefined' ? ST.getAll('categories') : [])
       .filter(c => c.type === 'expense').map(c => `${c.id}:${c.name}`).join(', ');
-    const today = new Date().toISOString().slice(0, 10);
+    const today = U._ld(new Date());
     const prompt = `วิเคราะห์ใบเสร็จ/สลิปในภาพนี้ ตอบเป็น JSON เท่านั้น ห้ามมีข้อความอื่น:
 {"amount":0,"date":"YYYY-MM-DD","merchant":"","isSlip":false,"bank":"","categoryId":""}
 - amount: ยอดที่ชำระหรือโอน (ตัวเลขทศนิยม ไม่มี comma ไม่ติดลบ)

@@ -1,4 +1,4 @@
-const CACHE = 'expense-v24';
+const CACHE = 'expense-v25';
 const ASSETS = [
   './',
   './index.html',
@@ -6,12 +6,14 @@ const ASSETS = [
   './js/pinlock.js',
   './js/storage.js',
   './js/helpers.js',
+  './js/scanner.js',
   './js/pos.js',
   './js/views.js',
   './js/accounts.js',
   './js/savings.js',
   './js/subscriptions.js',
   './js/loans.js',
+  './js/ev.js',
   './js/chatbot.js',
   './js/features.js',
   './js/firebase-sync.js',
