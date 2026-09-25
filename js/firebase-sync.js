@@ -260,7 +260,7 @@ const CloudSync = {
         hBtn.innerHTML = '☁️';
         hBtn.title = this.isConfigured() ? 'Sign in with Google' : 'ตั้งค่า Cloud Sync';
         hBtn.classList.remove('logged-in');
-        hBtn.onclick = () => this.isConfigured() ? this.signIn() : App.rv('settings');
+        hBtn.onclick = () => this.isConfigured() ? this.signIn() : App.nav('settings');
       }
     }
     // อัปเดตปุ่มใน Settings card ถ้าเปิดอยู่

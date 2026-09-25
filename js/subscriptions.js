@@ -16,11 +16,11 @@ const SubsView = {
   },
 
   _advanceDate(dateStr, cycle) {
-    const d = new Date(dateStr);
+    const d = new Date(dateStr + 'T00:00:00');
     if (cycle === 'monthly') d.setMonth(d.getMonth() + 1);
     else if (cycle === 'annual') d.setFullYear(d.getFullYear() + 1);
     else if (cycle === 'weekly') d.setDate(d.getDate() + 7);
-    return d.toISOString().split('T')[0];
+    return U._ld(d);
   },
 
   render() {

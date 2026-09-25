@@ -11,7 +11,7 @@ const LoansView = {
     const now = new Date();
     let due = new Date(now.getFullYear(), now.getMonth(), plan.dayOfMonth || 25);
     if (due <= now) due.setMonth(due.getMonth() + 1);
-    return due.toISOString().split('T')[0];
+    return U._ld(due);
   },
 
   _isDueSoon(plan) {

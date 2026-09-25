@@ -522,8 +522,8 @@ const AccountsView = {
       cycleStart = new Date(today.getFullYear(), today.getMonth(), sd + 1);
       cycleEnd   = new Date(today.getFullYear(), today.getMonth() + 1, sd);
     }
-    const csISO = cycleStart.toISOString().slice(0, 10);
-    const ceISO = cycleEnd.toISOString().slice(0, 10);
+    const csISO = U._ld(cycleStart);
+    const ceISO = U._ld(cycleEnd);
     const todayISO = U.today();
     const daysToStatement = Math.max(0, Math.ceil((cycleEnd - today) / 86400000));
     const thMonths = ['ม.ค.','ก.พ.','มี.ค.','เม.ย.','พ.ค.','มิ.ย.','ก.ค.','ส.ค.','ก.ย.','ต.ค.','พ.ย.','ธ.ค.'];

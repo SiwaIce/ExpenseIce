@@ -601,11 +601,12 @@ const Onboarding = {
   render() {
     const o = document.getElementById('obOverlay'); if (!o) return;
     const s = this.steps[this.current];
-    o.innerHTML = `<div class="ob-card"><div style="font-size:2.8rem;margin-bottom:8px">${s.icon}</div><h2 style="font-size:1.1rem;font-weight:700;margin-bottom:8px">${s.title}</h2><p style="font-size:.86rem;color:var(--text-secondary);line-height:1.6">${s.desc}</p><div class="ob-dots">${this.steps.map((_, i) => `<div class="ob-dot ${i === this.current ? 'active' : ''}"></div>`).join('')}</div><div style="display:flex;gap:8px;justify-content:center;margin-top:16px">${this.current > 0 ? `<button class="btn btn-outline btn-sm" id="obPrev">← ก่อนหน้า</button>` : ''}<button class="btn btn-primary btn-sm" id="obNext">${this.current === this.steps.length - 1 ? 'เริ่มใช้งาน →' : 'ถัดไป →'}</button></div></div>`;
+    o.innerHTML = `<div class="ob-card"><div style="font-size:2.8rem;margin-bottom:8px">${s.icon}</div><h2 style="font-size:1.1rem;font-weight:700;margin-bottom:8px">${s.title}</h2><p style="font-size:.86rem;color:var(--text-secondary);line-height:1.6">${s.desc}</p><div class="ob-dots">${this.steps.map((_, i) => `<div class="ob-dot ${i === this.current ? 'active' : ''}"></div>`).join('')}</div><div style="display:flex;gap:8px;justify-content:center;margin-top:16px">${this.current > 0 ? `<button class="btn btn-outline btn-sm" id="obPrev">← ก่อนหน้า</button>` : ''}<button class="btn btn-primary btn-sm" id="obNext">${this.current === this.steps.length - 1 ? 'เริ่มใช้งาน →' : 'ถัดไป →'}</button></div>${this.current < this.steps.length - 1 ? `<button id="obSkip" style="margin-top:10px;font-size:.78rem;color:var(--text-secondary);background:none;border:none;cursor:pointer">ข้าม</button>` : ''}</div>`;
     document.getElementById('obNext')?.addEventListener('click', () => {
       if (this.current < this.steps.length - 1) { this.current++; this.render(); }
       else { o.remove(); U.updateConfig({ onboarded: true }); }
     });
+    document.getElementById('obSkip')?.addEventListener('click', () => { o.remove(); U.updateConfig({ onboarded: true }); });
     document.getElementById('obPrev')?.addEventListener('click', () => {
       if (this.current > 0) { this.current--; this.render(); }
     });

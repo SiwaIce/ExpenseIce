@@ -251,7 +251,7 @@ const EH = {
   calcInstNextDue(startDate, paidMonths) {
     const d = new Date(startDate + 'T00:00:00');
     d.setMonth(d.getMonth() + paidMonths + 1);
-    return d.toISOString().split('T')[0];
+    return U._ld(d);
   },
   getInstallmentsDueThisMonth() {
     const month = U.thisMonth();
