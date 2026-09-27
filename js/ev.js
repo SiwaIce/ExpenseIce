@@ -185,6 +185,12 @@ const EVView = {
         <button class="btn btn-outline btn-sm" id="btnEvVehicle">${vehicle ? 'แก้ไข' : 'ตั้งค่า'}</button>
       </div>
 
+      <div class="pos-section-label" style="margin-top:16px">💳 บัญชีตัดเงินค่าชาร์จ</div>
+      <div class="card">
+        ${this._accountSelectHTML(cfg)}
+        <div style="font-size:.72rem;color:var(--text-secondary);margin-top:6px">ตั้งไว้แล้วกด "บันทึกเป็นรายจ่าย" จะตัดจากบัญชีนี้ทันที — ถ้าไม่ตั้ง จะถามทุกครั้งว่าตัดบัญชีไหน</div>
+      </div>
+
       <div class="pos-section-label" style="margin-top:16px;display:flex;justify-content:space-between;align-items:center">
         <span>🔌 ผู้ให้บริการชาร์จ</span>
         <button class="btn btn-outline btn-sm" id="btnEvAddProvider">+ เพิ่ม</button>
@@ -206,6 +212,24 @@ const EVView = {
 
       ${this._statsHTML(cfg)}
     </div>`;
+  },
+
+  // Default account/card for EV charging expenses — '' means ask on every save
+  _evAccountId(cfg) {
+    const id = cfg.evAccountId || '';
+    return id && (ST.getById('wallet_accounts', id) || ST.getById('credit_cards', id)) ? id : '';
+  },
+
+  _accountSelectHTML(cfg) {
+    const sel = this._evAccountId(cfg);
+    const wallets = ST.getAll('wallet_accounts');
+    const cards = ST.getAll('credit_cards');
+    const opt = (id, label) => `<option value="${id}" ${sel === id ? 'selected' : ''}>${label}</option>`;
+    return `<select id="evAccSel">
+      ${opt('', '❓ ไม่ตั้งค่า — ถามทุกครั้ง')}
+      ${wallets.length ? `<optgroup label="บัญชี / เงินสด">${wallets.map(w => opt(w.id, `${w.icon || '🏦'} ${w.name}`)).join('')}</optgroup>` : ''}
+      ${cards.length ? `<optgroup label="บัตรเครดิต">${cards.map(c => opt(c.id, `💳 ${c.name}`)).join('')}</optgroup>` : ''}
+    </select>`;
   },
 
   _fuelCfg(cfg) {
@@ -372,6 +396,10 @@ const EVView = {
     document.getElementById('btnEvSave')?.addEventListener('click', () => this._saveAsExpense());
     document.getElementById('btnEvFuelCfg')?.addEventListener('click', () => this.openFuelCompareModal());
     document.getElementById('btnEvVehicle')?.addEventListener('click', () => this.openVehicleModal());
+    document.getElementById('evAccSel')?.addEventListener('change', e => {
+      U.updateConfig({ evAccountId: e.target.value });
+      U.toast(e.target.value ? 'ตั้งบัญชีตัดเงินค่าชาร์จแล้ว ✅' : 'จะถามบัญชีทุกครั้งที่บันทึก', 'success');
+    });
     document.getElementById('btnEvAddProvider')?.addEventListener('click', () => this.openProviderModal());
     document.querySelectorAll('[data-evpe]').forEach(btn => btn.addEventListener('click', () => {
       const p = ST.getById('item_groups', btn.dataset.evpe); if (p) this.openProviderModal(p);
@@ -503,6 +531,8 @@ const EVView = {
       amount: amt,
       date: U.today(),
       groupId: sel ? sel.id : '',
+      accountId: this._evAccountId(cfg), // preset → modal skips the "which account?" picker
+
       extra: {
         evKwh: r.kwh, evProvider: providerName, evRate: rate, evRangeKm: r.rangeKm,
         evStartTime: this._startTime, evEndTime: this._endTime,
